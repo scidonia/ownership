@@ -19,3 +19,6 @@ name = "Ownership"
 
 [[lean_lib]]
 name = "OwnershipTest"
+
+[[lean_lib]]
+name = "OwnershipLcnf"

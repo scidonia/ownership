@@ -40,6 +40,7 @@ The Lean version is pinned by `lean-toolchain` and provided by the Nix flake.
 ```sh
 nix develop -c lake build Ownership
 nix develop -c lake build OwnershipTest
+nix develop -c lake build OwnershipLcnf
 ```
 
 `OwnershipTest` builds the executable fixtures and proof modules; the full
@@ -60,8 +61,10 @@ separately.
 |---|---|
 | `Ownership/` | Lean library: heap/code, recursive ownership frames, one-pair model |
 | `OwnershipTest/` | Executable fixtures, countermodels and proof modules |
+| `OwnershipLcnf/` | Partial projection from the replayed `execP` branch into the model |
 | `scripts/` | Measurement CLI over the replayed impure LCNF |
 | `tests/` | Behavior contracts and sibling-checkout setup |
+| `docs/` | Steering notes and captured LCNF artifacts |
 | `PLAN.md` | Research plan, claims and non-claims |
 | `AGENTS.md` | Build/test policy and repository notes |
 | `LICENSE`, `NOTICE` | Apache-2.0 and copyright |

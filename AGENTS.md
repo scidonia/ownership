@@ -3,8 +3,9 @@
 ## Build and checks
 
 - The Lean toolchain comes from the nix dev shell. From the repository root:
-  `nix develop -c lake build Ownership` builds the development, and
-  `nix develop -c lake build OwnershipTest` builds the tests.
+  `nix develop -c lake build Ownership` builds the development,
+  `nix develop -c lake build OwnershipTest` builds the tests, and
+  `nix develop -c lake build OwnershipLcnf` builds the LCNF projection target.
 - Every module under `OwnershipTest/` belongs to the `OwnershipTest` Lean
   library, and `OwnershipTest.lean` imports each one, so
   `lake build OwnershipTest` elaborates the executable fixtures together with
