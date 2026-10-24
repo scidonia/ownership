@@ -54,7 +54,7 @@ def ctx1 : Ctx :=
   (((ctx0.move 0 2).bindOwned 3 1).move 3 4 |>.move 2 7).setUs 4 .dead
 
 theorem checkN_code : checkN ctx0 code = some ctx1 := by
-  simp [checkN, code, ctx0, ctx1, Ctx.multOf]
+  simp [checkN, checkNF, code, ctx0, ctx1, Ctx.multOf, openRef]
 
 theorem inv0 : Inv H env0 ctx0 := by
   refine ⟨?_, ?_, ?_, ?_, ?_⟩
@@ -111,14 +111,21 @@ theorem inv0 : Inv H env0 ctx0 := by
       · simp [H, h0, h1] at hcell
 
 theorem hok0 : TakeOutsOK H env0 code := by
-  refine ⟨?_, ?_⟩
-  · refine ⟨0, arrayObj, 0, ?_, ?_, ?_, ?_, ?_⟩
-    · simp [env0]
-    · simp [env0]
-    · simp [H]
-    · simp [H, arrayObj]
-    · decide
-  · simp [NoTakeOut]
+  refine ⟨0, arrayObj, 0, ?_, ?_, ?_, ?_, ?_, ?_⟩
+  · simp [env0]
+  · simp [env0]
+  · simp [H]
+  · simp [H, arrayObj]
+  · decide
+  · refine ⟨1, ?_, ?_, ?_⟩
+    · simp [env0, Env.set]
+    · simp [Heap.exclusive?, H, Heap.set, arrayObj, elemObj]
+    · refine ⟨0, 1, { arrayObj with fields := arrayObj.fields.setIfInBounds 0 (.scalar 0) }, 0,
+        ?_, ?_, ?_, ?_, trivial⟩
+      · simp [env0, Env.set]
+      · simp [env0, Env.set]
+      · simp [env0, Env.set]
+      · simp [Heap.set]
 
 /-- The nested artifact certificate. -/
 theorem artifact :
@@ -136,7 +143,7 @@ still named twice. -/
 def heldCode : NCode := .takeOut 0 1 2 3 1 (.ret 7)
 
 example : checkN heldCtx heldCode = none := by
-  simp [checkN, heldCode, heldCtx, ctx0, Ctx.multOf]
+  simp [checkN, checkNF, heldCode, heldCtx, ctx0, Ctx.multOf, openRef]
 
 #print axioms Ownership.Nested.checkN_sound
 #print axioms artifact

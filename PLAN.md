@@ -34,7 +34,7 @@ interpreter.
 | M2 fragment + soundness | done for the straight-line fragment | `Ownership/Heap.lean`, `Code.lean`, `Soundness.lean`; `check_sound` and the artifact theorems depend only on `propext`, `Classical.choice`, `Quot.sound` |
 | M2 countermodels | done at the fragment/context level | `aliasSet_rejected`, `heldCtx` (`mult = 2`); the shared-target write is rejected |
 | M3 entry invariant | done for the fresh-array initializer and the two nested countermodels | `Ownership/Entry.lean`: `initEntryInv`, `repeatedChild_not_unique`, `clientRetained_not_separated` |
-| M4 full executor | **partial, nested Path.index modelled** | the top-level `execP` set alternative is shape-checked; `setAt`'s `Path.index` order is shape-checked (`checkArray=3, takeOut=5, checkElem=7, setAt=8, putBack=9`); `Ownership/Nested.lean` now has `NCode`/`runN`/`checkN`/`checkN_sound` and `OwnershipTest/Nested.artifact` for take-out → element check → recursive summary → put-back. Still open: `Path.left/right` reset/reuse, recursion with more than one take-out, callbacks, and the actual-LCNF AST link |
+| M4 full executor | **partial; recursive `Path.index` and one-pair reset/reuse modelled** | the top-level `execP` set alternative is shape-checked; `setAt`'s `Path.index` order is shape-checked (`checkArray=3, takeOut=5, checkElem=7, setAt=8, putBack=9`); `Ownership/Nested.lean` has `NCode`/`runN`/`checkN`/`checkN_sound` with a state-indexed extraction frame and a conservative exit rule, `OwnershipTest/Nested.artifact` for the one-level path, and `OwnershipTest/RecursiveProof.artifact` for a two-level root → child → leaf path with LIFO restoration and the stale-slot, shared-child and duplicated-handle refusals; the executable fixtures `OwnershipTest/Recursive.lean`, `WrongFrame.lean`, `OpenFrameReturn.lean` and `DistinctBinders.lean` assert the stale-slot, wrong-array put-back, open-frame-exit and aliased-binder refusals at the `checkN` boundary. Still open: generic joins, callbacks, and the actual-LCNF AST link. The one-pair `Path.left/right` reset/reuse model is `Ownership/Pair.lean` (`checkP`, `runP`, `copy_poststate`, `copy_inv`) with `OwnershipTest/PairBranchProof.lean` binding both unique branches and both shared copies, and `scripts/dump_executor.lean` checks the replayed alternatives' selected/retained/reuse/copy relations, rejecting token-preserving near misses, before printing the per-constructor `setAt branch report:` line |
 | M5 runner/artifact | done for the measured write prefix | `Ownership/Runner.lean`: `initInv`, `execSet_check`, `artifact`; `Entry.artifact_entry` |
 | M6 kernel gate | done for the `Code` artifact, not the actual LCNF AST | `execSet_check` is a kernel proof; the actual LCNF link is the shape check + digest, not `check` on the emitted AST |
 | M7 source correspondence | **not done** | functional A2/A3 remain separate |
@@ -51,22 +51,56 @@ def code : NCode :=
 ```
 
 `takeOut` requires the array's selected slot to hold the exclusive element `e`
-(the `TakeOutOK` heap premise), binds the array and element to fresh variables,
+(the `TakeOutOK` heap premise), binds the array and element to two *distinct*
+fresh variables (the two sequential environment writes would otherwise collide),
 and the checker's `mult e = 1` rule rejects a held pair (element still named
 twice). `callAt` is the recursive `setAt` summary: it requires the extracted
 state `mult = 1`, records the write `(e, true)`, and returns the state.
 `putBack` stores the result into the array slot and moves the handles back.
 
+The checker keeps an extraction frame stack. A take-out records the array, the
+index variable, and the element it opened; a put-back must match the innermost
+open frame (same array, index variable and element) before that frame is
+popped. A second take-out from an array that already has an open frame (the
+checker tracks frames per array, not per slot: reopening an array before
+restoring it is outside one recursive path), a restoration into a different
+array, a take-out whose two binder variables are the same, and a straight-line
+block while a frame is open are refused. One extraction, and a nested extraction
+from a *different* array, are accepted.
+
+The exit is conservative: with no open frame an owned or scalar handle may be
+returned, with exactly one open frame only that frame's extracted element may
+return and only as an owned handle, and a deeper open stack is refused. The rule
+is a checker contract rather than a consequence of `checkN_sound`; see the
+non-claims below.
+
 `checkN_sound` proves the nested run is fault-free, every recorded write is
-exclusive, and the invariant is preserved. `OwnershipTest/Nested.artifact` is
-the concrete certificate; `heldCode`/`heldCtx` is the held-pair rejection.
-Axioms: `propext`, `Classical.choice`, `Quot.sound` only.
+exclusive, and the invariant is preserved, under `TakeOutsOK`: the heap premise
+indexed by the state each step reaches, so a nested take-out's obligation is
+stated on the heap its parent left and a put-back's on the heap the nested
+take-out left. `OwnershipTest/Nested.artifact` is the one-level certificate.
+`OwnershipTest/RecursiveProof.artifact` is the two-level certificate (root array
+→ child array → leaf, `callAt` at the leaf, LIFO put-backs) and shows both slots
+restored to their original elements; its `stale_rejected`, `shared_rejected` and
+`incShared_rejected` theorems are the nested refusals, each paired with the
+same-checker positive control `oneLevel_accepted`. `heldCode`/`heldCtx` is the
+held-pair rejection. The four executable fixtures (`OwnershipTest/Recursive.lean`,
+`WrongFrame.lean`, `OpenFrameReturn.lean`, `DistinctBinders.lean`, imported by
+`OwnershipTest/RecursiveProof.lean`) assert the stale-slot, wrong-array
+put-back, open-frame-exit and aliased-binder refusals as `#guard`s, each after
+its own affirmative control. Axioms: `propext`, `Classical.choice`,
+`Quot.sound` only.
 
 The model's abstractions are explicit: the take-out's value identity is not
-modelled (the ownership shape is), the continuation is restricted by
-`NoTakeOut` to the single take-out, and the actual `assertExclusiveImpl` is the
-`takeOut`/`callAt` contract. `Path.left/right` reset-reuse and the actual-LCNF
-AST link are the remaining M4/M6 work.
+modelled (the ownership shape is), `TakeOutsOK` is a heap obligation supplied by
+the entry/initializer rather than derived from the checker's context, and the
+actual `assertExclusiveImpl` is the `takeOut`/`callAt` contract. The one-pair
+`Path.left/right` reset/reuse branches are a separate model in
+`Ownership/Pair.lean`: the unique branch reuses the pair cell, the shared branch
+copies into a fresh pair and consumes the old handle, and the designated-write
+checker refuses a shared pair. Generic joins, callbacks and the actual-LCNF AST
+link remain M4/M6 work; neither `NCode` nor the pair model is a certificate for
+the emitted `setAt` LCNF.
 
 ### What the measured shape is
 
@@ -110,10 +144,14 @@ live.
 * The formal semantics is a `Code` fragment, not the emitted `LCNF.Code` AST.
   The actual-LCNF link is a build-checked shape and a digest (`T1b`), not a
   proved projection. A projection/refinement theorem is M4/M6 work.
-* The `setAt` nested path, its join points, reset/reuse expansion, the client
-  callbacks and the call contracts are measured, not checked. The fragment's
-  `setArr` is the scalar-array write; the nested `takeOut`/pair path is outside
-  it.
+* The `setAt` join points, generic reset/reuse expansion, the client callbacks
+  and the call contracts are measured, not checked. The nested `takeOut` path is
+  modelled by `NCode` with the state-indexed heap premise and its one- and
+  two-level artifacts; the one-pair `Path.left/right` reset/reuse branches are
+  modelled separately in `Ownership/Pair.lean`. The branch-local AST checker in
+  `scripts/dump_executor.lean` validates the replayed alternatives'
+  selected/retained/reuse/copy relations and rejects near misses, but neither
+  model is proved from the emitted LCNF AST.
 * The heap's `dec` saturates and does not free; the free/cascade stays in the
   sibling's `CHeap` for the runtime refinement. The core theorem only needs the
   write's count.
@@ -861,6 +899,30 @@ accepted and shown not to be in the mutable footprint.
 
 ### M4 — Joins, reset/reuse, recursive calls; contracts
 
+**Status.** The recursive single-slot take-out path is checked for one and two
+levels (`Ownership/Nested.lean`, `OwnershipTest/Nested.lean`,
+`OwnershipTest/RecursiveProof.lean`). The checker refuses a second take-out
+from an array whose slot is already open, a put-back into a different array, a
+take-out whose two binder variables are the same, and a return the open frames
+do not license: with one open frame only the extracted element may be returned,
+and a deeper open stack must be restored first. The stale-slot, wrong-array,
+open-frame-exit and aliased-binder refusals are executed as fixtures
+(`OwnershipTest/Recursive.lean`, `WrongFrame.lean`, `OpenFrameReturn.lean`,
+`DistinctBinders.lean`). The one-pair `Path.left/right` reset/reuse branches
+are modelled in `Ownership/Pair.lean`: a unique pair reuses its exact cell and
+retains the sibling; a shared pair copies into a fresh pair, preserves the old
+pair's fields and persistence while lowering its count, increments the retained
+sibling, and moves the caller's environment/context reference to the fresh pair.
+`OwnershipTest/PairBranchProof.lean` binds both unique runs and both shared
+copies, and pairs a same-checker unique control with the shared and inc-shared
+refusals. `scripts/dump_executor.lean` checks the replayed alternatives'
+branch-local relations and their token-preserving near misses before it prints
+the report. The emitted shared dispatch increments both field references before
+the child call and the old-handle decrement; the model's branch entry is after
+that child/argument accounting, and its copy relation adds the retained
+sibling's reference only. Generic joins, callbacks and call contracts remain
+open.
+
 **Output.** F3/F4/F5 support, `Ownership/Calls.lean`, checked summaries.
 **Work.** Add `cases`/`jp`/`jmp`, the expanded reset/reuse shape, recursion and
 `fap`/`pap`/callbacks. Every call gets a `CallContract`; unknown → reject.
@@ -891,6 +953,10 @@ or record the replay assumptions; prevent/check specialization of the executor.
 **Acceptance.** The kernel evidence (or the trusted-step entry) is in the
 report; the artifact is tied to the backend input; the digest and commands are
 recorded.
+
+The focused branch-local check in `scripts/dump_executor.lean` is a shape check
+of the replayed `Path.left/right` alternatives, not the M6 projection or the
+backend-input identity.
 
 ### M7 — Source functional correspondence (broader goal)
 
@@ -1028,6 +1094,19 @@ clients because the interpreter is fixed.
 * A1 is an ownership/artifact certificate under `EntryInv` and `CallContracts`.
   It does not say the executor writes the right value (A2) or implements the
   source interpreter (A3).
+* The nested `NCode` artifacts are statements about the modelled fragment under
+  `TakeOutsOK`. They are not a certificate for the emitted `setAt` LCNF; that
+  link remains the build-checked shape and digest.
+* The one-open-frame exit rule and the distinct take-out binders are checker
+  contracts, not consequences of `checkN_sound`. The theorem bounds faults,
+  exclusive writes and the invariant; a take-out that binds the array and the
+  element to one variable keeps `Inv` (the second environment write simply
+  overwrites the first binding), and the exit never observes a slot's contents,
+  so returning an emptied parent keeps it too. Both rules therefore refuse the
+  program at the client boundary by policy: a returned parent would carry the
+  take-out's placeholder in its selected slot, and an aliased binder would drop
+  the array handle. A program the checker accepts with one open frame leaves
+  that slot holding the placeholder and may not return the array that owns it.
 * No theorem here says a compiled C program mutates memory (A4/T4).
 * No theorem here says the Lean compiler is correct. T1a is a kernel check of
   the represented artifact; T1b is a pin/assumption tying it to the backend.

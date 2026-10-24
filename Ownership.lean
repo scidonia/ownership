@@ -20,3 +20,4 @@ import Ownership.Toy
 import Ownership.Runner
 import Ownership.Entry
 import Ownership.Nested
+import Ownership.Pair

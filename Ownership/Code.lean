@@ -5,9 +5,10 @@ and the usage/exclusivity context the checker maintains.
 The fragment is deliberately small and covers the executor's designated write
 prefix: a scalar-array element write between a runtime exclusivity check and the
 return. `inc` models a duplicated handle (the alias countermodel); `dec` models
-a consumed handle. The nested path write (`takeOut`/pair destructuring) and
-calls are added in `Nested.lean` / `Calls.lean`; this module's theorem is the
-array-write artifact certificate.
+a consumed handle. The nested `takeOut` path is added in `Nested.lean`, the
+one-pair `Path.left/right` reset/reuse model in `Pair.lean`, and call
+contracts in `Calls.lean`; this module's theorem is the array-write artifact
+certificate.
 
 The checker's context separates the facts the review asked to separate:
 

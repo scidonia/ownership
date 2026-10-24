@@ -1,2 +1,4 @@
 import OwnershipTest.Array
 import OwnershipTest.Nested
+import OwnershipTest.RecursiveProof
+import OwnershipTest.PairBranchProof
