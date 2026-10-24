@@ -15,6 +15,9 @@
   Its per-constructor `setAt branch report:` lines are produced only after the
   focused branch-local AST gate in that script accepts both replayed `Path`
   alternatives and rejects its token-preserving near misses.
+- The projection check replays the private `execP` and runs `projectPrefix` on
+  its `PTree.set` branch:
+  `(cd ../lean-examples && nix develop -c lake env bash -c 'export LEAN_PATH="../ownership/.lake/build/lib/lean:$LEAN_PATH"; lean ../ownership/scripts/check_projection.lean')`.
 
 ## How behaviour is tested
 

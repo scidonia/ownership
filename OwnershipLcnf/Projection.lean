@@ -70,13 +70,12 @@ private partial def scanCalls (c : Code .impure) (out : Array Call) : Array Call
   | .return _ | .jmp _ _ | .unreach _ => out
 
 /-- Project the captured `execP` set-branch prefix. The check and set calls must
-be present in the same `PTree.set`/`Bool.true` alternative, the set array must be
-the check result, and the check's array argument must be the first set argument.
-Anything else is unsupported. -/
+be present in the same `PTree.set` alternative, the set array must be the check
+result, and the check's array argument must be the first set argument. Anything
+else is unsupported. -/
 def projectPrefix (code : Code .impure) : Option Prefix := do
   let setAlt ← findAlt `Scidonia.FracPerm.Structured.PTree.set code
-  let trueAlt ← findAlt `Bool.true setAlt
-  let calls := scanCalls trueAlt #[]
+  let calls := scanCalls setAlt #[]
   let checkCall ← calls.findSome? fun c =>
     if c.name == `Scidonia.FracPerm.assertExclusiveArrayImpl ||
        c.name == `Scidonia.FracPerm.assertExclusiveArrayImpl._redArg then
