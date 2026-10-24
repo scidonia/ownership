@@ -1,0 +1,21 @@
+name = "Ownership"
+version = "0.1.0"
+defaultTargets = ["Ownership"]
+
+# The core development is deliberately standalone: the LCNF semantics, the
+# ownership judgment and the checker use the toolchain's own modules only.
+# The source discipline lives in the sibling `lean-examples` package and is
+# brought in at the stage the plan calls M3, at a pinned commit:
+#
+# [[require]]
+# name = "Scidonia"
+# path = "../lean-examples"
+#
+# Keeping M0-M2 independent of that build is what lets the hard part (the
+# emitted-IR judgment) be developed and checked before the surface is wired in.
+
+[[lean_lib]]
+name = "Ownership"
+
+[[lean_lib]]
+name = "OwnershipTest"
