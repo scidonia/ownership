@@ -31,6 +31,36 @@ def privateName (mod decl : Name) : Name := mkPrivateNameCore mod decl
 
 open Lean.Compiler.LCNF
 
+/-- Insert an `inc checked` immediately after the exclusivity check. This is the
+rejection fixture: a path-preserving projector must not still see the check and
+set as adjacent supported operations. -/
+private partial def insertIncAfterCheck : Code .impure → Code .impure
+  | .cases (.mk name ty discr alts) =>
+      .cases (.mk name ty discr (alts.map fun a =>
+        match a with
+        | .ctorAlt info code h => .ctorAlt info (insertIncAfterCheck code) h
+        | .default code => .default (insertIncAfterCheck code)
+        | .alt name params code h => .alt name params (insertIncAfterCheck code) h))
+  | .let d k =>
+      let k' := insertIncAfterCheck k
+      match d.value with
+      | .fap f _ _ =>
+          if f == `Scidonia.FracPerm.assertExclusiveArrayImpl ||
+             f == `Scidonia.FracPerm.assertExclusiveArrayImpl._redArg then
+            .let d (.inc d.fvarId 1 false false k' rfl)
+          else .let d k'
+      | _ => .let d k'
+  | .jp d k => .jp d (insertIncAfterCheck k)
+  | .fun d k h => .fun d (insertIncAfterCheck k) h
+  | .oset x n a k h => .oset x n a (insertIncAfterCheck k) h
+  | .uset x n y k h => .uset x n y (insertIncAfterCheck k) h
+  | .sset x n m y e k h => .sset x n m y e (insertIncAfterCheck k) h
+  | .setTag x n k h => .setTag x n (insertIncAfterCheck k) h
+  | .inc x n b1 b2 k h => .inc x n b1 b2 (insertIncAfterCheck k) h
+  | .dec x n b1 b2 o k h => .dec x n b1 b2 o (insertIncAfterCheck k) h
+  | .del x k h => .del x (insertIncAfterCheck k) h
+  | c => c
+
 partial def runPassesGo (decls : (pu : Purity) × Array (Decl pu)) (passes : List Pass) :
     CompilerM ((pu : Purity) × Array (Decl pu)) := do
   match passes with
@@ -72,6 +102,12 @@ def checkProjection : CommandElabM Unit := do
         logInfo "projectPrefix accepted the replayed execP PTree.set branch"
       | none =>
         throwError "projectPrefix rejected the replayed execP PTree.set branch"
+      let mutated := insertIncAfterCheck c
+      match OwnershipLcnf.projectPrefix mutated with
+      | some _ =>
+        throwError "projectPrefix accepted an intervening increment between check and set"
+      | none =>
+        logInfo "projectPrefix rejected an intervening increment between check and set"
     | .extern _ => throwError "execP has no code body"
 
 end CheckProjection
