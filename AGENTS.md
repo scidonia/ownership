@@ -18,6 +18,22 @@
 - The projection check replays the private `execP` and runs `projectPrefix` on
   its `PTree.set` branch:
   `(cd ../lean-examples && nix develop -c lake env bash -c 'export LEAN_PATH="../ownership/.lake/build/lib/lean:$LEAN_PATH"; lean ../ownership/scripts/check_projection.lean')`.
+  It asserts that the recognizer accepts the real declaration, that the
+  recognized array argument is the declaration's own parameter, that the
+  recognized fragment has the pinned fourteen operations, that the binders the
+  projected model reads are pairwise distinct (the only repeated name is the
+  index decrement, which the recognizer requires to be the index itself), and
+  that `Ownership.check` accepts the projected model from
+  `Ownership.Runner.initCtx` — the target theorem's checker-acceptance
+  hypothesis, instantiated on the real declaration. It then asserts that seven
+  token-preserving near misses are rejected while the unmutated declaration is
+  still accepted: an increment inserted between the check and the write, the two
+  pre-bounds projection indices swapped, the pre-bounds increments duplicated,
+  the index increment dropped, the two-object node decrement dropped, the
+  `Array.size` and `Nat.decLt` bindings' values exchanged, and the `Nat.decLt`
+  arguments swapped. The `Array.size`/`Nat.decLt` exchange keeps every call and
+  argument token and changes only which binder receives which call, so it is a
+  structure fixture rather than a compilable program.
 
 ## How behaviour is tested
 
@@ -75,5 +91,14 @@
   lists `propext`, `Classical.choice` and `Quot.sound`; if `native_decide` were
   used, the theorem using it would be named here.
 - The heap and the checker are models: `Ownership/Heap.lean` says so
-  explicitly, and a theorem here is not a statement about the compiled backend
-  or the emitted LCNF AST.
+  explicitly. `Ownership/`'s theorems are statements about those models.
+  `OwnershipLcnf/Semantics.lean` adds one link: for the pinned `execP`
+  `PTree.set` alternative it proves `project_sound` (the recognized fragment's
+  ownership reading is `Ownership.run` of the projected `Code`),
+  `projected_check`, `designated_write_in_place` (from the `EntryInv` condition),
+  `initializer_designated_write_in_place` (through `Entry.initEntryInv`) and
+  `fragment_in_place`, relative to the primitive and backend meanings listed as
+  A1–A10 in that module's header. Those theorems stop at the designated write's return; the
+  index's own `inc`/`dec` pair and the continuation with its recursive call are
+  named non-claims, and nothing there relates the replay to the backend input or
+  to physical memory.

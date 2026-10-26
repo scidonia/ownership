@@ -1,1 +1,2 @@
 import OwnershipLcnf.Projection
+import OwnershipLcnf.Semantics

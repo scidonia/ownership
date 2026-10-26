@@ -50,6 +50,14 @@ def erase (env : Env) (x : Var) : Env :=
     env.erase x y = env y := by
   simp [erase, h]
 
+/-- Setting one variable twice to the same value is setting it once. The
+designated write's model re-binds its checked handle to the same reference, so
+the poststate repeats this set. -/
+@[simp] theorem set_set_same (env : Env) (x : Var) (v : Val) :
+    (env.set x v).set x v = env.set x v := by
+  funext y
+  by_cases h : y = x <;> simp [set, h]
+
 end Env
 
 inductive LetF where
