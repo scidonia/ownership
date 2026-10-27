@@ -33,7 +33,7 @@ interpreter.
 | M1 measurement | done for the write paths | `scripts/dump_executor.lean` replays the full mono + impure pipeline on the private declarations; `execP` size 39, digest `15626230893919229497`; `execR` size 46, digest `6897751127345717416`; `setAt` size 81, digest `17644656787385327013`; the `execP` set shape check passes |
 | M2 fragment + soundness | done for the straight-line fragment | `Ownership/Heap.lean`, `Code.lean`, `Soundness.lean`; `check_sound` and the artifact theorems depend only on `propext`, `Classical.choice`, `Quot.sound` |
 | M2 countermodels | done at the fragment/context level | `aliasSet_rejected`, `heldCtx` (`mult = 2`); the shared-target write is rejected |
-| M3 entry invariant | done for the fresh-array initializer and the two nested countermodels | `Ownership/Entry.lean`: `initEntryInv`, `repeatedChild_not_unique`, `clientRetained_not_separated` |
+| M3 entry invariant | done for the fresh-array initializer, with transitive footprint and root completeness | `Ownership/Entry.lean`: `initEntryInv`; `MutableFootprint` (transitive, persistent cells excluded), `ClientReachable`/`ClientSeparated` (transitive on the client side), `RootsComplete` and `EntryInv.complete`; countermodels `sharedGrandchild_not_unique`, `indirectClient_not_separated`, `persistentChild_not_mutable` with the positive control `uniqueGrandchild_unique` |
 | M4 full executor | **partial; recursive `Path.index` and one-pair reset/reuse modelled** | the top-level `execP` set alternative is recognized op by op in `OwnershipLcnf/Projection.lean` (exact operation order and argument identities; eleven token-preserving near misses rejected, including a branch-label exchange, a box-chain bypass and an argument-count case); `setAt`'s `Path.index` order is shape-checked (`checkArray=3, takeOut=5, checkElem=7, setAt=8, putBack=9`); `Ownership/Nested.lean` has `NCode`/`runN`/`checkN`/`checkN_sound` with a state-indexed extraction frame and a conservative exit rule, `OwnershipTest/Nested.artifact` for the one-level path, and `OwnershipTest/RecursiveProof.artifact` for a two-level root → child → leaf path with LIFO restoration and the stale-slot, shared-child and duplicated-handle refusals; the executable fixtures `OwnershipTest/Recursive.lean`, `WrongFrame.lean`, `OpenFrameReturn.lean` and `DistinctBinders.lean` assert the stale-slot, wrong-array put-back, open-frame-exit and aliased-binder refusals at the `checkN` boundary. Still open: generic joins and callbacks. The top-level `execP` set path's AST execution link is proved at M6. The one-pair `Path.left/right` reset/reuse model is `Ownership/Pair.lean` (`checkP`, `runP`, `copy_poststate`, `copy_inv`) with `OwnershipTest/PairBranchProof.lean` binding both unique branches and both shared copies, and `scripts/dump_executor.lean` checks the replayed alternatives' selected/retained/reuse/copy relations, rejecting token-preserving near misses, before printing the per-constructor `setAt branch report:` line |
 | M5 runner/artifact | done for the measured write prefix | `Ownership/Runner.lean`: `initInv`, `execSet_check`, `artifact`; `Entry.artifact_entry` |
 | M6 kernel gate | done for the `Code` artifact and, for the pinned update, for kernel-checked execution of the recognized emitted LCNF | `execSet_check` is a kernel proof; the emitted-LCNF link for the pinned `execP` set alternative is the recognizer plus `OwnershipLcnf.execAST`, which executes the trace the walk emitted for the declaration and returns nothing unless the declaration decodes to the expected prefix. The kernel-checked theorems are `execAST_recognized`, `prefix_simulates_model` (fragment level), `project_sound` (over the actual declaration), `projected_check`, `designated_write_in_place`, `initializer_designated_write_in_place`, `recognized_write_in_place`, `initializer_prefix_in_place` and `nonzero_prefix_in_place`, relative to the named primitive/backend contracts A1–A12 in `OwnershipLcnf/Semantics.lean`; they depend only on `propext`, `Classical.choice` and `Quot.sound`. A reified transcription of the captured declaration has its recognition, layout and checker acceptance kernel-checked in `scripts/check_projection.lean`. Not `check` on an arbitrary emitted AST, and not a backend-input identity |
@@ -48,6 +48,7 @@ interpreter.
 def code : NCode :=
   .takeOut 0 1 2 3 1
     (.callAt 3 5 6 4
+      (.base (.let 8 (.checkAlias 3) (.setArr 8 5 6 (.ret 8))))
       (.putBack 2 4 1 7 (.ret 7)))
 ```
 
@@ -55,9 +56,17 @@ def code : NCode :=
 (the `TakeOutOK` heap premise), binds the array and element to two *distinct*
 fresh variables (the two sequential environment writes would otherwise collide),
 and the checker's `mult e = 1` rule rejects a held pair (element still named
-twice). `callAt` is the recursive `setAt` summary: it requires the extracted
-state `mult = 1`, records the write `(e, true)`, and returns the state.
-`putBack` stores the result into the array slot and moves the handles back.
+twice). `callAt` is the recursive call: it carries the embedded program `body`
+the summary runs. The checker checks `body` as its own program from a context
+that exposes only the call's own state, path and index (every other variable is
+dead), requires `body`'s exit variable to still denote the state's reference, and
+requires `body` to neither duplicate nor consume a handle, so the caller's
+multiplicities still describe the heap afterwards. At runtime the body runs in an
+environment that exposes only those three variables, on the same heap, so the
+heap really changes through the body's own extraction, restoration and write
+steps; `callAt_frame_sound` proves the admitted body runs fault-free, writes only
+exclusively, and returns the reference the call was given. `putBack` stores the
+result into the array slot and moves the handles back.
 
 The checker keeps an extraction frame stack. A take-out records the array, the
 index variable, and the element it opened; a put-back must match the innermost
@@ -81,8 +90,10 @@ indexed by the state each step reaches, so a nested take-out's obligation is
 stated on the heap its parent left and a put-back's on the heap the nested
 take-out left. `OwnershipTest/Nested.artifact` is the one-level certificate.
 `OwnershipTest/RecursiveProof.artifact` is the two-level certificate (root array
-→ child array → leaf, `callAt` at the leaf, LIFO put-backs) and shows both slots
-restored to their original elements; its `stale_rejected`, `shared_rejected` and
+→ child array → leaf): the outer take-out is restored by the outer put-back, the
+embedded body extracts and restores the leaf and performs the designated write
+in the child's other slot, and the artifact binds both restored slots, the
+exclusive write and its address; its `stale_rejected`, `shared_rejected` and
 `incShared_rejected` theorems are the nested refusals, each paired with the
 same-checker positive control `oneLevel_accepted`. `heldCode`/`heldCtx` is the
 held-pair rejection. The four executable fixtures (`OwnershipTest/Recursive.lean`,
@@ -93,9 +104,29 @@ its own affirmative control. Axioms: `propext`, `Classical.choice`,
 `Quot.sound` only.
 
 The model's abstractions are explicit: the take-out's value identity is not
-modelled (the ownership shape is), `TakeOutsOK` is a heap obligation supplied by
-the entry/initializer rather than derived from the checker's context, and the
-actual `assertExclusiveImpl` is the `takeOut`/`callAt` contract. The one-pair
+modelled (the ownership shape is), and the actual `assertExclusiveImpl` is the
+`takeOut`/`callAt` contract. `TakeOutsOK` is no longer simply supplied:
+`Ownership/Nested.lean` separates the part of it that is a runtime fact about the
+program's annotations (the `Agrees` relation: each take-out names what its slot
+actually holds), and `Entry.takeOutsOK_of_inv` derives the whole obligation from
+the handle/count invariant, the checker's acceptance and `Agrees`, with
+`takeOutsOK_of_entryInv` and `checkN_sound_of_entryInv` as the entry-level
+corollaries. The agreement premise is load-bearing: the checker cannot see a
+slot's contents, so no entry invariant implies them on its own.
+
+The recursive call's contract is stated in full by
+`Entry.callAt_frame_confined`: an admitted body runs fault-free, writes only
+exclusively, exits through a variable denoting the reference the call was given,
+and touches no cell outside that reference's mutable footprint. The confinement
+half rests on two named premises the checker cannot express — every extraction
+annotation names a footprint cell (`AnnotationsIn`), because a handle's
+multiplicity being one does not place it in the footprint — and on a
+confinement invariant (`LiveIn` for the context, `Outside` for the heap) carried
+through the body's own run: `run_confined` re-derives the checker's per-step
+`us`/`refOf` facts for the straight-line block and excludes the copying
+allocation branch from the all-exclusive-writes fact, and `runN_confined` lifts
+it through take-out, put-back and the recursive call itself. The nested and pair LCNF correspondences are also not claimed
+here. The one-pair
 `Path.left/right` reset/reuse branches are a separate model in
 `Ownership/Pair.lean`: the unique branch reuses the pair cell, the shared branch
 copies into a fresh pair and consumes the old handle, and the designated-write

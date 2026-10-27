@@ -42,5 +42,14 @@ example : check (initCtx 0) (aliasSet 0 3 1 2) = none :=
 #print axioms Ownership.check_sound
 #print axioms Ownership.Runner.artifact
 #print axioms Ownership.Entry.artifact_entry
+#print axioms Ownership.Entry.uniqueGrandchild_unique
+#print axioms Ownership.Entry.sharedGrandchild_not_unique
+#print axioms Ownership.Entry.indirectClient_not_separated
+#print axioms Ownership.Entry.persistentGrandchild_not_mutable
+#print axioms Ownership.Entry.initEntryInv
+#print axioms Ownership.Entry.takeOutsOK_of_entryInv
+#print axioms Ownership.Entry.checkN_sound_of_entryInv
+#print axioms Ownership.Entry.takeOutsOK_of_inv
+#print axioms Ownership.Entry.callAt_frame_confined
 
 end OwnershipTest
