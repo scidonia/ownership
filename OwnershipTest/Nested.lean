@@ -16,7 +16,7 @@ open Ownership.Nested
 namespace OwnershipTest.Nested
 
 def arrayObj : Obj := ⟨#[.ref 1], 1, false⟩
-def elemObj : Obj := ⟨#[], 1, false⟩
+def elemObj : Obj := ⟨#[.scalar 0], 1, false⟩
 
 def H : Heap :=
   { cells := fun r =>
@@ -30,7 +30,7 @@ def env0 : Env :=
     if x = 0 then some (.ref 0)
     else if x = 1 then some (.scalar 0)
     else if x = 5 then some (.scalar 0)
-    else if x = 6 then some (.scalar 0)
+    else if x = 6 then some (.scalar 5)
     else none
 
 def ctx0 : Ctx :=
@@ -43,18 +43,22 @@ def ctx0 : Ctx :=
     refOf := fun x => if x = 0 then some 0 else none
     mult := fun r => if r = 0 then 1 else if r = 1 then 1 else 0 }
 
-/-- The measured order: take-out, check the extracted element, recursive write,
+/-- The measured order: take-out, check the extracted element, the recursive
+call whose body performs the designated write inside the extracted element,
 put-back. -/
 def code : NCode :=
   .takeOut 0 1 2 3 1
     (.callAt 3 5 6 4
+      (.base (.let 8 (.checkAlias 3) (.setArr 8 5 6 (.ret 8))))
       (.putBack 2 4 1 7 (.ret 7)))
 
 def ctx1 : Ctx :=
   (((ctx0.move 0 2).bindOwned 3 1).move 3 4 |>.move 2 7).setUs 4 .dead
 
 theorem checkN_code : checkN ctx0 code = some ctx1 := by
-  simp [checkN, checkNF, code, ctx0, ctx1, Ctx.multOf, openRef]
+  simp [checkN, checkNF, code, ctx0, ctx1, Ctx.multOf, openRef, CountFree,
+    countFreeCode, retVar, codeRetVar, isolatedCtx, check, Ctx.setUs,
+    Ctx.inc, Ctx.bindOwned, Ctx.move, Env.set]
 
 theorem inv0 : Inv H env0 ctx0 := by
   refine ⟨?_, ?_, ?_, ?_, ?_⟩
@@ -95,7 +99,7 @@ theorem inv0 : Inv H env0 ctx0 := by
       · by_cases hx5 : x = 5
         · subst hx5; exact ⟨0, by simp [env0]⟩
         · by_cases hx6 : x = 6
-          · subst hx6; exact ⟨0, by simp [env0]⟩
+          · subst hx6; exact ⟨5, by simp [env0]⟩
           · simp [ctx0, hx0, hx1, hx5, hx6] at hx
   · intro r o hcell
     by_cases h0 : r = 0
@@ -117,22 +121,42 @@ theorem hok0 : TakeOutsOK H env0 code := by
   · simp [H]
   · simp [H, arrayObj]
   · decide
-  · refine ⟨1, ?_, ?_, ?_⟩
+  · refine ⟨1, ?_, ?_, ?_, ?_⟩
     · simp [env0, Env.set]
     · simp [Heap.exclusive?, H, Heap.set, arrayObj, elemObj]
-    · refine ⟨0, 1, { arrayObj with fields := arrayObj.fields.setIfInBounds 0 (.scalar 0) }, 0,
+    · trivial
+    · intro H' envb vb wsb hb
+      simp [runN, isolateEnv, env0, Env.set, H, Heap.set, Heap.exclusive?,
+        arrayObj, elemObj, Res.addWrite] at hb
+      obtain ⟨rfl, -, -, -⟩ := hb
+      refine ⟨0, 1, { arrayObj with fields := arrayObj.fields.setIfInBounds 0 (.scalar 0) }, 0,
         ?_, ?_, ?_, ?_, trivial⟩
       · simp [env0, Env.set]
       · simp [env0, Env.set]
       · simp [env0, Env.set]
-      · simp [Heap.set]
+      · simp [Heap.set, arrayObj]
 
-/-- The nested artifact certificate. -/
+/-- The nested artifact certificate: the run is fault-free, every write is
+exclusive, the outer slot is restored to the extracted element, and the
+recursive body's own write landed in the element it was handed. -/
 theorem artifact :
     ∃ H' env' v ws, runN code env0 H = .done H' env' v ws ∧
-      (∀ w ∈ ws, w.2 = true) := by
+      (∀ w ∈ ws, w.2 = true) ∧
+      H'.cells 0 = some arrayObj ∧ H'.cells 1 = some ⟨#[.scalar 5], 1, false⟩ := by
   obtain ⟨H', env', v, ws, hrun, hws, _⟩ := checkN_sound checkN_code inv0 hok0
-  exact ⟨H', env', v, ws, hrun, hws⟩
+  refine ⟨H', env', v, ws, hrun, hws, ?_, ?_⟩
+  · have hred := hrun
+    simp only [runN, code, env0, Env.set, H, Heap.set, arrayObj, elemObj,
+      Heap.exclusive?, Res.addWrite, addWrites, isolateEnv, run, codeRetVar] at hred
+    injection hred with hH _ _ _
+    subst hH
+    rfl
+  · have hred := hrun
+    simp only [runN, code, env0, Env.set, H, Heap.set, arrayObj, elemObj,
+      Heap.exclusive?, Res.addWrite, addWrites, isolateEnv, run, codeRetVar] at hred
+    injection hred with hH _ _ _
+    subst hH
+    rfl
 
 /-- The held-pair/alias shape: the element's count is two, so the take-out's
 `mult e = 1` rule rejects it. -/

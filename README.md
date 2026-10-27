@@ -34,6 +34,14 @@ This repository isolates the ownership/RC core of that goal:
   routes; `OwnershipTest/` contains the executable fixtures, countermodels and
   kernel-checked proof modules.
 
+The entry invariant states a transitive mutable footprint (immutable observations
+excluded), transitive client reachability with a completeness condition tying
+every owned variable to the one root, and carries a three-level positive control
+alongside a shared-grandchild and an indirect-client countermodel. The recursive
+call carries its own program: the checker isolates that program's context to the
+state it was handed, and `callAt_frame_sound` proves an admitted body runs
+fault-free, writes only exclusively, and returns the reference it was given.
+
 The current result is a model-level certificate plus a proved connection from
 the replayed LCNF to it, for the pinned scalar-array update. `OwnershipLcnf`
 recognizes the `execP` `PTree.set` alternative, executes the recognized code,
@@ -49,7 +57,15 @@ declaration, rejecting eleven token-preserving near misses. This is not a compil
 proof: the certified prefix stops at the designated write's return, and the
 continuation, the recursive `execP` call, the source-to-target correspondence,
 the replay-to-backend identity and the physical runtime are separate claims in
-`PLAN.md`.
+`PLAN.md`. The nested checker's heap premise is now derived rather than
+supplied: `Entry.takeOutsOK_of_inv` builds it from the handle/count invariant,
+the checker's acceptance and an explicit heap/program agreement premise, with
+`checkN_sound_of_entryInv` as the entry-level corollary, and
+`Entry.callAt_frame_confined` states the recursive call's whole contract: an
+admitted body is fault-free, writes only exclusively, returns the reference it was
+given, and touches no cell outside that reference's mutable footprint (given every
+extraction annotation names one). The nested/pair LCNF correspondence remains
+open, with its reason recorded in `PLAN.md`.
 
 ## Building
 

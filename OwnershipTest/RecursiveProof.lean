@@ -23,6 +23,7 @@ import OwnershipTest.Recursive
 import OwnershipTest.WrongFrame
 import OwnershipTest.OpenFrameReturn
 import OwnershipTest.DistinctBinders
+import OwnershipTest.RecursiveFrame
 
 open Ownership
 open Ownership.Nested
@@ -34,10 +35,11 @@ namespace OwnershipTest.RecursiveProof
 /-- The root array: slot 0 holds the child array `ref 1`. -/
 def rootObj : Obj := ⟨#[.ref 1], 1, false⟩
 
-/-- The child array: slot 0 holds the leaf `ref 2`. -/
-def childObj : Obj := ⟨#[.ref 2], 1, false⟩
+/-- The child array: slot 0 holds the leaf `ref 2`; slot 1 is the slot the
+recursive body's designated write targets. -/
+def childObj : Obj := ⟨#[.ref 2, .scalar 9], 1, false⟩
 
-/-- The leaf the recursive write targets. -/
+/-- The leaf the recursive body extracts and restores. -/
 def leafObj : Obj := ⟨#[.scalar 0], 1, false⟩
 
 /-- Root → child → leaf, each live cell counted once. -/
@@ -49,46 +51,46 @@ def H : Heap :=
       else none
     next := 3 }
 
-/-- Variable 0 names the root, 1 and 4 name the extracted slots' indices, and
-7 and 8 name the recursive summary's path and state arguments. -/
+/-- Variable 0 names the root, 1 names the root's slot, and 7 and 8 name the
+recursive call's scalar path and replacement arguments. -/
 def env0 : Env :=
   fun x =>
     if x = 0 then some (.ref 0)
     else if x = 1 then some (.scalar 0)
-    else if x = 4 then some (.scalar 0)
     else if x = 7 then some (.scalar 0)
-    else if x = 8 then some (.scalar 0)
+    else if x = 8 then some (.scalar 1)
     else none
 
 def ctx0 : Ctx :=
   { us := fun x =>
       if x = 0 then .owned
       else if x = 1 then .scalar
-      else if x = 4 then .scalar
       else if x = 7 then .scalar
       else if x = 8 then .scalar
       else .dead
     refOf := fun x => if x = 0 then some 0 else none
     mult := fun r => if r = 0 then 1 else if r = 1 then 1 else if r = 2 then 1 else 0 }
 
-/-- Take the child out of the root, take the leaf out of the child, write at the
-leaf, restore the child's slot, restore the root's slot. -/
+/-- Extract the child from the root, then call the recursive program on it. The
+body takes the leaf out of the child, restores it, and performs the designated
+write in the child's other slot; the outer continuation restores the root's
+slot. -/
 def code : NCode :=
   .takeOut 0 1 2 3 1
-    (.takeOut 3 4 5 6 2
-      (.callAt 6 7 8 9
-        (.putBack 5 9 4 10
-          (.putBack 2 10 1 11 (.ret 11)))))
+    (.callAt 3 7 8 9
+      (.takeOut 3 7 5 6 2
+        (.putBack 5 6 7 10
+          (.base (.let 11 (.checkAlias 10) (.setArr 11 8 7 (.ret 11))))))
+      (.putBack 2 9 1 12 (.ret 12)))
 
 def ctx1 : Ctx := (ctx0.move 0 2).bindOwned 3 1
-def ctx2 : Ctx := (ctx1.move 3 5).bindOwned 6 2
-def ctx3 : Ctx := ctx2.move 6 9
-def ctx4 : Ctx := (ctx3.move 5 10).setUs 9 .dead
-def ctx5 : Ctx := (ctx4.move 2 11).setUs 10 .dead
+def ctx2 : Ctx := ctx1.move 3 9
+def ctx3 : Ctx := (ctx2.move 2 12).setUs 9 .dead
 
-theorem checkN_code : checkN ctx0 code = some ctx5 := by
-  simp [checkN, checkNF, code, ctx0, ctx1, ctx2, ctx3, ctx4, ctx5, Ctx.multOf,
-    openRef]
+theorem checkN_code : checkN ctx0 code = some ctx3 := by
+  simp [checkN, checkNF, code, ctx0, ctx1, ctx2, ctx3, Ctx.multOf, openRef,
+    CountFree, countFreeCode, retVar, codeRetVar, isolatedCtx, check, Ctx.setUs,
+    Ctx.bindOwned, Ctx.move, Env.set]
 
 theorem inv0 : Inv H env0 ctx0 := by
   refine ⟨?_, ?_, ?_, ?_, ?_⟩
@@ -108,37 +110,31 @@ theorem inv0 : Inv H env0 ctx0 := by
       exact ⟨by simp [env0], by simp [ctx0]⟩
     · by_cases hx1 : x = 1
       · subst hx1; simp [ctx0, hx0] at hx
-      · by_cases hx4 : x = 4
-        · subst hx4; simp [ctx0, hx0, hx1] at hx
-        · by_cases hx7 : x = 7
-          · subst hx7; simp [ctx0, hx0, hx1, hx4] at hx
-          · by_cases hx8 : x = 8
-            · subst hx8; simp [ctx0, hx0, hx1, hx4, hx7] at hx
-            · simp [ctx0, hx0, hx1, hx4, hx7, hx8] at hx
+      · by_cases hx7 : x = 7
+        · subst hx7; simp [ctx0, hx0, hx1] at hx
+        · by_cases hx8 : x = 8
+          · subst hx8; simp [ctx0, hx0, hx1, hx7] at hx
+          · simp [ctx0, hx0, hx1, hx7, hx8] at hx
   · intro x r hx hr
     by_cases hx0 : x = 0
     · subst hx0; simp [ctx0] at hx
     · by_cases hx1 : x = 1
       · subst hx1; simp [ctx0, hx0] at hx
-      · by_cases hx4 : x = 4
-        · subst hx4; simp [ctx0, hx0, hx1] at hx
-        · by_cases hx7 : x = 7
-          · subst hx7; simp [ctx0, hx0, hx1, hx4] at hx
-          · by_cases hx8 : x = 8
-            · subst hx8; simp [ctx0, hx0, hx1, hx4, hx7] at hx
-            · simp [ctx0, hx0, hx1, hx4, hx7, hx8] at hx
+      · by_cases hx7 : x = 7
+        · subst hx7; simp [ctx0, hx0, hx1] at hx
+        · by_cases hx8 : x = 8
+          · subst hx8; simp [ctx0, hx0, hx1, hx7] at hx
+          · simp [ctx0, hx0, hx1, hx7, hx8] at hx
   · intro x hx
     by_cases hx0 : x = 0
     · subst hx0; simp [ctx0] at hx
     · by_cases hx1 : x = 1
       · subst hx1; exact ⟨0, by simp [env0]⟩
-      · by_cases hx4 : x = 4
-        · subst hx4; exact ⟨0, by simp [env0]⟩
-        · by_cases hx7 : x = 7
-          · subst hx7; exact ⟨0, by simp [env0]⟩
-          · by_cases hx8 : x = 8
-            · subst hx8; exact ⟨0, by simp [env0]⟩
-            · simp [ctx0, hx0, hx1, hx4, hx7, hx8] at hx
+      · by_cases hx7 : x = 7
+        · subst hx7; exact ⟨0, by simp [env0]⟩
+        · by_cases hx8 : x = 8
+          · subst hx8; exact ⟨1, by simp [env0]⟩
+          · simp [ctx0, hx0, hx1, hx7, hx8] at hx
   · intro r o hcell
     by_cases h0 : r = 0
     · subst h0
@@ -158,8 +154,9 @@ theorem inv0 : Inv H env0 ctx0 := by
         · simp [H, h0, h1, h2] at hcell
 
 /-- The state-indexed premise at the concrete two-level heap: the root's slot
-holds the child, the child's slot holds the leaf, the leaf is exclusive, and
-each put-back runs on the heap the previous take-out left. -/
+holds the child, the child's slot 0 holds the leaf, the body's designated write
+runs on the heap the body's own extraction left, and the outer continuation runs
+on whatever heap the body leaves. -/
 theorem hok0 : TakeOutsOK H env0 code := by
   refine ⟨0, rootObj, 0, ?_, ?_, ?_, ?_, ?_, ?_⟩
   · simp [env0]
@@ -167,52 +164,53 @@ theorem hok0 : TakeOutsOK H env0 code := by
   · simp [H]
   · simp [H, rootObj]
   · decide
-  · refine ⟨1, childObj, 0, ?_, ?_, ?_, ?_, ?_, ?_⟩
+  · refine ⟨1, ?_, ?_, ?_, ?_⟩
     · simp [env0, Env.set]
-    · simp [env0, Env.set]
-    · simp [Heap.set, H, rootObj]
-    · simp [childObj]
-    · decide
-    · refine ⟨2, ?_, ?_, ?_⟩
-      · simp [env0, Env.set]
-      · simp [Heap.exclusive?, Heap.set, H, rootObj, childObj, leafObj]
+    · simp [Heap.exclusive?, Heap.set, H, rootObj, childObj]
+    · -- the body: take the leaf out of the child, restore it, write
+      refine ⟨1, childObj, 0, ?_, ?_, ?_, ?_, ?_, ?_⟩
+      · rfl
+      · rfl
+      · simp [Heap.set, H, rootObj]
+      · simp [childObj]
+      · decide
       · refine ⟨1, 2, { childObj with fields := childObj.fields.setIfInBounds 0 (.scalar 0) }, 0,
-          ?_, ?_, ?_, ?_, ?_⟩
-        · simp [env0, Env.set]
-        · simp [env0, Env.set]
-        · simp [env0, Env.set]
+          ?_, ?_, ?_, ?_, trivial⟩
+        · simp [Env.set, isolateEnv, env0]
+        · simp [Env.set, isolateEnv, env0]
+        · simp [Env.set, isolateEnv, env0]
         · simp [Heap.set]
-        · refine ⟨0, 1, { rootObj with fields := rootObj.fields.setIfInBounds 0 (.scalar 0) }, 0,
-            ?_, ?_, ?_, ?_, ?_⟩
-          · simp [env0, Env.set]
-          · simp [env0, Env.set]
-          · simp [env0, Env.set]
-          · simp [Heap.set, H, rootObj, childObj]
-          · trivial
+    · -- the continuation: restore the root's slot on the heap the body leaves
+      intro H' envb vb wsb hb
+      simp [runN, isolateEnv, env0, Env.set, H, Heap.set, Heap.exclusive?, rootObj,
+        childObj, leafObj, Res.addWrite, addWrites, run] at hb
+      obtain ⟨rfl, -, -, -⟩ := hb
+      refine ⟨0, 1, { rootObj with fields := rootObj.fields.setIfInBounds 0 (.scalar 0) }, 0,
+        ?_, ?_, ?_, ?_, trivial⟩
+      · simp [env0, Env.set]
+      · simp [env0, Env.set]
+      · simp [env0, Env.set]
+      · simp [Heap.set, rootObj]
 
-/-- The two-level artifact certificate: the run is fault-free, its only write
-is the exclusive mutate-branch write at the leaf, and both extracted slots are
-restored to their original elements. -/
+/-- The two-level artifact certificate: the run is fault-free, its only write is
+the body's exclusive write inside the extracted child, both extracted slots are
+restored to their original elements, and the designated write changed the
+child's other slot. -/
 theorem artifact :
     ∃ H' env' v ws, runN code env0 H = .done H' env' v ws ∧
       (∀ w ∈ ws, w.2 = true) ∧
-      H'.cells 0 = some rootObj ∧ H'.cells 1 = some childObj := by
+      H'.cells 0 = some rootObj ∧
+      H'.cells 1 = some ⟨#[.ref 2, .scalar 0], 1, false⟩ ∧
+      ws = [(1, true)] := by
   obtain ⟨H', env', v, ws, hrun, hws, _⟩ := checkN_sound checkN_code inv0 hok0
-  refine ⟨H', env', v, ws, hrun, hws, ?_, ?_⟩
-  · have hred := hrun
-    simp only [runN, code, env0, Env.set, H, Heap.set, rootObj, childObj, leafObj,
-      Heap.exclusive?, Res.addWrite] at hred
-    injection hred with hH _ _ _
-    subst hH
-    rfl
-  · have hred := hrun
-    simp only [runN, code, env0, Env.set, H, Heap.set, rootObj, childObj, leafObj,
-      Heap.exclusive?, Res.addWrite] at hred
-    injection hred with hH _ _ _
-    subst hH
-    rfl
+  have hred := hrun
+  simp only [runN, code, env0, Env.set, H, Heap.set, rootObj, childObj, leafObj,
+    Heap.exclusive?, Res.addWrite, addWrites, isolateEnv, run] at hred
+  injection hred with hH henv hv hws'
+  exact ⟨H', env', v, ws, hrun, hws, by rw [← hH]; rfl, by rw [← hH]; rfl, hws'.symm⟩
 
 #print axioms Ownership.Nested.checkN_sound
+#print axioms Ownership.Nested.callAt_frame_sound
 #print axioms artifact
 
 /-! ## Refusals with same-checker positive controls -/

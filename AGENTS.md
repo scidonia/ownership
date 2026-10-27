@@ -58,6 +58,17 @@
   `OwnershipTest/OpenFrameReturn.lean`, and
   `tests/distinct-binders-contract.md` with
   `OwnershipTest/DistinctBinders.lean`.
+- `tests/recursive-frame-contract.md` (N5) with `OwnershipTest/RecursiveFrame.lean`
+  is the recursive-frame contract: `checkN` accepts a `.callAt` body confined to
+  the state it was handed and refuses a body that opens the suspended frame's own
+  emptied array with a take-out/put-back. The refused body's exit is not what
+  differs: it returns variable 3, the call's own state, exactly the handle the
+  accepted body returns. What refuses it is frame isolation: the isolated context
+  leaves the parent array dead, so the take-out's first requirement — that the
+  array be an owned handle — fails.
+  `OwnershipTest/RecursiveProof.lean` imports it alongside the other contract
+  fixtures, so `lake build OwnershipTest` elaborates both guards (affirmative
+  control first).
 - `tests/struct-branch-contract.md` (S1/S2) is executed by the shell fixture
   `tests/struct-branch-assert.sh`, not by a `checkN` fixture, because its
   subject is the executable measurement CLI. The page provisions the pinned
@@ -81,7 +92,8 @@
   rejection. Run one fixture with
   `nix develop -c bash -c 'lake build Ownership && lake env lean OwnershipTest/<Fixture>.lean'`.
 - Recursive and algebraic claims are theorems, not guards: the artifacts
-  (`OwnershipTest/Nested.artifact`, `OwnershipTest.RecursiveProof.artifact`) and
+  (`OwnershipTest/Nested.artifact`, `OwnershipTest.RecursiveProof.artifact`, which
+  now binds the body's designated write and both restored slots) and
   the countermodels (`OwnershipTest.RecursiveProof.stale_rejected`,
   `shared_rejected`, `incShared_rejected`) are kernel-checked, each negative
   paired with the same-checker positive control `oneLevel_accepted`. The exit
@@ -102,7 +114,16 @@
 
 - No `sorry`, `admit` or new axioms. `#print axioms` for the headline theorems
   lists `propext`, `Classical.choice` and `Quot.sound`; if `native_decide` were
-  used, the theorem using it would be named here.
+  used, the theorem using it would be named here. `OwnershipTest/RecursiveProof.lean`
+  prints the axioms for `checkN_sound`, `callAt_frame_sound` and its own artifact;
+  `OwnershipTest/Array.lean` prints them for the entry invariant, its positive
+  control and countermodels, the `TakeOutsOK` derivation and the recursive call's
+  full contract (`callAt_frame_confined`, whose confinement half carries the
+  `AnnotationsIn` premise). The derivation's
+  heap/program agreement premise (`Ownership.Nested.Agrees`) is a real hypothesis,
+  not a hidden assumption: `takeOutsOK_of_entryInv` and
+  `checkN_sound_of_entryInv` both require it, because the checker cannot see which
+  object a slot holds.
 - The heap and the checker are models: `Ownership/Heap.lean` says so
   explicitly. `Ownership/`'s theorems are statements about those models.
   `OwnershipLcnf/Semantics.lean` adds the AST link: `execAST` executes the

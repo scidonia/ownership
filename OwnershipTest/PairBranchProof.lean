@@ -159,7 +159,7 @@ theorem shape0 : ∀ x r, ctx0.us x = .owned → ctx0.refOf x = some r →
 
 /-! ## The exclusive child, through the M4a nested checker -/
 
-def childCode : NCode := .callAt 10 11 12 13 (.ret 13)
+def childCode : NCode := .callAt 10 11 12 13 (.ret 10) (.ret 13)
 
 def childEnv : Env :=
   fun x =>
@@ -175,18 +175,22 @@ def childCtx : Ctx :=
     mult := fun r => if r = 1 then 1 else 0 }
 
 theorem child_check : checkN childCtx childCode = some (childCtx.move 10 13) := by
-  simp [checkN, checkNF, childCode, childCtx, Ctx.multOf, openRef]
+  simp [checkN, checkNF, childCode, childCtx, Ctx.multOf, openRef, CountFree,
+    countFreeCode, retVar, isolatedCtx, Ctx.move]
 
 theorem child_ok : TakeOutsOK H0 childEnv childCode := by
-  refine ⟨1, ?_, ?_, trivial⟩
+  refine ⟨1, ?_, ?_, ?_, ?_⟩
   · simp [childEnv]
   · decide
+  · trivial
+  · intro H' envb vb wsb _
+    trivial
 
 theorem child_run :
-    runN childCode childEnv H0 = .done H0 (childEnv.set 13 (.ref 1)) (.ref 1) [(1, true)] := by
-  change runN (.callAt 10 11 12 13 (.ret 13)) childEnv H0 =
-    .done H0 (childEnv.set 13 (.ref 1)) (.ref 1) [(1, true)]
-  simp [runN, childEnv, H0, childObj, sibObj, Heap.exclusive?, Res.addWrite]
+    runN childCode childEnv H0 = .done H0 (childEnv.set 13 (.ref 1)) (.ref 1) [] := by
+  change runN (.callAt 10 11 12 13 (.ret 10) (.ret 13)) childEnv H0 =
+    .done H0 (childEnv.set 13 (.ref 1)) (.ref 1) []
+  simp [runN, childEnv, H0, childObj, sibObj, Heap.exclusive?, addWrites]
 
 /-! ## The unique branches -/
 
@@ -215,7 +219,7 @@ theorem unique_left_run :
 starts from that same branch entry. -/
 theorem exclusive_child_then_reuse :
     runN childCode childEnv H0 =
-        .done H0 (childEnv.set 13 (.ref 1)) (.ref 1) [(1, true)] ∧
+        .done H0 (childEnv.set 13 (.ref 1)) (.ref 1) [] ∧
       runP pairCodeLeft pairEnv H0 =
         (Res.done (reuse H0 0 pairObj .left 1) (pairEnv.set 1 (.ref 0)) (.ref 0) []).addWrite
           (0, true) :=

@@ -614,7 +614,8 @@ theorem operandEnv_entryInv (n i v : Nat) :
       (Ownership.Runner.initHeap n).1 [] :=
   { toInv := operandEnv_inv n i v
     uniqueTree := (Ownership.Entry.initEntryInv n).uniqueTree
-    separated := (Ownership.Entry.initEntryInv n).separated }
+    separated := (Ownership.Entry.initEntryInv n).separated
+    complete := (Ownership.Entry.initEntryInv n).complete }
 
 /-- The milestone's target statement at the model level: for a declaration the
 projection recognizes, from any state satisfying the concrete entry condition at
