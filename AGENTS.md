@@ -160,3 +160,13 @@
   write's return; the index's own `inc`/`dec` pair and the continuation with its
   recursive call are named non-claims, and nothing there relates the replay to
   the backend input, to physical counted references, or to physical memory.
+- `OwnershipLcnf/NestedSemantics.lean` adds the same link for the recognized
+  nested prefix: `execNested` interprets the recognizer's trace, and
+  `index_prefix_simulates_model` consumes `projectNested` to relate the executed
+  prefix to `Ownership.Nested.runN` of the take-out/call/put-back model term,
+  over the N1–N12 contracts in its header. `OwnershipTest/NestedEmitted.lean`
+  instantiates it with a changed leaf, a restored child slot, an untouched
+  sibling, outside-footprint preservation and a re-established `EntryInv`. The
+  child-call contract (`ChildContract`) is a hypothesis and the emitted
+  recursive callee's body is not captured; that link remains an outstanding
+  obligation.

@@ -133,7 +133,9 @@ they state is what the implementation must fix.
 ## 7. Non-claims
 
 - No general recursion, executor or compiler certification.
-- No LCNF correspondence for the nested alternative yet.
+- The LCNF correspondence is conditional: the recognized prefix's execution is
+  related to the model term, and the emitted recursive callee's body is not
+  captured.
 - No joins, callbacks or general LCNF fragment.
 - No physical runtime reference-count claim; the model's counts are the
   restricted semantics' counts.
@@ -160,3 +162,11 @@ they state is what the implementation must fix.
    interpretation and the structural invariant.
 4. Add the recursive call rule connecting finite bodies to the fixed executor.
 5. Connect the represented prefix, the replay, the heap counts and the runtime.
+
+Status (27 October 2026): obligation 1 is done. `OwnershipLcnf/NestedSemantics.lean`
+proves the conditional prefix correspondence (`index_prefix_simulates_model`,
+consuming `projectNested`, over the N1–N12 contracts in its header), and
+`OwnershipTest/NestedEmitted.lean` instantiates it with the boundary's
+observations: the changed leaf, the restored child slot, the untouched sibling,
+outside-footprint preservation and a re-established `EntryInv`. The child-call
+contract is a hypothesis in both. Obligations 2–5 remain.
