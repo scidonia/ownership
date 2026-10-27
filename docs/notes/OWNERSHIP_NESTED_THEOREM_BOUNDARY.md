@@ -163,10 +163,17 @@ they state is what the implementation must fix.
 4. Add the recursive call rule connecting finite bodies to the fixed executor.
 5. Connect the represented prefix, the replay, the heap counts and the runtime.
 
-Status (27 October 2026): obligation 1 is done. `OwnershipLcnf/NestedSemantics.lean`
-proves the conditional prefix correspondence (`index_prefix_simulates_model`,
-consuming `projectNested`, over the N1–N12 contracts in its header), and
-`OwnershipTest/NestedEmitted.lean` instantiates it with the boundary's
-observations: the changed leaf, the restored child slot, the untouched sibling,
-outside-footprint preservation and a re-established `EntryInv`. The child-call
-contract is a hypothesis in both. Obligations 2–5 remain.
+Status (27 October 2026): obligations 1 and 3 are done.
+`OwnershipLcnf/NestedSemantics.lean` proves the conditional prefix
+correspondence (`index_prefix_simulates_model`, consuming `projectNested`, over
+the N1–N12 contracts in its header), and `OwnershipTest/NestedEmitted.lean`
+instantiates it with the boundary's observations: the changed leaf, the restored
+child slot, the untouched sibling, outside-footprint preservation and a
+re-established `EntryInv`. `Ownership/Path.lean` proves the reachability
+transitivity lemmas and derives `Agrees` and `AnnotationsIn` from a level chain;
+`OwnershipTest/PathAgreement.lean` is the certificate that obtains both from
+those theorems and feeds them to `takeOutsOK_of_entryInv` and
+`callAt_frame_confined`. The emitted machine-level `NestedAgrees` still needs the
+recognizer's operand identities and the reified machine fields (the model-field
+part is derived in the certificate). The child-call contract is a hypothesis in
+both. Obligations 2, 4 and 5 remain.

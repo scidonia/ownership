@@ -170,3 +170,13 @@
   child-call contract (`ChildContract`) is a hypothesis and the emitted
   recursive callee's body is not captured; that link remains an outstanding
   obligation.
+- `Ownership/Path.lean` derives the agreement and annotation premises from a
+  path instead of per-client facts: `MutableFootprint.trans`,
+  `ClientReachable.trans` and `AnnotationsIn.trans` are proved, `build` reads
+  the nested program off a level chain, `agrees_of_path` composes `Agrees`
+  through take-out/call/put-back, and `annotationsIn_of_path` lifts every
+  annotation into the root's footprint. `OwnershipTest/PathAgreement.lean` is
+  the certificate: it obtains `Agrees` and `AnnotationsIn` from those theorems
+  and feeds them to `takeOutsOK_of_entryInv` and `callAt_frame_confined`. The
+  emitted machine-level `NestedAgrees` still needs the recognizer's operand
+  identities and the reified machine fields.
