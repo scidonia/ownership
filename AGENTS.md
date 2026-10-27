@@ -25,15 +25,28 @@
   index decrement, which the recognizer requires to be the index itself), and
   that `Ownership.check` accepts the projected model from
   `Ownership.Runner.initCtx` — the target theorem's checker-acceptance
-  hypothesis, instantiated on the real declaration. It then asserts that seven
+  hypothesis, instantiated on the real declaration. It then asserts that eleven
   token-preserving near misses are rejected while the unmutated declaration is
   still accepted: an increment inserted between the check and the write, the two
   pre-bounds projection indices swapped, the pre-bounds increments duplicated,
   the index increment dropped, the two-object node decrement dropped, the
-  `Array.size` and `Nat.decLt` bindings' values exchanged, and the `Nat.decLt`
-  arguments swapped. The `Array.size`/`Nat.decLt` exchange keeps every call and
-  argument token and changes only which binder receives which call, so it is a
-  structure fixture rather than a compilable program.
+  `Array.size` and `Nat.decLt` bindings' values exchanged, the `Nat.decLt`
+  arguments swapped, the two bounds alternatives' constructor labels exchanged,
+  the two bounds alternatives' bodies exchanged, the write reading the box's
+  scalar source instead of the boxed binder, and an extra argument on
+  `Array.set!`. The label exchange is the fixture
+  that a positional "second alternative is `Bool.true`" selection cannot
+  survive; the body exchange moves the write body onto the first alternative
+  while keeping both labels; the operand case bypasses the box chain while
+  keeping every call token; the extra-argument case keeps every recognized
+  operand in place, so only the explicit arity check rejects it. The
+  `Array.size`/`Nat.decLt` exchange keeps every
+  call and argument token and changes only which binder receives which call, so
+  it is a structure fixture rather than a compilable program. The same script
+  reifies the captured declaration as a `Code .impure` value and has the kernel
+  check its recognition, its variable layout and `Ownership.check` acceptance
+  (`decide`, plus `projected_check` instantiated on it), and it asserts that the
+  reified artifact decodes to the replayed declaration's prefix.
 
 ## How behaviour is tested
 
@@ -92,13 +105,21 @@
   used, the theorem using it would be named here.
 - The heap and the checker are models: `Ownership/Heap.lean` says so
   explicitly. `Ownership/`'s theorems are statements about those models.
-  `OwnershipLcnf/Semantics.lean` adds one link: for the pinned `execP`
-  `PTree.set` alternative it proves `project_sound` (the recognized fragment's
-  ownership reading is `Ownership.run` of the projected `Code`),
-  `projected_check`, `designated_write_in_place` (from the `EntryInv` condition),
-  `initializer_designated_write_in_place` (through `Entry.initEntryInv`) and
-  `fragment_in_place`, relative to the primitive and backend meanings listed as
-  A1–A10 in that module's header. Those theorems stop at the designated write's return; the
-  index's own `inc`/`dec` pair and the continuation with its recursive call are
-  named non-claims, and nothing there relates the replay to the backend input or
-  to physical memory.
+  `OwnershipLcnf/Semantics.lean` adds the AST link: `execAST` executes the
+  operation trace the projection walk emitted for the declaration and returns
+  nothing unless the declaration decodes to the expected prefix, so
+  `execAST_recognized` makes the recognition hypothesis load-bearing;
+  `prefix_simulates_model` (fragment level) and `project_sound` (over the
+  actual declaration) relate the executed prefix's `PrefixOutcome` — heap,
+  write result binder, returned handle, target, disposition, fault, trace — to
+  `Ownership.run (p.toModel assign)`; `projected_check` is the checker
+  acceptance; `recognized_write_in_place` is the in-place result for arbitrary
+  in-bounds index and replacement from `EntryInv`, with
+  `initializer_prefix_in_place` and `nonzero_prefix_in_place` as corollaries and
+  `designated_write_in_place`/`initializer_designated_write_in_place` as the
+  model-level forms. All of that is relative to the primitive, constructor-layout
+  and call-signature contracts A1–A12 in that module's header and to the layout
+  and initial-state agreement premises. Those theorems stop at the designated
+  write's return; the index's own `inc`/`dec` pair and the continuation with its
+  recursive call are named non-claims, and nothing there relates the replay to
+  the backend input, to physical counted references, or to physical memory.

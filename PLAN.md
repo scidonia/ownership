@@ -34,10 +34,10 @@ interpreter.
 | M2 fragment + soundness | done for the straight-line fragment | `Ownership/Heap.lean`, `Code.lean`, `Soundness.lean`; `check_sound` and the artifact theorems depend only on `propext`, `Classical.choice`, `Quot.sound` |
 | M2 countermodels | done at the fragment/context level | `aliasSet_rejected`, `heldCtx` (`mult = 2`); the shared-target write is rejected |
 | M3 entry invariant | done for the fresh-array initializer and the two nested countermodels | `Ownership/Entry.lean`: `initEntryInv`, `repeatedChild_not_unique`, `clientRetained_not_separated` |
-| M4 full executor | **partial; recursive `Path.index` and one-pair reset/reuse modelled** | the top-level `execP` set alternative is recognized op by op in `OwnershipLcnf/Projection.lean` (exact operation order and argument identities; seven token-preserving near misses rejected, not only the inserted increment); `setAt`'s `Path.index` order is shape-checked (`checkArray=3, takeOut=5, checkElem=7, setAt=8, putBack=9`); `Ownership/Nested.lean` has `NCode`/`runN`/`checkN`/`checkN_sound` with a state-indexed extraction frame and a conservative exit rule, `OwnershipTest/Nested.artifact` for the one-level path, and `OwnershipTest/RecursiveProof.artifact` for a two-level root → child → leaf path with LIFO restoration and the stale-slot, shared-child and duplicated-handle refusals; the executable fixtures `OwnershipTest/Recursive.lean`, `WrongFrame.lean`, `OpenFrameReturn.lean` and `DistinctBinders.lean` assert the stale-slot, wrong-array put-back, open-frame-exit and aliased-binder refusals at the `checkN` boundary. Still open: generic joins, callbacks, and the actual-LCNF AST link. The one-pair `Path.left/right` reset/reuse model is `Ownership/Pair.lean` (`checkP`, `runP`, `copy_poststate`, `copy_inv`) with `OwnershipTest/PairBranchProof.lean` binding both unique branches and both shared copies, and `scripts/dump_executor.lean` checks the replayed alternatives' selected/retained/reuse/copy relations, rejecting token-preserving near misses, before printing the per-constructor `setAt branch report:` line |
+| M4 full executor | **partial; recursive `Path.index` and one-pair reset/reuse modelled** | the top-level `execP` set alternative is recognized op by op in `OwnershipLcnf/Projection.lean` (exact operation order and argument identities; eleven token-preserving near misses rejected, including a branch-label exchange, a box-chain bypass and an argument-count case); `setAt`'s `Path.index` order is shape-checked (`checkArray=3, takeOut=5, checkElem=7, setAt=8, putBack=9`); `Ownership/Nested.lean` has `NCode`/`runN`/`checkN`/`checkN_sound` with a state-indexed extraction frame and a conservative exit rule, `OwnershipTest/Nested.artifact` for the one-level path, and `OwnershipTest/RecursiveProof.artifact` for a two-level root → child → leaf path with LIFO restoration and the stale-slot, shared-child and duplicated-handle refusals; the executable fixtures `OwnershipTest/Recursive.lean`, `WrongFrame.lean`, `OpenFrameReturn.lean` and `DistinctBinders.lean` assert the stale-slot, wrong-array put-back, open-frame-exit and aliased-binder refusals at the `checkN` boundary. Still open: generic joins and callbacks. The top-level `execP` set path's AST execution link is proved at M6. The one-pair `Path.left/right` reset/reuse model is `Ownership/Pair.lean` (`checkP`, `runP`, `copy_poststate`, `copy_inv`) with `OwnershipTest/PairBranchProof.lean` binding both unique branches and both shared copies, and `scripts/dump_executor.lean` checks the replayed alternatives' selected/retained/reuse/copy relations, rejecting token-preserving near misses, before printing the per-constructor `setAt branch report:` line |
 | M5 runner/artifact | done for the measured write prefix | `Ownership/Runner.lean`: `initInv`, `execSet_check`, `artifact`; `Entry.artifact_entry` |
-| M6 kernel gate | done for the `Code` artifact and, for the pinned update, for a proved projection of the emitted LCNF | `execSet_check` is a kernel proof; the emitted-LCNF link for the pinned `execP` set alternative is the recognizer plus the kernel-checked `OwnershipLcnf.project_sound`/`designated_write_in_place`/`fragment_in_place`, relative to the named primitive assumptions A1–A10 listed in `OwnershipLcnf/Semantics.lean` — not `check` on an arbitrary emitted AST, and not a backend-input identity |
-| Priority-1 bridge (steering note) | done for the pinned scalar-array update; not a whole-executor claim | `OwnershipLcnf/Projection.lean` recognizes the replayed `execP` `PTree.set` alternative with the exact pre-bounds order and argument identities; `OwnershipLcnf/Semantics.lean` states the trusted primitive meanings (A1–A10 in its header), proves `project_sound` (the recognized fragment's ownership reading is `Ownership.run` of the projected `Code`), instantiates the concrete entry invariant (`projected_check`), and proves `designated_write_in_place` (from the `EntryInv` condition; `initializer_designated_write_in_place` instantiates it through `Entry.initEntryInv`) and `fragment_in_place`: no ownership fault at the designated write, the in-place branch selected, the target address and returned handle preserved. `#print axioms` for the headline theorems lists `propext`, `Classical.choice`, `Quot.sound`. `scripts/check_projection.lean` accepts the real declaration and rejects seven token-preserving near misses, and asserts the fresh-binder and checker-acceptance hypotheses on the real declaration. The index's own `inc`/`dec` pair and the continuation/recursive call are named non-claims |
+| M6 kernel gate | done for the `Code` artifact and, for the pinned update, for kernel-checked execution of the recognized emitted LCNF | `execSet_check` is a kernel proof; the emitted-LCNF link for the pinned `execP` set alternative is the recognizer plus `OwnershipLcnf.execAST`, which executes the trace the walk emitted for the declaration and returns nothing unless the declaration decodes to the expected prefix. The kernel-checked theorems are `execAST_recognized`, `prefix_simulates_model` (fragment level), `project_sound` (over the actual declaration), `projected_check`, `designated_write_in_place`, `initializer_designated_write_in_place`, `recognized_write_in_place`, `initializer_prefix_in_place` and `nonzero_prefix_in_place`, relative to the named primitive/backend contracts A1–A12 in `OwnershipLcnf/Semantics.lean`; they depend only on `propext`, `Classical.choice` and `Quot.sound`. A reified transcription of the captured declaration has its recognition, layout and checker acceptance kernel-checked in `scripts/check_projection.lean`. Not `check` on an arbitrary emitted AST, and not a backend-input identity |
+| Priority-1 bridge (steering note) | done for the pinned scalar-array update; not a whole-executor claim | `OwnershipLcnf/Projection.lean` walks the replayed `execP` `PTree.set` alternative with the exact pre-bounds order, argument identities and primitive arities, selecting the bounds `Bool.true` alternative by constructor identity and never by position; `OwnershipLcnf/Semantics.lean` states the trusted primitive/backend contracts (A1–A12 in its header), executes the recognized code (`execAST`) and proves `project_sound` over the actual declaration, with the write's index and replacement written into the environment by the prefix's own projection and box rules from the node's reified fields; `recognized_write_in_place` gives the in-place outcome for arbitrary in-bounds index and replacement from `EntryInv`, `initializer_prefix_in_place` and `nonzero_prefix_in_place` instantiate it, and `designated_write_in_place` is the model-level form. `#print axioms` for the headline theorems lists `propext`, `Classical.choice`, `Quot.sound`. `scripts/check_projection.lean` accepts the real declaration, rejects eleven token-preserving near misses, and kernel-checks a reified transcription of the captured declaration. The index's own `inc`/`dec` pair and the continuation/recursive call are named non-claims |
 | M7 source correspondence | **not done** | functional A2/A3 remain separate |
 
 ### Nested `Path.index` artifact
@@ -142,15 +142,23 @@ live.
 
 ### What is deliberately not claimed
 
-* The formal semantics is still a `Code` fragment. For the pinned `execP`
-  `PTree.set` alternative the link is now a proved projection
-  (`OwnershipLcnf.project_sound`) relative to the named primitive/backend
-  assumptions A1–A10 in `OwnershipLcnf/Semantics.lean`, covering the
-  exclusivity check, the write and the write's return. It does not cover the
-  continuation, the recursive `execP` call, or the index's own `inc`/`dec`
-  pair, which are named non-claims; and it does not identify the replay with the
-  backend input, which stays the pin-and-digest trust step (`T1b`). No general
-  emitted-AST projection exists.
+* The formal semantics is still a `Code` fragment, executed on the AST. For the
+  pinned `execP` `PTree.set` alternative the link is now an execution of the
+  declaration the recognizer accepts: `OwnershipLcnf.execAST` runs the trace the
+  projection walk emitted for that declaration and returns nothing unless the
+  declaration decodes to the expected prefix, so `OwnershipLcnf.project_sound`
+  consumes its recognition hypothesis instead of accepting an unused premise.
+  The write's index and replacement are written into the environment by the
+  prefix's own projection and box rules from the node's reified fields, and the
+  write reads the emitted checked-array, index and boxed-value binders. The
+  statement is relative to the named primitive/backend contracts A1–A12 in
+  `OwnershipLcnf/Semantics.lean`, and to the layout and initial-state agreement
+  premises, which are theorem hypotheses rather than assumptions. It does not
+  cover the continuation, the recursive `execP` call, or the index's own
+  `inc`/`dec` pair, which are named non-claims; and it does not identify the
+  replay with the backend input, which stays the pin-and-digest trust step
+  (`T1b`). No general emitted-AST projection exists: the recognizer accepts one
+  supported shape.
 * The `setAt` join points, generic reset/reuse expansion, the client callbacks
   and the call contracts are measured, not checked. The nested `takeOut` path is
   modelled by `NCode` with the state-indexed heap premise and its one- and
@@ -177,31 +185,52 @@ milestone:
    declaration digests (`execP` `15626230893919229497`) and the `PTree.set`
    alternative.
 2. **Kernel-checked evidence that the represented form passes the checker.**
-   Met: `OwnershipLcnf.projected_check` accepts `p.toModel` from
-   `Ownership.Runner.initCtx`, and `scripts/check_projection.lean` asserts the
-   same acceptance on the declaration the recognizer actually accepts.
+   Met twice over: `OwnershipLcnf.projected_check` accepts `p.toModel` from
+   `Ownership.Runner.initCtx` for any recognized prefix under the layout
+   premise, and a reified transcription of the captured declaration
+   (`scripts/check_projection.lean`'s `capturedDecl`) has its recognition, its
+   variable layout and its checker acceptance checked by the kernel (`decide`),
+   while the same run asserts that the reified artifact decodes to the replayed
+   declaration's prefix.
 3. **The supported LCNF execution is represented by the model execution,
    including ownership faults and copy-versus-mutate behaviour.** Met for the
-   certified prefix: `OwnershipLcnf.project_sound` equates the fragment's
-   outcome with `Ownership.run (p.toModel assign)` — faults, the mutate branch,
-   the copy branch and the write trace all come from the same rules; the
-   fragment decides nothing about ownership that the model does not. The
-   caveats are the assumptions (A1–A10) and the two named non-claims, not a
-   weaker conclusion.
+   certified prefix: `OwnershipLcnf.prefix_simulates_model` relates the outcome
+   of executing the recognized trace to `Ownership.run (p.toModel assign)` at
+   the `PrefixOutcome` boundary — heap, the write's result binder, the returned
+   handle, the target, the write disposition, the fault status and the write
+   trace — and `project_sound` is the same statement for a declaration the
+   recognizer accepts. The outcome is the case split this prefix actually
+   decides: an exclusive array takes the in-place write, a shared one faults at
+   the exclusivity check (`notExclusive`, empty trace), on both sides at once, so
+   the write's copy branch — present in both `Ownership.Code.setArr` and the
+   fragment's own `Array.set!` rule — is not reached through the prefix; the
+   fragment decides nothing about ownership that the model does not. The caveats
+   are the contracts (A1–A12), the layout and agreement premises, and the two
+   named non-claims, not a weaker conclusion.
 4. **Fault freedom and absence of copying for the designated update, from a
-   concrete entry invariant.** Met: `OwnershipLcnf.designated_write_in_place`
-   takes `Ownership.Entry.EntryInv H env (Runner.initCtx root) root client` and
-   derives the mutate branch from `Inv.exclusive` at `mult root = 1`, giving the
-   write trace `[(root, true)]` and the returned handle the root;
-   `initializer_designated_write_in_place` instantiates it through
-   `Ownership.Entry.initEntryInv`; `execSet_run` and `fragment_in_place` state
-   the exact poststate (`inPlaceHeap`, `inPlaceEnv`).
+   concrete entry invariant.** Met, for arbitrary supported index and
+   replacement: `OwnershipLcnf.recognized_write_in_place` executes the
+   recognized AST from a state satisfying
+   `Ownership.Entry.EntryInv H env (Runner.initCtx root) root client`, with the
+   node's index and replacement in bounds and the array binder agreeing with the
+   model's root variable, and reports the in-place outcome — no fault,
+   `inPlace = true`, target and returned handle the root — together with the
+   model's identical `PrefixOutcome`. The mutate branch follows from
+   `Inv.exclusive` at `mult root = 1`; `initializer_prefix_in_place` and
+   `nonzero_prefix_in_place` instantiate it through
+   `Ownership.Entry.initEntryInv`/`operandEnv_entryInv` at `(0, 0)` and at
+   `(1, 7)` on an array of length at least two, and
+   `designated_write_in_place`/`initializer_designated_write_in_place` are the
+   model-level statements.
 5. **State whether the captured artifact is the backend input or a replay, and
    list the assumptions connecting it to the backend input.** Stated: the
    artifact is a replay of the pinned sibling's emitted LCNF, not a captured
-   backend input (A10); the primitive and runtime meanings the proof trusts are
-   A1–A9 in `OwnershipLcnf/Semantics.lean`. The physical backend/runtime
-   correspondence (C12, A4/T4) remains a separate, unproved obligation.
+   backend input (A10); the primitive, constructor-layout and call-signature
+   meanings the proof trusts are A1–A12 in `OwnershipLcnf/Semantics.lean`, whose
+   header separates the facts encoded in definitions, the explicit theorem
+   premises and the named external contracts. The physical backend/runtime
+   correspondence (C12, A4/T4) — including the model's count of one versus
+   physical counted references — remains a separate, unproved obligation.
 
 ## 1. The result, split into the claims it actually contains
 
@@ -1001,21 +1030,37 @@ recorded.
 
 **Status for the pinned scalar-array update.** Rather than reflecting the
 accepted LCNF to `artifactF`, the development takes the projection route the
-steering note permits: `OwnershipLcnf/Projection.lean` recognizes the replayed
-`execP` `PTree.set` alternative op by op, `OwnershipLcnf/Semantics.lean` gives
-the recognized node kinds an explicit meaning and proves the correspondence
-(`project_sound`) to `Ownership.run (p.toModel assign)`, instantiates the
-concrete entry invariant (`projected_check`), and states the target result
-(`designated_write_in_place` under the `EntryInv` condition,
-`initializer_designated_write_in_place` through `Entry.initEntryInv`, and
-`fragment_in_place` for the fragment semantics). The named trust is the
-primitive/backend assumption list A1–A10, and the two non-claims are the
-index's own `inc`/`dec` pair and the continuation with its recursive call. The
-recognizer is exercised on the real declaration by
-`scripts/check_projection.lean`, including seven token-preserving near misses.
-What remains M6 work is the backend-input identity (capture versus replay, A10)
-and any projection of the rest of the executor: the certified prefix stops at
-the designated write's return.
+steering note permits and executes it on the AST.
+`OwnershipLcnf/Projection.lean` walks the replayed `execP` `PTree.set`
+alternative and records what it walked twice — as the `Prefix`'s binder
+identities and as `Prefix.fragment`, the trace each matched node contributes.
+`OwnershipLcnf/Semantics.lean` gives the recognized node kinds an explicit
+meaning in a machine with no auxiliary `locals`, and `execAST` executes the
+trace the walk emitted, returning nothing unless the declaration decodes to the
+expected prefix. The correspondence therefore consumes the recognition
+hypothesis: `prefix_simulates_model` relates the fragment's outcome to
+`Ownership.run (p.toModel assign)` at the `PrefixOutcome` boundary and
+`project_sound` states the same for a declaration the recognizer accepts. The
+write's index and replacement are written into the environment by the prefix's
+own `projIndex`/`projValue` rules from the node's reified fields, the box rule
+copies the replacement to the emitted boxed-value binder, and the write reads the
+emitted checked-array, index and boxed-value binders. The target result is
+`recognized_write_in_place`, with `initializer_prefix_in_place` and
+`nonzero_prefix_in_place` as corollaries and
+`designated_write_in_place`/`initializer_designated_write_in_place` as the
+model-level statements. The named contracts are A1–A12; the variable layout and
+the initial-state agreement are theorem premises, not assumptions. The
+index's own `inc`/`dec` pair and the continuation with its recursive call are
+the two named non-claims, recorded in the `PrefixOutcome` boundary.
+`scripts/check_projection.lean` exercises the recognizer on the real
+declaration, rejects eleven token-preserving near misses (seven structural, a
+branch-label exchange, a branch-body exchange, a box-chain bypass and an
+extra-argument case), and
+kernel-checks a reified transcription of the captured declaration's
+recognition, layout and checker acceptance. What remains M6 work is the
+backend-input identity (capture versus replay, A10) and any projection of the
+rest of the executor: the certified prefix stops at the designated write's
+return.
 
 The focused branch-local check in `scripts/dump_executor.lean` is a shape check
 of the replayed `Path.left/right` alternatives, not the M6 projection or the
