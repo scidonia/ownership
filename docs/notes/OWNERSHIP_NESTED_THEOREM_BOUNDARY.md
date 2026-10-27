@@ -31,8 +31,10 @@ The LCNF `setAt` `Path.index` alternative is the one `scripts/dump_executor.lean
 prints (size 81, digest `17644656787385327013`): bounds test, exclusive-array
 assertion, `takeOut`, the two projection increments, the child `assertExclusive`,
 the recursive `setAt` call, and `Array.set` for the restore. The nested
-alternative and the helper bodies it calls are not yet captured; that capture is
-the first task of the emitted-protocol step.
+alternative and the helper bodies it calls are captured in
+`docs/notes/artifacts/setAt-nested.lcnf.txt`, with provenance in
+`docs/notes/OWNERSHIP_NESTED_CAPTURE.md`; the recognizer and its model
+correspondence are the remaining tasks of the emitted-protocol step.
 
 ## 2. Observation boundary
 

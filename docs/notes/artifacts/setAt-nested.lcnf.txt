@@ -1,0 +1,222 @@
+scidonia-lean: Lean (version 4.35.0-rc3, Release)
+===== setAt (private): replayed _private.Scidonia.FracPerm.StateVar.Layout5.0.Scidonia.FracPerm.StateVar.Layout5.setAt._redArg (size 81, params 3) =====
+def _private.Scidonia.FracPerm.StateVar.Layout5.0.Scidonia.FracPerm.StateVar.Layout5.setAt._redArg x.1 @&x.2 x.3 : tobj :=
+  cases x.1 : tobj
+  | Scidonia.FracPerm.StateVar.Layout5.Path.here =>
+    dec[ref][1 objs] x.1;
+    dec x.3;
+    inc x.2;
+    return x.2
+  | Scidonia.FracPerm.StateVar.Layout5.Path.left =>
+    let p.4 := oproj[2] x.1;
+    inc[ref] p.4;
+    dec[ref][3 objs] x.1;
+    let fst.5 := oproj[0] x.3;
+    let snd.6 := oproj[1] x.3;
+    jp resetjp.7 _x.8 isShared.9 : tobj :=
+      let _x.10 := _private.Scidonia.FracPerm.StateVar.Layout5.0.Scidonia.FracPerm.StateVar.Layout5.setAt._redArg p.4 x.2 fst.5;
+      jp reusejp.11 _x.12 : tobj :=
+        return _x.12;
+      cases isShared.9 : tobj
+      | Bool.false =>
+        oset _x.8 [0] := _x.10;
+        goto reusejp.11 _x.8
+      | Bool.true =>
+        let reuseFailAlloc.13 := ctor_0[Prod.mk] _x.10 snd.6;
+        goto reusejp.11 reuseFailAlloc.13;
+    let isSharedCheck.14 := isShared x.3;
+    cases isSharedCheck.14 : tobj
+    | Bool.false =>
+      goto resetjp.7 x.3 isSharedCheck.14
+    | Bool.true =>
+      inc snd.6;
+      inc fst.5;
+      dec x.3;
+      goto resetjp.7 ◾ isSharedCheck.14
+  | Scidonia.FracPerm.StateVar.Layout5.Path.right =>
+    let p.15 := oproj[2] x.1;
+    inc[ref] p.15;
+    dec[ref][3 objs] x.1;
+    let fst.16 := oproj[0] x.3;
+    let snd.17 := oproj[1] x.3;
+    jp resetjp.18 _x.19 isShared.20 : tobj :=
+      let _x.21 := _private.Scidonia.FracPerm.StateVar.Layout5.0.Scidonia.FracPerm.StateVar.Layout5.setAt._redArg p.15 x.2 snd.17;
+      jp reusejp.22 _x.23 : tobj :=
+        return _x.23;
+      cases isShared.20 : tobj
+      | Bool.false =>
+        oset _x.19 [1] := _x.21;
+        goto reusejp.22 _x.19
+      | Bool.true =>
+        let reuseFailAlloc.24 := ctor_0[Prod.mk] fst.16 _x.21;
+        goto reusejp.22 reuseFailAlloc.24;
+    let isSharedCheck.25 := isShared x.3;
+    cases isSharedCheck.25 : tobj
+    | Bool.false =>
+      goto resetjp.18 x.3 isSharedCheck.25
+    | Bool.true =>
+      inc snd.17;
+      inc fst.16;
+      dec x.3;
+      goto resetjp.18 ◾ isSharedCheck.25
+  | Scidonia.FracPerm.StateVar.Layout5.Path.index =>
+    let a.26 := oproj[0] x.1;
+    inc[ref] a.26;
+    let i.27 := oproj[1] x.1;
+    inc i.27;
+    let p.28 := oproj[2] x.1;
+    inc[ref] p.28;
+    dec[ref][3 objs] x.1;
+    let _x.29 := Array.size ◾ x.3;
+    let _x.30 := Nat.decLt i.27 _x.29;
+    cases _x.30 : tobj
+    | Bool.false =>
+      dec[ref] p.28;
+      dec i.27;
+      dec[ref] a.26;
+      return x.3
+    | Bool.true =>
+      let _x.31 := _private.Scidonia.FracPerm.StateVar.Layout5.0.Scidonia.FracPerm.StateVar.Layout5.setAt._redArg._closed_0;
+      let _x.32 := Scidonia.FracPerm.assertExclusiveArrayImpl._redArg _x.31 x.3;
+      let _x.33 := Scidonia.FracPerm.StateVar.Layout5.stateDefault a.26;
+      let val.34 := _private.Scidonia.FracPerm.StateVar.Layout5.0.Scidonia.FracPerm.StateVar.Layout5.takeOut._redArg _x.32 i.27 _x.33;
+      let fst.35 := oproj[0] val.34;
+      inc fst.35;
+      let snd.36 := oproj[1] val.34;
+      inc snd.36;
+      dec[ref] val.34;
+      let _x.37 := _private.Scidonia.FracPerm.StateVar.Layout5.0.Scidonia.FracPerm.StateVar.Layout5.setAt._redArg._closed_1;
+      let _x.38 := Scidonia.FracPerm.assertExclusiveImpl._redArg _x.37 snd.36;
+      let _x.39 := _private.Scidonia.FracPerm.StateVar.Layout5.0.Scidonia.FracPerm.StateVar.Layout5.setAt._redArg p.28 x.2 _x.38;
+      let xs' := Array.set ◾ fst.35 i.27 _x.39 ◾;
+      dec i.27;
+      return xs'
+replayed digest: 17644656787385327013
+===== takeOut (private): replayed _private.Scidonia.FracPerm.StateVar.Layout5.0.Scidonia.FracPerm.StateVar.Layout5.takeOut._redArg (size 3, params 3) =====
+def _private.Scidonia.FracPerm.StateVar.Layout5.0.Scidonia.FracPerm.StateVar.Layout5.takeOut._redArg s @&i d : obj :=
+  let e := Array.getInternal ◾ s i ◾;
+  let xs' := Array.set ◾ s i d ◾;
+  let _x.1 := ctor_0[Prod.mk] xs' e;
+  return _x.1
+replayed digest: 6417109891623298338
+===== inBounds (private): replayed _private.Scidonia.FracPerm.StateVar.Layout5.0.Scidonia.FracPerm.StateVar.Layout5.inBounds._redArg (size 21, params 2) =====
+def _private.Scidonia.FracPerm.StateVar.Layout5.0.Scidonia.FracPerm.StateVar.Layout5.inBounds._redArg @&x.1 @&x.2 : UInt8 :=
+  cases x.1 : UInt8
+  | Scidonia.FracPerm.StateVar.Layout5.Path.here =>
+    let _x.3 := 1;
+    return _x.3
+  | Scidonia.FracPerm.StateVar.Layout5.Path.left =>
+    let p.4 := oproj[2] x.1;
+    let fst := oproj[0] x.2;
+    let _x.5 := _private.Scidonia.FracPerm.StateVar.Layout5.0.Scidonia.FracPerm.StateVar.Layout5.inBounds._redArg p.4 fst;
+    return _x.5
+  | Scidonia.FracPerm.StateVar.Layout5.Path.right =>
+    let p.6 := oproj[2] x.1;
+    let snd := oproj[1] x.2;
+    let _x.7 := _private.Scidonia.FracPerm.StateVar.Layout5.0.Scidonia.FracPerm.StateVar.Layout5.inBounds._redArg p.6 snd;
+    return _x.7
+  | Scidonia.FracPerm.StateVar.Layout5.Path.index =>
+    let i.8 := oproj[1] x.1;
+    let p.9 := oproj[2] x.1;
+    let _x.10 := Array.size ◾ x.2;
+    let _x.11 := Nat.decLt i.8 _x.10;
+    cases _x.11 : UInt8
+    | Bool.false =>
+      return _x.11
+    | Bool.true =>
+      let _x.12 := Array.getInternalBorrowed ◾ x.2 i.8 ◾;
+      let _x.13 := _private.Scidonia.FracPerm.StateVar.Layout5.0.Scidonia.FracPerm.StateVar.Layout5.inBounds._redArg p.9 _x.12;
+      return _x.13
+replayed digest: 15393521060650254261
+===== stateDefault: replayed Scidonia.FracPerm.StateVar.Layout5.stateDefault (size 33, params 1) =====
+def Scidonia.FracPerm.StateVar.Layout5.stateDefault x.1 : tobj :=
+  cases x.1 : tobj
+  | Scidonia.FracPerm.StateVar.Layout5.Layout.leaf =>
+    let o.2 := oproj[0] x.1;
+    inc o.2;
+    dec[ref][1 objs] x.1;
+    let _x.3 := Scidonia.FracPerm.StateVar.Layout5.obsDefault o.2;
+    return _x.3
+  | Scidonia.FracPerm.StateVar.Layout5.Layout.struct =>
+    let left.4 := oproj[0] x.1;
+    let right.5 := oproj[1] x.1;
+    jp resetjp.6 _x.7 isShared.8 : tobj :=
+      let _x.9 := Scidonia.FracPerm.StateVar.Layout5.stateDefault left.4;
+      let _x.10 := Scidonia.FracPerm.StateVar.Layout5.stateDefault right.5;
+      jp reusejp.11 _x.12 : tobj :=
+        return _x.12;
+      cases isShared.8 : tobj
+      | Bool.false =>
+        setTag _x.7 := 0;
+        oset _x.7 [1] := _x.10;
+        oset _x.7 [0] := _x.9;
+        goto reusejp.11 _x.7
+      | Bool.true =>
+        let reuseFailAlloc.13 := ctor_0[Prod.mk] _x.9 _x.10;
+        goto reusejp.11 reuseFailAlloc.13;
+    let isSharedCheck.14 := isShared x.1;
+    cases isSharedCheck.14 : tobj
+    | Bool.false =>
+      goto resetjp.6 x.1 isSharedCheck.14
+    | Bool.true =>
+      inc right.5;
+      inc left.4;
+      dec x.1;
+      goto resetjp.6 ◾ isSharedCheck.14
+  | Scidonia.FracPerm.StateVar.Layout5.Layout.arr =>
+    dec[ref][1 objs] x.1;
+    let _x.15 := 0;
+    let _x.16 := Array.mkEmpty ◾ _x.15;
+    return _x.16
+replayed digest: 4430873225874980118
+===== stateDefault._redArg: Scidonia.FracPerm.StateVar.Layout5.stateDefault._redArg -- no replayed declaration =====
+===== assertExclusiveArrayImpl: replayed Scidonia.FracPerm.assertExclusiveArrayImpl (size 1, params 3) =====
+def Scidonia.FracPerm.assertExclusiveArrayImpl α @&site a : obj :=
+  let _x.1 := Scidonia.FracPerm.assertExclusiveArrayImpl._redArg site a;
+  return _x.1
+replayed digest: 14543362650369266955
+===== assertExclusiveArrayImpl._redArg: replayed Scidonia.FracPerm.assertExclusiveArrayImpl._redArg (size 18, params 2) =====
+def Scidonia.FracPerm.assertExclusiveArrayImpl._redArg @&site a : obj :=
+  let _x.1 := Scidonia.FracPerm.inplaceCheck;
+  cases _x.1 : obj
+  | Bool.false =>
+    return a
+  | Bool.true =>
+    let _x.2 := isExclusiveUnsafe ◾ a;
+    cases _x.2 : obj
+    | Bool.false =>
+      let _x.3 := Scidonia.FracPerm.assertExclusiveArrayImpl._redArg._closed_0;
+      let _x.4 := Array.size ◾ a;
+      let _x.5 := Nat.reprFast _x.4;
+      inc[persistent][ref] _x.3;
+      let _x.6 := String.append _x.3 _x.5;
+      dec[ref] _x.5;
+      let _x.7 := Scidonia.FracPerm.assertExclusiveArrayImpl._redArg._closed_1;
+      let _x.8 := String.append _x.6 _x.7;
+      let _x.9 := Scidonia.FracPerm.reportNotExclusive._redArg site _x.8 a;
+      dec[ref] _x.8;
+      return _x.9
+    | Bool.true =>
+      return a
+replayed digest: 17616022044830371737
+===== assertExclusiveImpl: replayed Scidonia.FracPerm.assertExclusiveImpl (size 1, params 3) =====
+def Scidonia.FracPerm.assertExclusiveImpl σ @&site s : tobj :=
+  let _x.1 := Scidonia.FracPerm.assertExclusiveImpl._redArg site s;
+  return _x.1
+replayed digest: 5884188167294317440
+===== assertExclusiveImpl._redArg: replayed Scidonia.FracPerm.assertExclusiveImpl._redArg (size 10, params 2) =====
+def Scidonia.FracPerm.assertExclusiveImpl._redArg @&site s : tobj :=
+  let _x.1 := Scidonia.FracPerm.inplaceCheck;
+  cases _x.1 : tobj
+  | Bool.false =>
+    return s
+  | Bool.true =>
+    let _x.2 := isExclusiveUnsafe ◾ s;
+    cases _x.2 : tobj
+    | Bool.false =>
+      let _x.3 := Scidonia.FracPerm.assertExclusiveImpl._redArg._closed_0;
+      let _x.4 := Scidonia.FracPerm.reportNotExclusive._redArg site _x.3 s;
+      return _x.4
+    | Bool.true =>
+      return s
+replayed digest: 7992479402402180708
