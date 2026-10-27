@@ -47,6 +47,22 @@
   check its recognition, its variable layout and `Ownership.check` acceptance
   (`decide`, plus `projected_check` instantiated on it), and it asserts that the
   reified artifact decodes to the replayed declaration's prefix.
+- The nested projection check replays the private `setAt` and runs
+  `projectNested` on its `Path.index` branch:
+  `(cd ../lean-examples && nix develop -c lake env bash -c 'export LEAN_PATH="../ownership/.lake/build/lib/lean:$LEAN_PATH"; lean ../ownership/scripts/check_nested_projection.lean')`.
+  It asserts that the recognizer accepts the real declaration, that the
+  recognized fragment has the pinned 25 operations, that the path's projections
+  are its three fields, that the put-back uses the extracted parent, the
+  selected index and the recursive result, and that the child check reads the
+  pair's second projection. It then asserts that ten token-preserving near
+  misses are rejected while the unmutated declaration is still accepted: an
+  extra pair or extracted-child increment, a put-back through the path's array
+  field, at the bounds result or of the extracted child, swapped pair
+  projections, a flipped check flag, a dropped pair decrement, the update body
+  moved onto `Bool.false`, swapped `Bool` labels, and a recursive call reading
+  the raw extracted child. The recognizer is structural only: no model
+  correspondence is claimed, and the emitted recursive callee is an outstanding
+  obligation.
 
 ## How behaviour is tested
 
