@@ -2,5 +2,6 @@ import OwnershipTest.Array
 import OwnershipTest.Nested
 import OwnershipTest.NestedEmitted
 import OwnershipTest.PathAgreement
+import OwnershipTest.PathSafety
 import OwnershipTest.RecursiveProof
 import OwnershipTest.PairBranchProof

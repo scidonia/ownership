@@ -21,4 +21,5 @@ import Ownership.Runner
 import Ownership.Entry
 import Ownership.Nested
 import Ownership.Path
+import Ownership.PathSafety
 import Ownership.Pair

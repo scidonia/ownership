@@ -180,3 +180,12 @@
   and feeds them to `takeOutsOK_of_entryInv` and `callAt_frame_confined`. The
   emitted machine-level `NestedAgrees` still needs the recognizer's operand
   identities and the reified machine fields.
+- `Ownership/PathSafety.lean` turns the path theory into depth-independent
+  results: `path_run_safe` covers an arbitrary level list through
+  `checkN_sound_of_entryInv`, `level_call_confined` is `callAt_frame_confined`
+  at a level of the path, and `client_retention`/`clientSeparated_preserved`
+  keep client-reachable references outside the footprint (the latter with the
+  three explicit non-growth facts, discharged by the depth-three certificate).
+  It does not prove arbitrary runtime recursion, the emitted callee or
+  continuation, or physical reference counts; callbacks are outside the
+  fragment.
