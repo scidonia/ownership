@@ -1,11 +1,20 @@
 # The core result: a Lean type discipline that necessarily yields RC=1
 
-Status: revised against `OWNERSHIP_PLAN_REVIEW.md` (24 October 2026). M0 — the
-toolchain scaffold and a toy LCNF-acquisition smoke test — is in place and
-verified. Nothing in the core theorem is proved yet. The first milestone is now
-an **ownership (artifact) certificate for the generated executor under an
-explicit entry invariant**, not a claim that the executor implements the source
-interpreter.
+Status: revised against `OWNERSHIP_PLAN_REVIEW.md` (24 October 2026) and, after
+integrating the recursive-ownership development, against
+`docs/notes/OWNERSHIP_NEXT_STEPS.md` (27 October 2026). The toolchain scaffold,
+the scalar-array artifact certificate and the recursive model are in place and
+verified: `Ownership`, `OwnershipTest` and `OwnershipLcnf` build, the contract
+fixtures pass, and the pinned projection replay accepts the replayed `execP`
+`PTree.set` branch while rejecting its eleven near misses. The core theorem is
+not proved in full: the emitted nested and pair correspondence, the
+compositional discharge of the heap/program agreement and
+annotation-reachability premises, the recursive executor call rule, and the
+runtime connections remain open. §0.1 records each milestone's state and
+`AGENTS.md` records the recursive model's contract and non-claims. The first
+milestone remains an **ownership (artifact) certificate for the generated
+executor under an explicit entry invariant**, not a claim that the executor
+implements the source interpreter.
 
 ---
 
