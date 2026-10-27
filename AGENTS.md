@@ -60,9 +60,18 @@
   field, at the bounds result or of the extracted child, swapped pair
   projections, a flipped check flag, a dropped pair decrement, the update body
   moved onto `Bool.false`, swapped `Bool` labels, and a recursive call reading
-  the raw extracted child. The recognizer is structural only: no model
-  correspondence is claimed, and the emitted recursive callee is an outstanding
-  obligation.
+  the raw extracted child. The recognizer itself is structural; the conditional
+  model correspondence is in `OwnershipLcnf/NestedSemantics.lean`, and the
+  emitted recursive callee remains an outstanding obligation.
+- The captured LCNF artifacts are gated by `scripts/check_artifacts.sh`: it
+  checks the sibling revision and the flake's Lean, regenerates the `execP` and
+  nested `setAt` captures and diffs them against `docs/notes/artifacts/`.
+  Runtime evidence for the layout write path is
+  `(cd ../lean-examples && nix develop -c lake exe inplace)`, and the IR gate is
+  `(cd ../lean-examples && nix develop -c lake build ScidoniaTest)`. The results,
+  the count accounting and the replay/backend assumptions are recorded in
+  `docs/notes/OWNERSHIP_RUNTIME_EVIDENCE.md`; they are supporting measurement,
+  not a refinement proof.
 
 ## How behaviour is tested
 
