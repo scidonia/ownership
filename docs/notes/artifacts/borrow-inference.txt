@@ -28,7 +28,8 @@ An unmarked parameter is owned: the compiler decided the callee needs ownership,
 i.e. the value is consumed or used non-linearly and the caller's count is
 transferred (or an `inc` is inserted at the call site).
 
-- `setAt`: path owned, state borrowed, pair-state owned.
+- `setAt`: the path (`x.1`) is owned, the replacement value (`x.2`, the
+  `State (At p)` argument) is borrowed, and the state (`x.3`) is owned.
 - `takeOut`: array owned, index borrowed, default owned.
 - `execP`: array owned, tree owned.
 

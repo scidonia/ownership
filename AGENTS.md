@@ -64,7 +64,9 @@
   model correspondence is in `OwnershipLcnf/NestedSemantics.lean`, and the
   emitted recursive callee remains an outstanding obligation.
 - The captured LCNF artifacts are gated by `scripts/check_artifacts.sh`: it
-  checks the sibling revision and the flake's Lean, regenerates the `execP` and
+  checks the sibling revision, that its working tree is clean at that revision
+  (ignored build outputs such as `.lake/` are excluded), and the flake's Lean;
+  it then regenerates the `execP` and
   nested `setAt` captures and diffs them against `docs/notes/artifacts/`.
   Runtime evidence for the layout write path is
   `(cd ../lean-examples && nix develop -c lake exe inplace)`, and the IR gate is

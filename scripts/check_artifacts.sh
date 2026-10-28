@@ -20,6 +20,17 @@ if [ "$actual" != "$pin" ]; then
   exit 1
 fi
 
+# The artifact captures are only meaningful for a clean pin. Tracked
+# modifications and untracked source count; ignored build outputs (the
+# sibling's `.lake/`) do not, because `git status` excludes them by default.
+# Submodules are not ignored, so a dirty submodule is rejected too.
+dirty=$(git -C "$sibling" status --porcelain --untracked-files=normal)
+if [ -n "$dirty" ]; then
+  echo "sibling working tree is dirty at the pin; refusing to regenerate artifacts:" >&2
+  printf '%s\n' "$dirty" >&2
+  exit 1
+fi
+
 if ! nix develop -c lean --version | grep -q '4.35.0-rc3'; then
   echo "the flake's Lean is not 4.35.0-rc3" >&2
   exit 1

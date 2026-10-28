@@ -85,9 +85,14 @@ replayed signatures of the pinned declarations are:
 
 | Declaration | Inferred signature | Borrowed | Owned |
 | --- | --- | --- | --- |
-| `setAt` | `x.1 @&x.2 x.3` | the state | the path, the pair-state |
+| `setAt` | `x.1 @&x.2 x.3` | the replacement value (`x.2`) | the path (`x.1`), the state (`x.3`) |
 | `takeOut` | `s @&i d` | the index | the array, the default |
 | `execP` | `a x.1` | — | the array, the tree |
+
+The mapping follows the source: `setAt : {d} → (p : Path d) → State (At p) → State d → State d`,
+so `x.2` is the replacement value and `x.3` the owned state. An owned parameter is
+a reference-management convention, not evidence of exclusivity; a borrowed
+replacement does not make the updated state borrowed.
 
 The reasons are the compiler's own: the probe copy of `execP` logs
 `own a: owned function argument`, `own x.56: bkwd projection propagation k.60`,
