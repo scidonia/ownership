@@ -1,0 +1,70 @@
+# Borrow inference for the pinned declarations
+
+Date: 2026-10-28
+Repository: scidonia/ownership
+Pinned sibling: lean-examples 66e64334a1c968d829903b8aec8d22f7e3b9fd3f (clean)
+Toolchain: Lean 4.35.0-rc3 (flake)
+
+Commands:
+
+  # signatures (normal replay; no trace needed)
+  (cd ../lean-examples && nix develop -c lake env lean ../ownership/scripts/dump_executor.lean)
+  (cd ../lean-examples && nix develop -c lake env lean ../ownership/scripts/capture_nested.lean)
+
+  # compiler decision log (trace; the public probe copies are compiled here)
+  (cd ../lean-examples && nix develop -c lake env lean \
+      -Dtrace.Compiler.inferBorrow=true ../ownership/scripts/dump_executor.lean)
+
+## Inferred signatures of the replayed declarations
+
+def _private.Scidonia.FracPerm.StateVar.Layout5.0.Scidonia.FracPerm.StateVar.Layout5.setAt._redArg x.1 @&x.2 x.3 : tobj
+
+def _private.Scidonia.FracPerm.StateVar.Layout5.0.Scidonia.FracPerm.StateVar.Layout5.takeOut._redArg s @&i d : obj
+
+def _private.Scidonia.FracPerm.Structured.Executor.0.Scidonia.FracPerm.Structured.execP._redArg a x.1 : tobj
+
+`@&` marks a borrowed parameter: the callee reads it without taking ownership.
+An unmarked parameter is owned: the compiler decided the callee needs ownership,
+i.e. the value is consumed or used non-linearly and the caller's count is
+transferred (or an `inc` is inserted at the call site).
+
+- `setAt`: path owned, state borrowed, pair-state owned.
+- `takeOut`: array owned, index borrowed, default owned.
+- `execP`: array owned, tree owned.
+
+## Compiler trace for the public probe copy of execP
+
+The dump script compiles a public copy of the executor body (`probeExecP`). Its
+inference emits the reasons (excerpt):
+
+  [Compiler.inferBorrow] own _x.66: owned function argument _x.67
+  [Compiler.inferBorrow] own v.59: owned function argument _x.67
+  [Compiler.inferBorrow] own a: owned function argument _x.66
+  [Compiler.inferBorrow] own k.60: argument to closure call _x.63
+  [Compiler.inferBorrow] own x.56: bkwd projection propagation k.60
+  [Compiler.inferBorrow] own i.58: fwd projection propagation i.58
+  [Compiler.inferBorrow] own a.57: fwd projection propagation a.57
+  [Compiler.inferBorrow] size: 25
+      def DumpExecutor.probeExecP._redArg a x.1 : tobj := ...
+      # (signature line: DumpExecutor.probeExecP._redArg a x.1 : tobj)
+
+The reasons are the compiler's own vocabulary: `owned function argument`,
+`argument to closure call`, `fwd`/`bkwd projection propagation`, `used in reset
+reuse`, `result of function call`, `result of ctor call`, `constructorArg`,
+`tail call preservation`, `jpArgPropagation`, `jpTailCallPreservation`,
+`ownedAnnotation`.
+
+## Limit
+
+The borrow inference for the private `setAt`, `takeOut` and `execP` declarations
+ran when the pinned sibling's module was compiled into its olean. The replay in
+these scripts starts after `saveMono` and re-runs the pass on declarations that
+already carry the inferred annotations; the pass therefore does not re-emit the
+"own" lines for them. What is recorded for the pinned declarations is the
+resulting signature, which is the compiler's decision, not a re-derivation.
+
+This is a compiler decision log, not a linearity certificate. It reports no
+pass-rate: an owned parameter is a deliberate ownership decision (the value is
+consumed or non-linear at the callee), not a failure. The model's linearity
+(`Scidonia.FracPerm`) and the runtime's exclusivity (`inplace`) are separate
+properties; see `docs/notes/OWNERSHIP_RUNTIME_EVIDENCE.md`.

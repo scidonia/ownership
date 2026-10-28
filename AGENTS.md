@@ -72,6 +72,11 @@
   the count accounting and the replay/backend assumptions are recorded in
   `docs/notes/OWNERSHIP_RUNTIME_EVIDENCE.md`; they are supporting measurement,
   not a refinement proof.
+- The borrow-inference decision log is
+  `(cd ../lean-examples && nix develop -c lake env lean -Dtrace.Compiler.inferBorrow=true ../ownership/scripts/dump_executor.lean)`.
+  The pinned signatures and the probe copy's reasons are recorded in
+  `docs/notes/artifacts/borrow-inference.txt`; it is a compiler decision log,
+  not a linearity certificate or a pass rate.
 
 ## How behaviour is tested
 

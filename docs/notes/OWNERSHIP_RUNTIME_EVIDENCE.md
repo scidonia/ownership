@@ -77,6 +77,29 @@ inlining choices. No custom compiler options are passed.
 byte-for-byte artifacts. It does not bind a linked executable, the C runtime
 revision, or the selected implementation; that remains outstanding.
 
+## Borrow inference (compiler decision log)
+
+The compiler's borrow inference decides which parameters a declaration owns.
+`-Dtrace.Compiler.inferBorrow=true` prints the decisions and their reasons. The
+replayed signatures of the pinned declarations are:
+
+| Declaration | Inferred signature | Borrowed | Owned |
+| --- | --- | --- | --- |
+| `setAt` | `x.1 @&x.2 x.3` | the state | the path, the pair-state |
+| `takeOut` | `s @&i d` | the index | the array, the default |
+| `execP` | `a x.1` | — | the array, the tree |
+
+The reasons are the compiler's own: the probe copy of `execP` logs
+`own a: owned function argument`, `own x.56: bkwd projection propagation k.60`,
+`own k.60: argument to closure call`, and similar. The private declarations'
+inference ran when the pinned sibling's module was compiled, so the replay does
+not re-emit their "own" lines; the signature is the recorded decision. The raw
+log and its provenance are in `docs/notes/artifacts/borrow-inference.txt`.
+
+This is a decision log, not a linearity certificate: it reports no pass-rate,
+and an owned parameter is a deliberate ownership decision (the value is consumed
+or used non-linearly at the callee), not a failure.
+
 ## Outstanding
 
 - The backend-input capture and the replay-to-backend argument.
