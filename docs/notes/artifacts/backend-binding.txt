@@ -1,0 +1,67 @@
+# Backend binding for the certified setAt write
+
+Date: 2026-10-28
+Repository: scidonia/ownership
+Pinned sibling: lean-examples 66e64334a1c968d829903b8aec8d22f7e3b9fd3f (clean)
+Toolchain: Lean 4.35.0-rc3 (flake)
+Gate: scripts/check_runtime_binding.sh
+
+The gate runs the artifact pin/cleanliness check, the sibling's IR-shape gate
+(`lake build ScidoniaTest`), the generated-C and runtime-header primitive
+check, and the linked probe modes with `SCIDONIA_CHECK_INPLACE` off and on.
+
+## Generated C: Scidonia/FracPerm/StateVar/Layout5.c
+
+The fused path update (`setAt___redArg`) and the take-out:
+
+- `4102` `lp_..._setAt___redArg(...)`: the declaration's entry; the `Path.index`
+  arm follows the `switch`.
+- `4122`, `4171` `!lean_is_exclusive(v_x_1223_)`: the pair-reuse tests for the
+  two container arms.
+- `4235` `lp_..._assertExclusiveArrayImpl___redArg(...)`: the array check.
+- `4244` `lp_..._assertExclusiveImpl___redArg(...)`: the child check on `snd`.
+- `4245` `lp_..._setAt___redArg(v_p_1248_, v_x_1222_, v___x_1258_)`: the
+  recursive call on the checked child.
+- `4246` `v_xs_x27_1260_ = lean_array_fset(v_fst_1255_, v_i_1247_, v___x_1259_)`:
+  the put-back into the extracted parent at the selected index with the
+  recursive result.
+- `2089` `lp_..._takeOut___redArg`: `2093` `lean_array_fget`, `2094`
+  `lean_array_fset`, `2095` `lean_alloc_ctor(0, 2, 0)` with the two
+  `lean_ctor_set` field stores: the pair carries the updated array and the
+  extracted element.
+
+## Runtime header: include/lean/lean.h
+
+- `759` `static inline bool lean_is_exclusive(lean_object * o)`; `767`
+  `lean_is_exclusive_obj`.
+- `lean_array_set_core` tests exclusivity before the in-place store;
+  `lean_array_fset` (called by the generated code) reaches it.
+- `lean_array_uset` is the update primitive the model's `arraySet` names.
+
+## IR-shape gate
+
+`ScidoniaTest/IRShape.lean` reads the post-RC IR of `Layout5.setAt`, its
+`Path.index` alternative, `takeOut`, and `Structured.execP`/`execR` through
+`IR.findEnvDecl` (names at :284-300; survey entries at :394-399; requirements at
+:490-540) and fails the build when the constructs or their order do not hold.
+The gate runs `lake build ScidoniaTest`.
+
+## Linked probe modes (gate output)
+
+Check off: `separate-exact`, `separate-spare`, `inline-io`, `sealed`,
+`inline-exact`, `closed-case` all exit 0.
+Check on: `separate-exact`, `inline-io`, `sealed` exit 0; `inline-exact` and
+`closed-case` exit 1 (the armed check aborts on the copy).
+
+## What is bound, and what remains trusted
+
+Bound: the pinned revision and clean tree, the artifact captures, the
+post-reference-counting IR shapes, the generated C's check/recursive/put-back
+calls and the runtime header's primitives, and the linked probe's statuses for
+the certified and control shapes.
+
+Not bound: the C semantics itself. The runtime model's `isExclusive` and
+`arraySet` are the documented meanings of `lean_is_exclusive` and
+`lean_array_uset`; the gate shows the primitives are present and the observed
+behaviour agrees, not that the model refines the linked runtime. Replay-to-
+backend identity (A10), address identity and free/cascade remain assumptions.

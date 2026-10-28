@@ -71,6 +71,26 @@ after the backend passes is not captured; the replay assumptions remain those
 recorded in `OwnershipLcnf/Semantics.lean` (A10), including specialization and
 inlining choices. No custom compiler options are passed.
 
+## Backend and runtime binding
+
+`scripts/check_runtime_binding.sh` binds the pinned revision and clean tree, the
+artifact captures, the sibling's IR-shape gate, the generated C and runtime
+header primitives for the `setAt` write, and the linked probe modes with
+`SCIDONIA_CHECK_INPLACE` off and on. The captured evidence is in
+`docs/notes/artifacts/backend-binding.txt`.
+
+What it bounds: the IR the pinned toolchain produced for `setAt` and `execP`,
+the C's check/recursive/put-back calls and the runtime header's
+`lean_is_exclusive`/`lean_array_uset` primitives, and the probe's statuses for
+the certified shapes (in place) and the closed-pure-array controls (copy, abort
+when armed).
+
+What it does not bound: the C semantics. The runtime model's `isExclusive` and
+`arraySet` are the documented meanings of those primitives; the gate shows they
+are present and the observed behaviour agrees, not that the model refines the
+linked runtime. Replay-to-backend identity (A10), address identity and
+free/cascade remain assumptions.
+
 ## Build gate
 
 `scripts/check_artifacts.sh` is the current gate: sibling pin, flake Lean, and

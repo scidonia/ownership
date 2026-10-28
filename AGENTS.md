@@ -79,6 +79,12 @@
   The pinned signatures and the probe copy's reasons are recorded in
   `docs/notes/artifacts/borrow-inference.txt`; it is a compiler decision log,
   not a linearity certificate or a pass rate.
+- The runtime binding is gated by `scripts/check_runtime_binding.sh`: it runs
+  the artifact gate, the sibling's IR-shape build, checks the generated C and
+  runtime-header primitives for the `setAt` write, and runs the linked probe
+  modes with the check off and on. The captured evidence is
+  `docs/notes/artifacts/backend-binding.txt`. It binds the pinned evidence and
+  observed behaviour, not the C semantics.
 - `runtime-bridge/` is the compiled reproducer for the in-place context
   dependence: `(cd runtime-bridge && nix develop -c lake build)`, then
   `nix develop -c lake exe probe <mode>`; the modes and expected results are in
