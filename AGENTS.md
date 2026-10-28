@@ -213,3 +213,23 @@
   It does not prove arbitrary runtime recursion, the emitted callee or
   continuation, or physical reference counts; callbacks are outside the
   fragment.
+- `Ownership/PathConsolidation.lean` consolidates the premises those results
+  take: `checkNF_build` derives the built program's checker acceptance and its
+  final context, `childConfined_of_path` derives `ChildConfined` at every level,
+  `agrees_extract_restore` derives the extract/restore leaf's agreement,
+  `slotRefs_runN`/`writesIn_build`/`footprint_contained` derive the post-state
+  footprint's non-growth from the run's write account, and
+  `observation_retention`/`callback_retention` carry client retention to the
+  interface's produced values. The remaining supplied premises are the leaf
+  (emitted callee) contract, the heap-shape facts `Acyclic` and `Closed`, and the
+  interface's own observation separation. `OwnershipTest/PathConsolidation.lean`
+  instantiates every derivation on the depth-three path.
+- The finite level list is a **named, narrowed** row, not a completed
+  connection: `calls_build`/`extractions_build` bound the built program's call
+  structure by the list's length and `callBody_build` shows each call's embedded
+  body is the remaining list, so the model's recursion is syntactic descent.
+  The emitted `setAt` recursive callee's body is not captured (N10) and the
+  executor's call rule is not established, so `Ownership/PathConsolidation.lean`'s
+  section on the finite list states the boundary and what a connection would
+  need; nothing there is an executor certificate, and the depth of recursion the
+  model covers is the program's own syntax, not data-dependent runtime depth.

@@ -22,6 +22,7 @@ import Ownership.Entry
 import Ownership.Nested
 import Ownership.Path
 import Ownership.PathSafety
+import Ownership.PathConsolidation
 import Ownership.Pair
 import Ownership.CountedPair
 import Ownership.PutBack

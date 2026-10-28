@@ -3,6 +3,7 @@ import OwnershipTest.Nested
 import OwnershipTest.NestedEmitted
 import OwnershipTest.PathAgreement
 import OwnershipTest.PathSafety
+import OwnershipTest.PathConsolidation
 import OwnershipTest.RecursiveProof
 import OwnershipTest.PairBranchProof
 import OwnershipTest.CountedPair
