@@ -1,0 +1,362 @@
+% Paper skeleton: static count-one ownership and in-place array updates in Lean 4.
+%
+% Build note: the Lean blocks use minted, so compile with
+%   lualatex -shell-escape ownership-skeleton.tex
+% and a monospace font that covers Lean's Unicode glyphs (adjust \setmonofont).
+% The \prose{...} markers are visible placeholders (todonotes); remove the
+% package/macro when the prose is written. No prose is supplied.
+%
+% Theorem statements are the repository's actual signatures, with premises
+% abbreviated where marked by "-- …". Bibliographic details to be verified.
+%
+% Build note on this host: the installed TeX Live lacks the luaotfload font
+% database, so fontspec cannot load Latin Modern and the document does not
+% render here. On a complete TeX Live run
+%   lualatex -shell-escape ownership-skeleton.tex
+% (minted needs pygments). If a Unicode mono font is unavailable, replace the
+% fontspec/minted block with the listings fallback commented below; the Lean
+% glyphs then need literate mappings or a Unicode-capable mono font.
+
+\documentclass[11pt]{article}
+
+\usepackage{fontspec}
+\setmonofont{DejaVu Sans Mono}[Scale=0.85]
+\usepackage{minted}
+\setminted{breaklines=true, fontsize=\small, frame=lines, framesep=2mm}
+% Fallback without fontspec/minted (also needs literate mappings for ∀ → ∧ ∃):
+% \usepackage[T1]{fontenc}\usepackage{lmodern}\usepackage{listings}
+% \lstset{basicstyle=\ttfamily\small, breaklines=true}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{cleveref}
+\usepackage{todonotes}
+\newcommand{\prose}[1]{\todo[inline, color=yellow!20, size=\small]{#1}}
+
+\newtheorem{claim}{Claim}
+\newtheorem{definition}{Definition}
+\newtheorem{nonclaim}{Non-claim}
+
+\title{Static Count-One Ownership for In-Place Array Updates in Lean~4}
+\author{[Author]}
+\date{[Date]}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+\prose{One paragraph: the problem (Lean arrays copy when shared), the claim
+(an ownership discipline with a count-one invariant yields in-place updates for
+the recognised emitted write), and the boundary (what is proved, what is
+measured, what is trusted).}
+\end{abstract}
+
+\section*{Argument map}
+% ARG: the paper's spine; each row is one step of the argument and the theorem
+% that carries it. Prose should introduce each row and then hand over to the
+% claims.
+\begin{center}
+\begin{tabular}{@{}lll@{}}
+\toprule
+Step & Claim & Carrier \\
+\midrule
+1 & the checker is sound: accepted writes are exclusive & \Cref{thm:check-sound} \\
+2 & the entry invariant supplies count one and separation & \Cref{thm:entry-inv} \\
+3 & the emitted write prefix is recognised and corresponds & \Cref{thm:prefix-sound} \\
+4 & the recognised write lands in place & \Cref{thm:prefix-in-place} \\
+5 & the nested path corresponds without a callee hypothesis & \Cref{thm:path-sound} \\
+6 & the extraction pair returns to count one & \Cref{thm:pair} \\
+7 & the put-back's exclusive branch is derived & \Cref{thm:putback} \\
+8 & the runtime model cannot abort under the correspondence & \Cref{thm:no-abort} \\
+9 & the observable behaviour agrees on a corpus & \Cref{sec:empirical} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\section{Introduction}
+\prose{Motivate the gap: a purely functional language's updates copy when the
+array is shared; the paper asks whether a static discipline can guarantee the
+in-place branch. State the two claims (model-level theorem; runtime-model
+simulation) and the empirical boundary. Cite \cite{lean4,perceus,countingbeans}.}
+\prose{List the contributions, each pointing at a claim below, and state the
+non-claims early (no C-semantics proof, no M7 source correspondence).}
+
+\section{Setting: Lean 4, LCNF, and reference counting}
+\prose{Describe the pinned toolchain, LCNF, the runtime's \texttt{lean\_is\_exclusive}
+and \texttt{lean\_array\_uset}, and the representation of arrays. Cite
+\cite{lean4,leanruntime,perceus}.}
+\prose{State the problem precisely: the runtime copies unless the count is one and
+the object is non-persistent; a source-level discipline must arrange that.}
+
+\section{The ownership discipline}
+\prose{Introduce the model heap, values, counts, exclusivity, and the checker as
+a proof obligation, not a runtime test. The key point: count one is a ghost
+predicate enforced by the checker and preserved by the invariant.}
+
+\begin{definition}[Invariant]\label{def:inv}
+\begin{minted}{lean}
+structure Inv (H : Heap) (env : Env) (c : Ctx) : Prop where
+  rc_eq       : ∀ r, H.rc r = c.mult r
+  owned       : ∀ x r, c.us x = .owned → c.refOf x = some r →
+                  env x = some (.ref r) ∧ 1 ≤ c.mult r
+  borrow      : ∀ x r, c.us x = .borrow → c.refOf x = some r →
+                  env x = some (.ref r) ∧ H.cells r ≠ none
+  scalar      : ∀ x, c.us x = .scalar → ∃ n, env x = some (.scalar n)
+  nonPersistent : ∀ r o, H.cells r = some o → o.persistent = false
+
+def Exclusive (H : Heap) (r : Ref) : Prop :=
+  ∃ o, H.cells r = some o ∧ o.rc = 1 ∧ o.persistent = false
+\end{minted}
+\end{definition}
+
+\begin{claim}[Checker soundness]\label{thm:check-sound}
+\begin{minted}{lean}
+theorem check_sound {c : Code} {ctx ctx' : Ctx} {H : Heap} {env : Env}
+    (hc : check ctx c = some ctx') (hi : Inv H env ctx) :
+    ∃ H' env' v ws, run c env H = .done H' env' v ws ∧
+      (∀ w ∈ ws, w.2 = true) ∧ Inv H' env' ctx'
+\end{minted}
+\end{claim}
+
+\begin{claim}[Entry invariant]\label{thm:entry-inv}
+\begin{minted}{lean}
+structure EntryInv (H : Heap) (env : Env) (c : Ctx) (root : Ref)
+    (client : List Ref) : Prop extends Inv H env c where
+  uniqueTree  : UniqueTree H root                 -- rc = 1 on the footprint
+  separated   : ClientSeparated H root client
+  complete    : RootsComplete c H root
+
+theorem checkN_sound_of_entryInv -- … premises abbreviated
+    (hEntry : EntryInv H env c root client) (hag : Agrees H env code)
+    (hc : checkN c code = some c') :
+    ∃ H' env' v ws, runN code env H = .done H' env' v ws ∧
+      (∀ w ∈ ws, w.2 = true) ∧ Inv H' env' c'
+\end{minted}
+\end{claim}
+
+\prose{Path-level agreement and annotation reachability replace per-client
+premises: \texttt{agrees\_of\_path}, \texttt{annotationsIn\_of\_path}, the
+transitivity lemmas, and \texttt{path\_run\_safe}/\texttt{client\_retention}.
+State what remains supplied.}
+
+\section{Recognising the emitted write}
+\prose{Explain the strict-recogniser approach: decode the actual LCNF value,
+pin operation order, arities, operand identities and branch constructors, and
+reject token-preserving near misses. The recogniser is structural; the contracts
+A1--A12 (execP) and N1--N12 (nested) are named assumptions.}
+\prose{Describe the three recognised shapes: \texttt{execP}'s \texttt{PTree.set},
+\texttt{setAt}'s \texttt{Path.index}, and \texttt{setAt}'s
+\texttt{Path.left}/\texttt{Path.right} pair arms (with joins). Cite the capture
+artifact and the near-miss counts (11, 10, 28).}
+
+\section{Correspondence to the ownership model}
+\prose{This is the semantic bridge: the recognised fragment's restricted
+semantics equals the model run. Emphasise that the recognition hypothesis is
+load-bearing (\texttt{execAST} returns nothing unless the code decodes).}
+
+\begin{claim}[Prefix correspondence]\label{thm:prefix-sound}
+\begin{minted}{lean}
+theorem project_sound (assign : FVarId → Var) (p : Prefix)
+    (code : Code .impure) (hproj : projectPrefix code = some p) -- … premises
+    (hag : Agrees assign p s env H root i v) (hcell : H.cells root = some o)
+    (hin : i < o.fields.size) :
+    PrefixOutcome.ofExec assign p (execAST assign p code s) =
+      some (PrefixOutcome.ofModel (Ownership.run (p.toModel assign) env H))
+\end{minted}
+\end{claim}
+
+\begin{claim}[The write is in place]\label{thm:prefix-in-place}
+\begin{minted}{lean}
+theorem recognized_write_in_place -- … premises abbreviated
+    (hEntry : EntryInv H env (Runner.initCtx root) root client)
+    (hproj : projectPrefix code = some p) (hl : Layout assign p) -- …
+    (hcell : H.cells root = some o) (hin : i < o.fields.size) :
+    PrefixOutcome.ofExec assign p (execAST assign p code s) =
+        some (inPlaceOutcome root i v o H) ∧
+      PrefixOutcome.ofModel (Ownership.run (p.toModel assign) env H) =
+        inPlaceOutcome root i v o H
+\end{minted}
+\end{claim}
+
+\prose{The nested path: the model builds take-out/call/put-back per level; the
+finite-path induction discharges the callee contract from the tail, leaving the
+leaf contract and N10. The model bound: the flat environment cannot express the
+emitted per-invocation \texttt{oproj[1]} index; record it as a limitation.}
+
+\begin{claim}[Nested finite path]\label{thm:path-sound}
+\begin{minted}{lean}
+theorem index_path_simulates_model (declName takeOut : Name) -- … premises
+    (hproj : projectNested declName takeOut code = some p) -- …
+    (build : …) (ls : List Level) :
+    NestedOutcome.ofExec assign p
+        (execNestedAST declName takeOut assign body p code s) =
+      NestedOutcome.ofModel (Nested.runN (build path value body ls) mEnv H) ∧
+    ∃ H' env' ws, Nested.runN (build path value body ls) mEnv H =
+        .done H' env' (.ref rA) ws ∧ ∀ w ∈ ws, w.2 = true
+\end{minted}
+\end{claim}
+
+\begin{minted}{lean}
+theorem calls_build (path value : Var) (body : NCode) (ls : List Level) :
+    calls (build path value body ls) = calls body + ls.length
+theorem callBody_build -- (l :: rest), rfl:
+    callBody? (build path value body (l :: rest)) = some (build path value body rest)
+\end{minted}
+
+\section{Counted extraction, call, and restoration}
+\prose{The pair's temporary handles: the take-out transfers the parent and child
+into the fresh pair, the projections increment, and freeing the unique pair
+releases both edges, so the boundary counts equal the entry counts. The negative
+controls are what make the claim non-vacuous.}
+
+\begin{claim}[Pair accounting]\label{thm:pair}
+\begin{minted}{lean}
+theorem pair_accounting {H : Heap} {p c : Ref} {i : Nat}
+    (hw : WellFormedEntry H p c i) :
+    let B := protocol H p c i
+    B.2.rc p = 1 ∧ B.2.rc c = 1 ∧ B.2.cells p ≠ none ∧ B.2.cells c ≠ none ∧
+      B.2.cells B.1 = none ∧ Heap.Exclusive B.2 p ∧ Heap.Exclusive B.2 c ∧
+      B.2.rc p = H.rc p ∧ B.2.rc c = H.rc c
+
+theorem no_free_components_not_exclusive -- negative control
+    (hw : WellFormedEntry H p c i) :
+    let B := protocolNoFree H p c i
+    B.2.rc p = 2 ∧ B.2.rc c = 2 ∧ ¬ Heap.Exclusive B.2 p
+\end{minted}
+\end{claim}
+
+\prose{Put-back: two dispositions, the exclusive branch derived from the
+counted-pair boundary and the child-call contract. Functional restoration and
+count preservation are separate. The child-call boundary is derived (confinement
+from \texttt{callAt\_frame\_confined}), not assumed; the returned-handle counts
+remain premises.}
+
+\begin{claim}[Put-back exclusivity]\label{thm:putback}
+\begin{minted}{lean}
+theorem putBack_exclusive_of_wellFormed -- … premises abbreviated
+    (hw : CountedPair.WellFormedEntry H p c i)
+    (hc : ChildCall Hin Hout env ctx state path x body p c) :
+    putBack H p i c = some (p, mutate H p o i c) ∧ -- … poststate
+      Heap.Exclusive (mutate H p o i c) p ∧ H.rc p = 1
+\end{minted}
+\end{claim}
+
+\section{Runtime model and abort impossibility}
+\prose{Define the independent runtime state, its exclusivity predicate and the
+two array-set dispositions; the structural correspondence preserves refs, cells,
+counts, persistence, fields and the allocator cursor. The abort branch is
+unreachable under the correspondence and \texttt{EntryInv}; a guarded allocator
+refuses a dirty cursor. Name the fidelity boundary: the model is the documented
+meaning of the primitives, not a proof of the C semantics.}
+
+\begin{claim}[No abort]\label{thm:no-abort}
+\begin{minted}{lean}
+structure RHeap where
+  cells : Ref → Option RObj
+  next  : Ref
+
+def RHeap.isExclusive (R : RHeap) (r : Ref) : Bool := -- rc = 1 and not persistent
+
+def checkExclusive (R : RHeap) (r : Ref) : CheckOutcome := -- .ok r or .abort r
+
+def arraySet (R : RHeap) (r : Ref) (i : Nat) (v : Val) : Option SetOutcome := -- inPlace or copied
+
+structure Corr (H : Heap) (R : RHeap) : Prop where -- refs, cells, rc, persistent, fields, next
+
+theorem checkExclusive_no_abort {H : Heap} {R : RHeap} {r : Ref}
+    (hC : Corr H R) (hx : H.Exclusive r) :
+    checkExclusive R r = .ok r ∧ ∀ r', checkExclusive R r ≠ .abort r'
+
+theorem setAt_inPlace_of_entryInv -- … premises abbreviated
+    (hEntry : EntryInv H env (Runner.initCtx root) root client)
+    (hC : Corr H R) (hcell : H.cells root = some o)
+    (hR : R.cells root = some o') (hin : i < o.fields.size) :
+    ∃ H', setAt R root i (.scalar vn) = some (.inPlace H' root) ∧
+      Corr (inPlaceOutcome root i vn o H).heap H'
+\end{minted}
+\end{claim}
+
+\begin{claim}[Emitted-semantics abort impossibility]\label{thm:prefix-no-abort}
+\begin{minted}{lean}
+def PrefixAborts (out : Option PrefixOutcome) : Prop :=
+  ∃ o, out = some o ∧ o.fault ≠ none
+
+theorem prefix_abort_impossible -- … the recognised-prefix premises
+    (hproj : projectPrefix code = some p) -- …
+    (hEntry : EntryInv H env (Runner.initCtx root) root client) :
+    ¬ PrefixAborts (PrefixOutcome.ofExec assign p (execAST assign p code s))
+\end{minted}
+\end{claim}
+
+\section{Empirical alignment}\label{sec:empirical}
+\prose{The compiled corpus and the gate: the model's predicates against
+\texttt{lean\_is\_exclusive} and address identity, with the check armed and
+unarmed. Report the context finding (closed pure arrays are lifted to
+\texttt{\_\_\_closed}/lean\_obj\_once shared constants, so they copy) and the
+differential corpus (unique, alias, drop-back-to-one, persistent, closure). State
+that this is validation, not an exhaustive equivalence. Cite the pinned
+artifact, IR-shape gate, generated C and runtime header.}
+
+\begin{center}
+\begin{tabular}{@{}lll@{}}
+\toprule
+Case & Predicted & Observed \\
+\midrule
+unique array & exclusive, in place & agree \\
+live alias (count two) & shared, copy & agree \\
+alias released before the write & exclusive, in place & agree \\
+persistent literal & shared, copy & agree \\
+closure-held array & shared, copy & agree \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\section{Limits and non-claims}
+\begin{nonclaim}
+\prose{Enumerate: no C-semantics refinement; A10 replay/backend identity; the
+emitted recursive callee and continuation (N10); the model's flat-environment
+index bound; address identity; free/cascade; concurrency and callbacks; M7
+source correspondence; the leaf body contract and the remaining heap-shape
+premises.}
+\end{nonclaim}
+
+\section{Related work}
+\prose{Four clusters, one sentence each, citing the references:
+reference counting and reuse \cite{perceus,countingbeans,koka}; linear and
+uniqueness disciplines \cite{wadler-linear,linearhaskell,uniqueness,aliastypes,
+ownershiptypes,cyclone}; program logics and ownership \cite{separationlogic,
+iris,rustbelt,verus}; verified compilation and kernels \cite{compcert,cakeml,
+lean4,lean4lean}.}
+
+\section{Conclusion}
+\prose{Restate what is proved (model-level and runtime-model) and what is
+trusted (the primitives' C semantics and A10). Sketch the next step: a verified
+runtime model or a backend gate with a stronger fidelity argument.}
+
+\appendix
+\section{Theorem map and artifacts}
+\prose{Table of Lean name, file, role, and the claimed status (proved,
+conditional, measured, trusted). Artifact pins, gate commands and the sibling
+revision.}
+\begin{center}
+\begin{tabular}{@{}lll@{}}
+\toprule
+Lean name & File & Status \\
+\midrule
+\texttt{check\_sound} & \texttt{Ownership/Soundness.lean} & proved \\
+\texttt{checkN\_sound\_of\_entryInv} & \texttt{Ownership/Entry.lean} & proved \\
+\texttt{project\_sound} & \texttt{OwnershipLcnf/Semantics.lean} & proved (contracts) \\
+\texttt{recognized\_write\_in\_place} & \texttt{OwnershipLcnf/Semantics.lean} & proved (contracts) \\
+\texttt{index\_path\_simulates\_model} & \texttt{OwnershipLcnf/PathRecursion.lean} & proved (leaf/N10) \\
+\texttt{pair\_accounting} & \texttt{Ownership/CountedPair.lean} & proved (restricted free) \\
+\texttt{putBack\_exclusive\_of\_wellFormed} & \texttt{Ownership/PutBack.lean} & proved (returned-handle premises) \\
+\texttt{checkExclusive\_no\_abort} & \texttt{OwnershipLcnf/RuntimeModel.lean} & proved (model) \\
+\texttt{prefix\_abort\_impossible} & \texttt{OwnershipLcnf/NoAbort.lean} & proved (A6/A8) \\
+\texttt{differential corpus} & \texttt{runtime-bridge} & measured \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\bibliographystyle{plain}
+\bibliography{references}
+
+\end{document}
