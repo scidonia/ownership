@@ -3,3 +3,4 @@ import OwnershipLcnf.NoAbort
 import OwnershipLcnf.NestedSemantics
 import OwnershipLcnf.Projection
 import OwnershipLcnf.Semantics
+import OwnershipLcnf.PathRecursion
