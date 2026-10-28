@@ -5,3 +5,4 @@ import OwnershipTest.PathAgreement
 import OwnershipTest.PathSafety
 import OwnershipTest.RecursiveProof
 import OwnershipTest.PairBranchProof
+import OwnershipTest.CountedPair

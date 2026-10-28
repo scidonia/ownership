@@ -77,15 +77,25 @@ emitted recursive declaration. That link is an outstanding obligation.
   `projPath` binds the model's path variable to that scalar. The recognizer
   pins which fields the path reads, so a layout change is a rejection, not a
   silent misinterpretation.
-* **N2 (refcount traffic).** The `inc`/`dec` steps on the path, its array field,
-  its index, its continuation, the extracted parent, the extracted child and
-  the pair are refcount traffic on handles the model heap has no cell for: they
-  leave the model's heap, environment and write trace untouched. This is the
-  named non-claim for the fragment's own increments and decrements. Treating
-  that traffic as disjoint from the array's and the child's cells is a
-  **modeling premise**: this fragment represents neither the path nor the pair
-  as a `Ref`, so there is no cell for their counts to collide with. The model's
-  counts are the checker's `mult`, not these.
+* **N2 (refcount traffic).** The concrete parent/child/pair counts are not a
+  disjointness premise. `Ownership.CountedPair.pair_accounting` derives them
+  from a well-formed concrete entry: the captured take-out transfers the parent
+  and child handles into the fresh pair (`rc = 1`) rather than duplicating
+  them, the two pair projections add one owned component handle each, and the
+  pair's unique decrement removes the pair cell and releases both component
+  edges. At the boundary the parent and child are live at their entry counts,
+  the child is exclusive and the pair is absent; `OwnershipTest.CountedPair`
+  carries the concrete certificate together with the omitted-free, retained
+  alias and shared-entry controls. This replaces the earlier disjointness
+  premise for those cells. The path node, its array field, its index and its
+  continuation are different: this fragment carries them as opaque values with
+  no cell in the ownership heap, so their `inc`/`dec`/decrement traffic is
+  **scalar/path bookkeeping**, an assumption of this module rather than a
+  consequence of the pair accounting. The free used there is the restricted
+  one-cell form documented in `Ownership/CountedPair.lean`: it releases one
+  cell's edges without cascading, and the protocol never reaches a cascading
+  case. The model's counts remain the checker's `mult`; the concrete counts
+  above are the protocol's own.
 * **N3 (`Array.size`).** `Array.size a` yields the array cell's field count,
   which is what the model's `LetF.size` reads.
 * **N4 (`Nat.decLt` and the bounds alternative).** `Nat.decLt i n` yields the
