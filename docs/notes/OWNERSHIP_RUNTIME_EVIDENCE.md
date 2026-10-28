@@ -107,3 +107,28 @@ or used non-linearly at the callee), not a failure.
   layout harness.
 - The linked-executable build gate.
 - The emitted recursive callee and continuation, and physical reference counts.
+
+## Context sensitivity of the in-place observation
+
+A probe at the pin, run as a compiled sibling executable and then removed
+(sibling restored clean), measured the same path write in two contexts with
+`addressIO` before and after and no post-write use of the original:
+
+- **Separate function**, the shape the harness uses: the exact-capacity array
+  (`Array.mkEmpty 8`, no slack) and the slack array both wrote in place — the
+  buffer and the focused struct kept their addresses, `ok = true`.
+- **Inlined into a larger `do` block** that also held earlier bindings: the same
+  `Layout5.setLeaf` call reported `exclusive_before = false` and the array was
+  copied, with `ok = true`. A direct `Array.set!` and a write through a `@&`
+  parameter in the same block also copied.
+
+So the in-place outcome is context-sensitive at the runtime even when the model's
+count is one: a binding retained by a surrounding `do` block, a borrowed
+parameter, or a closure/task holding the array changes the physical count, and
+the compiler copies. The model theorem is context-free; the runtime count is not.
+
+The guard is the armed check. With `SCIDONIA_CHECK_INPLACE=1` the write aborts
+instead of copying, which is what the check-enabled harness children assert. With
+the check off, the copy is silent. Any user-facing path that claims an in-place
+write should be exercised with the check armed, and the API should not take a
+written array by `@&`.
