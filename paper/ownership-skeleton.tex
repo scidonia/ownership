@@ -23,6 +23,7 @@
 \usepackage{enumitem}
 \usepackage{xcolor}
 \usepackage{amsthm}
+\usepackage{needspace}
 \usepackage{mdframed}
 \usepackage{minted}
 \usepackage{hyperref}
@@ -61,6 +62,7 @@
   {\thmname{#1}\thmnumber{ #2}\thmnote{ (#3)}.\newline}
 \theoremstyle{claimstyle}
 \newtheorem{claim}{Claim}
+\newtheorem{example}{Example}
 \newtheorem{nonclaim}{Non-claim}
 
 \title{Static Count-One Ownership for In-Place Array Updates in Lean~4}
@@ -116,10 +118,105 @@ two claims and the boundary. Cite \cite{lean4,perceus,countingbeans}.}
 object is non-persistent.}
 
 \section{The ownership discipline}
+
+\subsection{The judgement and its rules}
+\prose{Introduce the context and the judgement: a context records each variable's
+use, reference and multiplicity; \lean{check} (and \lean{checkN} with the frame
+stack) returns the successor context or refuses. The rules below are ownership
+obligations, not runtime tests; the heap side is \lean{Inv} and \lean{EntryInv}.}
+
+\begin{center}
+\small
+\begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}p{3.3cm}>{\raggedright\arraybackslash}p{6.4cm}>{\raggedright\arraybackslash}X@{}}
+\toprule
+Rule & Obligation & Effect \\
+\midrule
+\lean{let x (checkAlias a)} & \lean{a} owned, multiplicity one & \lean{x} is the checked alias \\
+\lean{setArr x i v} & \lean{x} owned, multiplicity one; \lean{i}, \lean{v} scalar & exclusive write through \lean{x} \\
+\lean{inc x n}, \lean{dec x n} & \lean{x} owned & multiplicity $\pm n$; \lean{dec} erases \\
+\lean{takeOut a i fst snd e} & \lean{a} owned, multiplicity one; \lean{i} scalar; \lean{e} multiplicity one; \lean{fst}, \lean{snd} dead and distinct; \lean{e ≠ a}; no open frame at \lean{a} & push the frame; bind parent and element \\
+\lean{putBack a e i result} & \lean{a}, \lean{e} owned, multiplicity one; the frame is \lean{(a,i,e)}; \lean{result} dead & pop the frame; bind the result \\
+\lean{callAt state path x result body} & \lean{state} owned, multiplicity one; \lean{path}, \lean{x} scalar; \lean{result} dead; \lean{CountFree body}; no open frame at \lean{state}; the body is accepted from the isolated context and returns \lean{state} & call the body; bind the result \\
+\lean{ret x} & no frame: \lean{x} owned or scalar; one frame: \lean{x} is the frame's element; deeper: refused & exit \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\prose{Explain the frame stack and the exit rule, and why the take-out and call
+rules are the ones that make nested updates safe. Note what the checker cannot
+see: slot contents, heap counts and client separation are supplied by the
+invariant and the fixture.}
+
+\subsection{Worked examples}
+\prose{Each example is a \lean{Code}/\lean{NCode} value; the \lean{\#guard}
+is the executable check. The contexts and heaps are the repository fixtures:
+\lean{initCtx} for the array and the nested \lean{ctx0} for the paths.}
+
+\needspace{10\baselineskip}\begin{example}[A unique write]\label{ex:unique}\end{example}
+\begin{minted}{lean4}
+def execSet (x y i v : Var) : Code :=
+  .let y (.checkAlias x) (.setArr y i v (.ret y))
+
+#guard (check (initCtx 0) (execSet 0 3 1 2)).isSome
+\end{minted}
+
+\needspace{10\baselineskip}\begin{example}[An aliased write is refused]\label{ex:alias}\end{example}
+\begin{minted}{lean4}
+def aliasSet (x y i v : Var) : Code :=
+  .inc x 1 (execSet x y i v)
+
+#guard (check (initCtx 0) (aliasSet 0 3 1 2)).isNone
+\end{minted}
+\prose{The alias increments the handle, so the write's multiplicity-one
+obligation fails. The held context with multiplicity two is the same refusal at
+the context level.}
+
+\needspace{10\baselineskip}\begin{example}[An extraction and its return]\label{ex:takeout}\end{example}
+\begin{minted}{lean4}
+def good : NCode :=
+  .takeOut 0 1 2 3 1 (.ret 3)
+
+#guard (checkN ctx0 good).isSome
+\end{minted}
+
+\needspace{10\baselineskip}\begin{example}[A stale slot is refused]\label{ex:stale}\end{example}
+\begin{minted}{lean4}
+def bad : NCode :=
+  .takeOut 0 1 2 3 1 (.takeOut 2 1 4 5 1 (.ret 5))
+
+#guard (checkN ctx0 bad).isNone
+\end{minted}
+\prose{The second extraction reopens the array whose slot the first has already
+emptied; the frame stack records the first extraction.}
+
+\needspace{10\baselineskip}\begin{example}[A recursive body confined to its state]\label{ex:call}\end{example}
+\begin{minted}{lean4}
+def good : NCode :=
+  .takeOut 0 1 2 3 1
+    (.callAt 3 4 7 9 (.ret 3) (.ret 9))
+
+#guard (checkN ctx0 good).isSome
+\end{minted}
+
+\needspace{10\baselineskip}\begin{example}[A suspended parent is refused]\label{ex:suspended}\end{example}
+\begin{minted}{lean4}
+def bad : NCode :=
+  .takeOut 0 1 2 3 1
+    (.callAt 3 4 7 9
+      (.takeOut 2 4 5 6 2 (.putBack 5 6 4 8 (.ret 3)))
+      (.ret 9))
+
+#guard (checkN ctx0 bad).isNone
+\end{minted}
+\prose{The refused body returns the call's own state, exactly as the accepted
+body does; the refusal is isolation: the suspended parent is not in the body's
+context.}
+
+\subsection{The invariant and soundness}
 \prose{The model heap, counts, exclusivity and the checker as a proof obligation,
 not a runtime test. Count one is a ghost predicate preserved by the invariant.}
 
-\begin{claim}[Invariant and exclusivity]\label{def:inv}\end{claim}
+\needspace{10\baselineskip}\begin{claim}[Invariant and exclusivity]\label{def:inv}\end{claim}
 \begin{minted}{lean4}
 structure Inv (H : Heap) (env : Env) (c : Ctx) : Prop where
   rc_eq         : ∀ r, H.rc r = c.mult r
@@ -135,7 +232,7 @@ def Exclusive (H : Heap) (r : Ref) : Prop :=
   ∃ o, H.cells r = some o ∧ o.rc = 1 ∧ o.persistent = false
 \end{minted}
 
-\begin{claim}[Checker soundness]\label{thm:check-sound}\end{claim}
+\needspace{10\baselineskip}\begin{claim}[Checker soundness]\label{thm:check-sound}\end{claim}
 \begin{minted}{lean4}
 theorem check_sound {c : Code} {ctx ctx' : Ctx} {H : Heap} {env : Env}
     (hc : check ctx c = some ctx') (hi : Inv H env ctx) :
@@ -144,7 +241,7 @@ theorem check_sound {c : Code} {ctx ctx' : Ctx} {H : Heap} {env : Env}
       (∀ w ∈ ws, w.2 = true) ∧ Inv H' env' ctx'
 \end{minted}
 
-\begin{claim}[Entry invariant]\label{thm:entry-inv}\end{claim}
+\needspace{10\baselineskip}\begin{claim}[Entry invariant]\label{thm:entry-inv}\end{claim}
 \begin{minted}{lean4}
 structure EntryInv (H : Heap) (env : Env) (c : Ctx) (root : Ref)
     (client : List Ref) : Prop extends Inv H env c where
@@ -182,7 +279,7 @@ joins. Near-miss counts: 11, 10, 28.}
 the model run; recognition is load-bearing because \lean{execAST} returns nothing
 unless the code decodes.}
 
-\begin{claim}[Prefix correspondence]\label{thm:prefix-sound}\end{claim}
+\needspace{10\baselineskip}\begin{claim}[Prefix correspondence]\label{thm:prefix-sound}\end{claim}
 \begin{minted}{lean4}
 theorem project_sound (assign : FVarId → Var) (p : Prefix)
     (code : Code .impure) (hproj : projectPrefix code = some p)
@@ -193,7 +290,7 @@ theorem project_sound (assign : FVarId → Var) (p : Prefix)
 \end{minted}
 \prose{Hypotheses abbreviated: layout and the heap/environment parameters.}
 
-\begin{claim}[The write is in place]\label{thm:prefix-in-place}\end{claim}
+\needspace{10\baselineskip}\begin{claim}[The write is in place]\label{thm:prefix-in-place}\end{claim}
 \begin{minted}{lean4}
 theorem recognized_write_in_place
     (hproj : projectPrefix code = some p) (hl : Layout assign p)
@@ -212,7 +309,7 @@ finite-path induction discharges the callee contract from the tail, leaving the
 leaf contract and N10. The flat environment cannot express the emitted
 per-invocation \lean{oproj[1]} index; record that bound.}
 
-\begin{claim}[Nested finite path]\label{thm:path-sound}\end{claim}
+\needspace{10\baselineskip}\begin{claim}[Nested finite path]\label{thm:path-sound}\end{claim}
 \begin{minted}{lean4}
 theorem index_path_simulates_model
     (declName takeOut : Name) (assign : FVarId → Ownership.Var)
@@ -229,7 +326,7 @@ theorem index_path_simulates_model
 \prose{Hypotheses abbreviated: the level facts, agreement, entry state and the
 leaf contract.}
 
-\begin{claim}[The finite nest]\label{thm:finite}\end{claim}
+\needspace{10\baselineskip}\begin{claim}[The finite nest]\label{thm:finite}\end{claim}
 \begin{minted}{lean4}
 theorem calls_build (path value : Var) (body : NCode) (ls : List Level) :
     calls (build path value body ls) = calls body + ls.length
@@ -246,7 +343,7 @@ theorem callBody_build (path value : Var) (body : NCode) (l : Level)
 into the fresh pair, the projections increment, and freeing the unique pair
 releases both edges. The negative controls make the claim non-vacuous.}
 
-\begin{claim}[Pair accounting]\label{thm:pair}\end{claim}
+\needspace{10\baselineskip}\begin{claim}[Pair accounting]\label{thm:pair}\end{claim}
 \begin{minted}{lean4}
 theorem pair_accounting {H : Heap} {p c : Ref} {i : Nat}
     (hw : WellFormedEntry H p c i) :
@@ -268,7 +365,7 @@ theorem no_free_components_not_exclusive
 counted-pair boundary and the child-call boundary. Functional restoration and
 count preservation are separate; the returned-handle counts remain premises.}
 
-\begin{claim}[Put-back exclusivity]\label{thm:putback}\end{claim}
+\needspace{10\baselineskip}\begin{claim}[Put-back exclusivity]\label{thm:putback}\end{claim}
 \begin{minted}{lean4}
 theorem putBack_exclusive_of_wellFormed
     (hw : CountedPair.WellFormedEntry H p c i)
@@ -292,7 +389,7 @@ refuses a dirty cursor. Name the fidelity boundary.}
 outcomes, the two array-set dispositions and the structural correspondence
 \lean{Corr}; the definitions are independent of the ownership model's predicates.}
 
-\begin{claim}[No abort]\label{thm:no-abort}\end{claim}
+\needspace{10\baselineskip}\begin{claim}[No abort]\label{thm:no-abort}\end{claim}
 \begin{minted}{lean4}
 theorem checkExclusive_no_abort {H : Heap} {R : RHeap} {r : Ref}
     (hC : Corr H R) (hx : H.Exclusive r) :
@@ -309,7 +406,7 @@ theorem setAt_inPlace_of_entryInv
       Corr (inPlaceOutcome root i vn o H).heap H'
 \end{minted}
 
-\begin{claim}[Emitted-semantics abort impossibility]\label{thm:prefix-no-abort}\end{claim}
+\needspace{10\baselineskip}\begin{claim}[Emitted-semantics abort impossibility]\label{thm:prefix-no-abort}\end{claim}
 \begin{minted}{lean4}
 def PrefixAborts (out : Option PrefixOutcome) : Prop :=
   ∃ o, out = some o ∧ o.fault ≠ none
@@ -346,7 +443,7 @@ closure-held array & shared, copy & agree \\
 \end{center}
 
 \section{Limits and non-claims}
-\begin{nonclaim}
+\needspace{10\baselineskip}\begin{nonclaim}
 \prose{No C-semantics refinement; A10 replay/backend identity; the emitted
 recursive callee and continuation (N10); the flat-environment index bound;
 address identity; free/cascade; concurrency and callbacks; M7 source
