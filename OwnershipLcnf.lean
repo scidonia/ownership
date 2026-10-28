@@ -5,3 +5,4 @@ import OwnershipLcnf.Projection
 import OwnershipLcnf.Semantics
 import OwnershipLcnf.PathRecursion
 import OwnershipLcnf.RuntimeModel
+import OwnershipLcnf.PairProjection

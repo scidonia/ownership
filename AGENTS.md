@@ -68,6 +68,14 @@
   (ignored build outputs such as `.lake/` are excluded), and the flake's Lean;
   it then regenerates the `execP` and
   nested `setAt` captures and diffs them against `docs/notes/artifacts/`.
+- The pair projection check replays the private `setAt` and runs `projectPair` on
+  its `Path.left`/`Path.right` arms:
+  `(cd ../lean-examples && nix develop -c lake env bash -c 'export LEAN_PATH="../ownership/.lake/build/lib/lean:$LEAN_PATH"; lean ../ownership/scripts/check_pair_projection.lean')`.
+  It asserts the recognizer accepts both arms, binds the selected/retained
+  fields, the child call, the reset/reuse joins and the oset/copy branches, and
+  rejects 28 token-preserving near misses (14 per arm) while the unmutated arms
+  remain accepted. The model term is read off the operands; the execution
+  correspondence with `Ownership.Pair.runP` is a named next step.
   Runtime evidence for the layout write path is
   `(cd ../lean-examples && nix develop -c lake exe inplace)`, and the IR gate is
   `(cd ../lean-examples && nix develop -c lake build ScidoniaTest)`. The results,
