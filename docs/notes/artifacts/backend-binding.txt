@@ -65,3 +65,21 @@ Not bound: the C semantics itself. The runtime model's `isExclusive` and
 `lean_array_uset`; the gate shows the primitives are present and the observed
 behaviour agrees, not that the model refines the linked runtime. Replay-to-
 backend identity (A10), address identity and free/cascade remain assumptions.
+
+## Differential corpus: the model's predicates against the runtime
+
+`runtime-bridge` mode `differential`, check off (the copy cases would abort under
+the armed check; the other modes cover that):
+
+| Case | Predicted | Observed |
+| --- | --- | --- |
+| unique array | exclusive true, in place | agree |
+| live alias (count two) | exclusive false, copy, alias keeps 0 | agree |
+| alias released before the write | exclusive true, in place | agree |
+| persistent literal | exclusive false, copy | agree |
+| closure holds the array | exclusive false, copy | agree |
+
+The model's predicate is count one and not persistent; the corpus constructs
+those states and compares them with `isExclusiveUnsafe` and the address change.
+This is validation, not proof: the corpus is finite, and the C semantics of the
+primitives is still the trust boundary.

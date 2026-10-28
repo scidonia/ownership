@@ -85,6 +85,13 @@ the C's check/recursive/put-back calls and the runtime header's
 the certified shapes (in place) and the closed-pure-array controls (copy, abort
 when armed).
 
+The probe's `differential` mode checks the model's predicates against the
+runtime on a corpus: unique, a live alias (count two), the alias released before
+the write (count back to one), a persistent literal and a closure-held array.
+All predictions agree; the copy cases would abort under the armed check and are
+covered by the other modes. The corpus is finite, so this is validation, not an
+exhaustive equivalence.
+
 What it does not bound: the C semantics. The runtime model's `isExclusive` and
 `arraySet` are the documented meanings of those primitives; the gate shows they
 are present and the observed behaviour agrees, not that the model refines the

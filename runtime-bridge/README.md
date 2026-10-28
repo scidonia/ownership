@@ -27,6 +27,7 @@ toolchain is the repository flake's Lean 4.35.0-rc3. Run a mode with and without
 | `inline-io` | IO construction, inline in `main` | in place, exit 0 | exit 0 |
 | `closed-case` | parameterless function with the pure construction | copied, exit 0 | abort, exit 1 |
 | `sealed` | `Structured.runFresh` | writes `(true, true)`, exit 0 | exit 0 |
+| `differential` | the model's predicate corpus: unique, alias (count two), drop-back-to-one, persistent literal, closure-held | all six predictions agree, exit 0 | — (the copy cases would abort under the armed check) |
 
 "In place" means `exclusive_before = true`, the array buffer and the focused
 struct keep their addresses, and `ok = true`.

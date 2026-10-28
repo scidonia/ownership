@@ -56,6 +56,7 @@ expect inline-io 0 0
 expect sealed 0 0
 expect inline-exact 0 0
 expect closed-case 0 0
+expect differential 0 0
 expect separate-exact 1 0
 expect inline-io 1 0
 expect sealed 1 0
