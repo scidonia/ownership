@@ -168,7 +168,11 @@
   in-bounds index and replacement from `EntryInv`, with
   `initializer_prefix_in_place` and `nonzero_prefix_in_place` as corollaries and
   `designated_write_in_place`/`initializer_designated_write_in_place` as the
-  model-level forms. All of that is relative to the primitive, constructor-layout
+  model-level forms. `OwnershipLcnf/NoAbort.lean` names the abort property:
+  `prefix_abort_impossible` proves the recognized prefix never reports the
+  `.notExclusive` check fault, under `EntryInv` and the recognizer. That is the
+  emitted semantics; the runtime `lean_is_exclusive` correspondence is contract
+  A6 and is not proved for the linked executable. All of that is relative to the primitive, constructor-layout
   and call-signature contracts A1–A12 in that module's header and to the layout
   and initial-state agreement premises. Those theorems stop at the designated
   write's return; the index's own `inc`/`dec` pair and the continuation with its

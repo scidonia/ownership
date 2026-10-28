@@ -1,4 +1,5 @@
 import OwnershipLcnf.NestedProjection
+import OwnershipLcnf.NoAbort
 import OwnershipLcnf.NestedSemantics
 import OwnershipLcnf.Projection
 import OwnershipLcnf.Semantics
