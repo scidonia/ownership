@@ -79,6 +79,10 @@
   The pinned signatures and the probe copy's reasons are recorded in
   `docs/notes/artifacts/borrow-inference.txt`; it is a compiler decision log,
   not a linearity certificate or a pass rate.
+- `runtime-bridge/` is the compiled reproducer for the in-place context
+  dependence: `(cd runtime-bridge && nix develop -c lake build)`, then
+  `nix develop -c lake exe probe <mode>`; the modes and expected results are in
+  its README. It requires the sibling by path and does not modify it.
 
 ## How behaviour is tested
 

@@ -1,0 +1,66 @@
+/* Emitted C excerpt: runtime-bridge/Probe.c, Lean 4.35.0-rc3, sibling 66e6433.
+   The inline-exact branch's pure closed constructions are lifted to ___closed
+   initializers; each consumer reads the cached constant through lean_obj_once. */
+
+/* inline-exact: the array itself */
+static lean_object* _init_lp_RuntimeBridge_main___closed__11(void){
+_start:
+{
+lean_object* v___x_331_; lean_object* v___x_332_; lean_object* v_a_333_;
+v___x_331_ = lean_unsigned_to_nat(0u);
+v___x_332_ = lean_unsigned_to_nat(8u);
+v_a_333_ = lp_RuntimeBridge_freshStructs(v___x_332_, v___x_331_);
+return v_a_333_;
+}
+}
+
+/* the exclusive observation reads the same cached array */
+static uint8_t _init_lp_RuntimeBridge_main___closed__12(void){
+_start:
+{
+lean_object* v_a_334_; uint8_t v_e_335_;
+v_a_334_ = lean_obj_once(&lp_RuntimeBridge_main___closed__11,
+                         &lp_RuntimeBridge_main___closed__11_once,
+                         _init_lp_RuntimeBridge_main___closed__11);
+v_e_335_ = lean_is_exclusive_obj(v_a_334_);
+return v_e_335_;
+}
+}
+
+/* the focused-element address reads the same cached array */
+static lean_object* _init_lp_RuntimeBridge_main___closed__13(void){
+_start:
+{
+lean_object* v___x_336_; lean_object* v_a_337_; lean_object* v___x_338_; lean_object* v___x_339_;
+v___x_336_ = lean_unsigned_to_nat(3u);
+v_a_337_ = lean_obj_once(&lp_RuntimeBridge_main___closed__11, ...);
+v___x_338_ = ((lean_object*)(lp_RuntimeBridge_separateCase___closed__0));
+v___x_339_ = lean_array_get_borrowed(v___x_338_, v_a_337_, v___x_336_);
+lean_inc(v___x_339_);
+return v___x_339_;
+}
+}
+
+/* the write reads the same cached array and passes it to setLeaf */
+static lean_object* _init_lp_RuntimeBridge_main___closed__14(void){
+_start:
+{
+lean_object* v_a_340_; lean_object* v___x_341_; lean_object* v___x_342_; lean_object* v___x_343_;
+v_a_340_ = lean_obj_once(&lp_RuntimeBridge_main___closed__11, ...);
+v___x_341_ = ((lean_object*)(lp_RuntimeBridge_p3));
+v___x_342_ = ((lean_object*)(lp_RuntimeBridge_separateCase___boxed__const__1));
+v___x_343_ = lp_Scidonia_Scidonia_FracPerm_StateVar_Layout5_setLeaf___redArg(
+               v___x_341_, v___x_342_, v_a_340_);
+return v___x_343_;
+}
+}
+
+/* separateCase: the array is a local construction from the runtime parameter and
+   is passed once to setLeaf. */
+LEAN_EXPORT lean_object* lp_RuntimeBridge_separateCase(lean_object* v_name_163_,
+                                                       lean_object* v_slack_164_){
+v_a_168_ = lp_RuntimeBridge_freshStructs(v___x_167_, v_slack_164_);
+v_e_169_ = lean_is_exclusive_obj(v_a_168_);
+...
+v___x_178_ = lp_Scidonia_Scidonia_FracPerm_StateVar_Layout5_setLeaf___redArg(
+               v___x_176_, v___x_177_, v_a_168_);

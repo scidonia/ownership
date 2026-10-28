@@ -115,25 +115,32 @@ or used non-linearly at the callee), not a failure.
 
 ## Context sensitivity of the in-place observation
 
-A probe at the pin, run as a compiled sibling executable and then removed
-(sibling restored clean), measured the same path write in two contexts with
-`addressIO` before and after and no post-write use of the original:
+A committed reproducer (`runtime-bridge/`) measures the same path write in
+several compiled contexts with `addressIO` before and after and no post-write
+use of the original. Results (check off; check on in parentheses):
 
-- **Separate function**, the shape the harness uses: the exact-capacity array
-  (`Array.mkEmpty 8`, no slack) and the slack array both wrote in place — the
-  buffer and the focused struct kept their addresses, `ok = true`.
-- **Inlined into a larger `do` block** that also held earlier bindings: the same
-  `Layout5.setLeaf` call reported `exclusive_before = false` and the array was
-  copied, with `ok = true`. A direct `Array.set!` and a write through a `@&`
-  parameter in the same block also copied.
+| Mode | Construction | Result |
+| --- | --- | --- |
+| `separate-exact`, `separate-spare` | parameterized function, exact/spare capacity | in place (exit 0) |
+| `inline-exact`, `inline-spare` | pure closed construction, inline in `main` | copied (abort, exit 1) |
+| `inline-io` | IO construction, inline in `main` | in place (exit 0) |
+| `closed-case` | parameterless function with the pure construction | copied (abort, exit 1) |
+| `sealed` | `Structured.runFresh` | writes `(true, true)` (exit 0) |
 
-So the in-place outcome is context-sensitive at the runtime even when the model's
-count is one: a binding retained by a surrounding `do` block, a borrowed
-parameter, or a closure/task holding the array changes the physical count, and
-the compiler copies. The model theorem is context-free; the runtime count is not.
+The emitted C explains it: the inline and parameterless pure constructions are
+lifted into `___closed` initializers called through `lean_obj_once` (excerpt in
+`runtime-bridge/emitted/closed-lifting.txt`). The array is a shared constant, so
+each access holds a reference and the write copies. The parameterized function
+and the IO construction are not closed, stay local, and are exclusive.
 
-The guard is the armed check. With `SCIDONIA_CHECK_INPLACE=1` the write aborts
-instead of copying, which is what the check-enabled harness children assert. With
-the check off, the copy is silent. Any user-facing path that claims an in-place
-write should be exercised with the check armed, and the API should not take a
-written array by `@&`.
+This corrects the earlier wording of this note: the copy is not caused by the
+`do` block as such, and the earlier borrowed-parameter and closure observations
+used the same closed pure construction, so the constant lifting explains them
+too. The compiler's separate decision to copy when a `@&` parameter is passed to
+an owning call (`user annotation blocked owning`) is real, but it was not
+isolated by this reproducer.
+
+The practical rule: construct the array in `IO` or from a runtime parameter, not
+as a closed pure expression. The sealed `runFresh` interface already does this;
+direct layout helpers on a closed constant copy. The armed check turns the copy
+into an abort instead of a silent copy.

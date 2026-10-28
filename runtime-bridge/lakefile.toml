@@ -1,0 +1,10 @@
+name = "RuntimeBridge"
+defaultTargets = ["probe"]
+
+[[require]]
+name = "Scidonia"
+path = "../../lean-examples"
+
+[[lean_exe]]
+name = "probe"
+root = "RuntimeBridge.Probe"
