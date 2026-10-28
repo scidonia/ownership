@@ -9,9 +9,14 @@
 % Theorem statements are the repository's actual signatures, with premises
 % abbreviated where marked by "-- …". Bibliographic details to be verified.
 %
-% Build note on this host: the installed TeX Live lacks the luaotfload font
-% database, so fontspec cannot load Latin Modern and the document does not
-% render here. On a complete TeX Live run
+% Build note on this host: the installed Debian TeX Live lacks texlive-luatex
+% (luaotfload), so fontspec cannot load fonts. Without root, fetch and extract
+% that one package:
+%   apt-get download texlive-luatex
+%   dpkg-deb -x texlive-luatex_*.deb /tmp/tl-luatex/root
+%   export TEXMFLOCAL=/tmp/tl-luatex/root/usr/share/texlive/texmf-dist
+%   mktexlsr "$TEXMFLOCAL"
+% then
 %   lualatex -shell-escape ownership-skeleton.tex
 % (minted needs pygments). If a Unicode mono font is unavailable, replace the
 % fontspec/minted block with the listings fallback commented below; the Lean
