@@ -233,3 +233,32 @@
   section on the finite list states the boundary and what a connection would
   need; nothing there is an executor certificate, and the depth of recursion the
   model covers is the program's own syntax, not data-dependent runtime depth.
+- `Ownership/CountedPair.lean` accounts for the take-out pair: the parent and
+  child handles transfer into the fresh pair (no new component owners), the two
+  projections increment, and freeing the unique pair releases both edges, so the
+  boundary counts equal the entry counts (`pair_accounting`,
+  `pair_traffic_neutral`, `boundary_correspondence`). The no-free,
+  retained-alias and shared-entry controls are in `OwnershipTest/CountedPair.lean`;
+  the free is the restricted one-cell form and persistence/address identity are
+  named limits.
+- `Ownership/PutBack.lean` gives restoration both dispositions and derives the
+  exclusive one: `putBack_exclusive_of_wellFormed` takes the counted-pair
+  boundary and the child-call boundary (`ChildCall.parent` via
+  `callAt_frame_confined`), with functional restoration and count preservation
+  separate; the copy branch and the retained-reference/footprint controls are in
+  the fixture. N11 cites it; the emitted call boundary and `child_rc`/
+  `child_persistent` remain premises.
+- `OwnershipLcnf/PathRecursion.lean` discharges `ChildContract` for a finite
+  level list by induction: the tail contract is the hypothesis, the leaf the
+  base, and `index_path_simulates_model` takes no arbitrary `ChildContract`. The
+  leaf contract and N10 remain; the module records that the model's flat
+  environment cannot express the emitted per-invocation path re-projection.
+- `OwnershipLcnf/RuntimeModel.lean` is the concrete runtime state for the
+  `setAt` write: counts, persistence, fields, the exclusivity predicate, a
+  guarded allocator, the check's ok/abort outcomes and both array-set
+  dispositions, with a structural correspondence to `Ownership.Heap`.
+  `checkExclusive_no_abort`/`setAt_inPlace_of_entryInv` derive the unreachable
+  abort and the in-place write; shared, persistent and dirty-cursor controls are
+  in the fixture. Fidelity to `lean_is_exclusive`/`lean_array_uset` (A6/A8), A10,
+  address identity and free/cascade remain the residual trust; no
+  linked-executable claim.
