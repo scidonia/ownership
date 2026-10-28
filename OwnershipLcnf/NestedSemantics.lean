@@ -128,12 +128,24 @@ emitted recursive declaration. That link is an outstanding obligation.
   not captured**; `ChildContract` is a hypothesis about the admitted model body,
   and the correspondence below is conditional on it.
 * **N11 (put-back).** `Array.set` writes the recursive result into the extracted
-  parent's selected slot in place and returns that array: the meaning of the
-  model's `NCode.putBack`. The runtime copy branch for a shared array is not
-  modelled on this path. The fragment relies on the array exclusivity assertion
-  that preceded the take-out; the correspondence does not prove that the
-  assertion's verdict still holds when the put-back runs, so in-place is part of
-  the contract, not a consequence of it.
+  parent's selected slot and returns the array: the meaning of the model's
+  `NCode.putBack`. The disposition is now derived rather than assumed.
+  `Ownership.PutBack.putBack_exclusive` shows that at this path's restoration
+  point — the counted entry carried through `Ownership.CountedPair.protocol`,
+  then the call boundary's derived preservation of the suspended parent cell
+  (`Ownership.PutBack.ChildCall.parent`, from `Entry.callAt_frame_confined`) —
+  the parent is the take-out's placeholder-filled cell, live at count one and
+  non-persistent, so the captured `Array.set` selects its in-place branch;
+  `Ownership.PutBack.mutate_eq_model` identifies that outcome with
+  `NCode.putBack`'s set. The copy branch the runtime takes for a shared or
+  persistent parent is modelled as well (`Ownership.PutBack.copy`), with the
+  shared, persistent and retained-alias controls in `OwnershipTest/PutBack.lean`,
+  so restoration is not *defined* to have only an in-place branch. What remains a
+  contract is the correspondence between the model's exclusivity test and the
+  runtime's in-place test, and the emitted call boundary: the captured call's
+  erased last operand is `Array.set`'s bounds proof, the recursive result is the
+  value the call consumes into the slot without an increment, and the parent
+  handle the call consumes is the copy branch's decrement.
 * **N12 (call signatures).** The primitive arities the recognizer checks are the
   specialized forms the pinned compiler emits for this declaration.
 
