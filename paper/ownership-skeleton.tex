@@ -283,9 +283,13 @@ other usage.
 \toprule
 Rule & Obligation & Effect \\
 \midrule
-\lean{let x (checkAlias a)} & \lean{a} owned, multiplicity one & \lean{x} is the checked alias \\
+\lean{let x (lit n)} & --- & \lean{x} scalar \\
+\lean{let x (size a)}, \lean{let x (isShared a)} & \lean{a} owned or borrow & \lean{x} scalar \\
+\lean{let x (checkAlias a)} & \lean{a} owned, multiplicity one & \lean{x} is the checked alias; \lean{a} dead \\
+\lean{check x} & \lean{x} owned, multiplicity one & unchanged \\
 \lean{setArr x i v} & \lean{x} owned, multiplicity one; \lean{i}, \lean{v} scalar & exclusive write through \lean{x} \\
-\lean{inc x n}, \lean{dec x n} & \lean{x} owned & multiplicity $\pm n$; \lean{dec} erases \\
+\lean{inc x n} & \lean{x} owned & multiplicity $+n$ \\
+\lean{dec x n} & \lean{x} owned; $n <$ multiplicity & multiplicity $-n$; \lean{x} dead \\
 \lean{takeOut a i fst snd e} & \lean{a} owned, multiplicity one; \lean{i} scalar; \lean{e} multiplicity one; \lean{fst}, \lean{snd} dead and distinct; \lean{e ≠ a}; no open frame at \lean{a} & push the frame; bind parent and element \\
 \lean{putBack a e i result} & \lean{a}, \lean{e} owned, multiplicity one; the frame is \lean{(a,i,e)}; \lean{result} dead & pop the frame; bind the result \\
 \lean{callAt state path x result body} & \lean{state} owned, multiplicity one; \lean{path}, \lean{x} scalar; \lean{result} dead; \lean{CountFree body}; no open frame at \lean{state}; the body is accepted from the isolated context and returns \lean{state} & call the body; bind the result \\
