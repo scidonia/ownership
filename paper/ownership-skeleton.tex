@@ -239,6 +239,43 @@ Table~\ref{tab:rules} are ownership obligations: a write is admitted only for an
 owned handle of multiplicity one, an extraction only with the frame discipline,
 and a call only with an isolated body that returns the state it was handed.
 
+The object language is untyped: there is no type former for a program, and the
+checker does not infer one by unification. The typing judgement is
+$c \vdash \mathit{code} \Rightarrow c'$, defined to hold exactly when
+\lean{check c code = some c'}; the context is the type of the program point. A
+context is a usage map, a reference map and a multiplicity map, and the checker
+is the syntax-directed decision procedure for the rules below.
+
+\begin{minted}{lean4}
+inductive U where
+  | owned
+  | borrow
+  | scalar
+  | dead
+
+structure Ctx where
+  us    : Var → U
+  refOf : Var → Option Ref
+  mult  : Ref → Nat
+
+structure Frame where
+  arr  : Ref
+  idx  : Var
+  elem : Ref
+
+def check   : Ctx → Code → Option Ctx
+def checkNF : Ctx → List Frame → NCode → Option Ctx
+\end{minted}
+
+The judgement is syntax-directed: each constructor has one rule, the context is
+an input, and the successor context is computed by \lean{setUs}, \lean{move},
+\lean{bindOwned}, \lean{inc} and \lean{dec}. There are no metavariables, no
+unification and no implicit type arguments in the object language; the only
+computation is the context update. This is why the discipline makes the count
+visible at the type level: at the write, the array's handle has usage
+\lean{owned} and multiplicity one in the context, and the rule refuses every
+other usage.
+
 \begin{table}[h]
 \centering
 \small
