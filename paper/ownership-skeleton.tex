@@ -143,7 +143,7 @@ by a gate and a differential corpus.
 Nothing in the development changes Lean's kernel, elaborator or set of type
 formers. The discipline is a shallow embedding: \lean{Ctx}, \lean{Heap},
 \lean{check}, \lean{run} and their theorems are ordinary Lean definitions; the
-source programs are \lean{Code}/\lean{NCode} values or recognised LCNF. A new
+model programs are \lean{Code}/\lean{NCode} values; the source is Lean, lowered to LCNF, and a recognised prefix is mapped to a model program. A new
 linear type former would require changing the kernel, unification and every
 library; the checker avoids that. The price is that linearity is a checked
 property of a recognised fragment under named contracts rather than a typing
@@ -187,6 +187,46 @@ the count at a particular write is one. Lean's source type system has no
 linearity or uniqueness; adding one would be a language change. We therefore
 state the property over the compiler's code and prove the connection, rather
 than extend the type system.
+
+\subsection{Model programs}
+The checker does not run on Lean source or on LCNF directly. Its programs are
+two small inductive types, interpreted over the model heap and environment; the
+compiler connection is a mapping from the recognised LCNF to these values.
+
+\begin{minted}{lean4}
+inductive LetF where
+  | lit (n : Nat)
+  | size (a : Var)
+  | isShared (x : Var)
+  | checkAlias (x : Var)
+
+inductive Code where
+  | let (x : Var) (v : LetF) (k : Code)
+  | inc (x : Var) (n : Nat) (k : Code)
+  | dec (x : Var) (n : Nat) (k : Code)
+  | check (x : Var) (k : Code)
+  | setArr (x : Var) (i : Var) (v : Var) (k : Code)
+  | ret (x : Var)
+
+inductive NCode where
+  | base (c : Code)
+  | takeOut (a i fst snd : Var) (e : Ref) (k : NCode)
+  | putBack (a e i result : Var) (k : NCode)
+  | callAt (state path x result : Var) (body : NCode) (k : NCode)
+  | ret (x : Var)
+\end{minted}
+
+A \lean{Code} is the straight-line array-write fragment; an \lean{NCode} adds
+extraction, restoration and the recursive call. Variables are \lean{Nat},
+references are \lean{Nat}, \lean{Val} is a reference, a scalar or erased, and a
+\lean{Heap} maps references to objects with a field array, a count and a
+persistence flag. \lean{run}/\lean{runN} execute these values and
+\lean{check}/\lean{checkN} are the checkers; the soundness theorems are about
+this semantics. They are neither Lean source nor LCNF: \lean{projectPrefix} and
+\lean{projectNested} walk an LCNF value, \lean{Prefix.toModel} and
+\lean{indexModelTerm} read a \lean{Code}/\lean{NCode} off the recognised
+operands, and \lean{execAST}/\lean{execNested} execute the recognised trace. The
+correspondence theorems relate that execution to the model run.
 
 \section{The ownership discipline}
 
