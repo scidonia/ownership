@@ -2,8 +2,9 @@
 %
 % Build (this host): the Debian TeX Live lacks texlive-luatex, so fetch and
 % extract it without root, then compile:
-%   apt-get download texlive-luatex && dpkg-deb -x texlive-luatex_*.deb /tmp/tl-luatex/root
-%   export TEXMFLOCAL=/tmp/tl-luatex/root/usr/share/texlive/texmf-dist
+%   mkdir -p "$HOME/.cache/texlive-luatex" && cd "$HOME/.cache/texlive-luatex"
+%   apt-get download texlive-luatex && dpkg-deb -x texlive-luatex_*.deb root
+%   export TEXMFLOCAL="$HOME/.cache/texlive-luatex/root/usr/share/texlive/texmf-dist"
 %   mktexlsr "$TEXMFLOCAL"
 %   lualatex -shell-escape ownership-skeleton.tex
 %   bibtex ownership-skeleton && lualatex -shell-escape ownership-skeleton.tex (twice)
@@ -22,6 +23,7 @@
 \usepackage{tabularx}
 \usepackage{enumitem}
 \usepackage{xcolor}
+\usepackage{amsmath}
 \usepackage{amsthm}
 \usepackage{needspace}
 \usepackage{mdframed}
@@ -299,6 +301,43 @@ Rule & Obligation & Effect \\
 \caption{The checker's ownership obligations.}
 \label{tab:rules}
 \end{table}
+
+Two consequences of the table are worth stating. First, \lean{dec} is affine,
+not the last drop: its premise is $n <$ the object's multiplicity, so it
+consumes a duplicate handle and leaves the object live. The last release would
+free the cell, which this fragment does not model; free and cascade are named
+limits. Second, linearity at the write is the side condition
+\lean{multOf x = 1}, not the usage tag alone: \lean{us x = owned} says the
+variable names the object, while the multiplicity says it is the only handle.
+
+\paragraph{A derivation.}
+The first example is the two rules applied in sequence. The premise of the
+second rule is the context the first produces; no type variable is solved.
+\[
+\frac{
+  \begin{array}{c}
+  \text{us } 0 = \text{owned} \qquad \text{multOf } 0 = 1 \\
+  c_1 = c_0.\text{move } 0\ 3
+  \end{array}
+}{
+  c_0 \vdash \texttt{checkAlias } 0 \Rightarrow c_1
+}
+\qquad
+\frac{
+  \begin{array}{c}
+  \text{us } 3 = \text{owned} \qquad \text{multOf } 3 = 1 \\
+  \text{us } 1 = \text{us } 2 = \text{scalar} \qquad
+  c_1 \vdash \texttt{ret } 3 \Rightarrow c_1
+  \end{array}
+}{
+  c_1 \vdash \texttt{setArr } 3\ 1\ 2;\ \texttt{ret } 3 \Rightarrow c_1
+}
+\]
+Composing the two gives
+$c_0 \vdash \texttt{execSet } 0\ 3\ 1\ 2 \Rightarrow c_1$, i.e.
+\lean{check (initCtx 0) (execSet 0 3 1 2) = some ((initCtx 0).move 0 3)}.
+The checker computes $c_1$; the derivation is the rule applications, and the
+accepted program is the one the first example's guard checks.
 
 The frame stack is the local form of the ownership invariant. An extraction
 opens a frame naming the array, index and element; a put-back closes the matching
