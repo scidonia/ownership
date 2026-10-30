@@ -142,6 +142,51 @@ development therefore does not extend the source type system. It states the
 count-one property over the compiler's own LCNF, checks it with an ordinary Lean
 function, and proves that the checked fragment corresponds to a model in which
 the write is exclusive.
+\subsection{The chain to an in-place write}\label{sec:chain}
+The result is a chain of eight conditional steps. Read in order, they say why an
+accepted update is in place; each names the premise it uses and the control that
+shows the premise is necessary, and the sections that follow prove it.
+
+\begin{enumerate}[leftmargin=1.8em, itemsep=2pt]
+\item \textbf{The entry state.} \lean{EntryInv} gives unique ownership, client
+separation and root completeness, and \lean{initEntryInv} establishes it for a
+fresh array. Premise: no client alias. Control: the alias context of
+Example~2 is refused.
+\item \textbf{Static acceptance.} A write requires an owned handle of
+multiplicity one; \lean{check\_sound} and \lean{checkN\_sound\_of\_entryInv}
+turn acceptance plus \lean{Inv} into an exclusive write in the model. Control:
+the held context with multiplicity two is refused.
+\item \textbf{Recognition.} \lean{execAST\_recognized} and its nested
+counterpart make the recognition hypothesis load-bearing: the executed trace is
+the recognised prefix. Control: the token-preserving near misses are rejected.
+\item \textbf{Correspondence.} The three theorems
+\lean{project\_sound},
+\lean{recognized\_write\_in\_place} and
+\lean{index\_path\_simulates\_model}
+identify the emitted outcome with the model's \lean{inPlaceOutcome}. Premise:
+the layout, agreement and entry facts, and the contracts A1--A12/N1--N12.
+\item \textbf{Temporary handles.} \lean{pair\_accounting} shows the extraction
+pair returns the parent and child counts to their entry values; the no-free and
+retained-alias controls leave a count of two.
+\item \textbf{Restoration.} \lean{putBack\_exclusive\_of\_wellFormed} derives the
+mutate branch from the counted boundary and the child-call boundary; the shared,
+persistent and retained-parent controls reach the copy branch or are excluded.
+\item \textbf{Runtime model.} Under \lean{Corr}, \lean{checkExclusive\_no\_abort}
+and \lean{setAt\_inPlace\_of\_entryInv} make the check return and the set mutate;
+\lean{prefix\_abort\_impossible} states the same at the emitted-semantics
+boundary. Controls: shared and persistent sources, and a dirty allocator cursor.
+\item \textbf{Linked corpus.} The gate and the differential corpus observe the
+agreement of the primitives on the pinned toolchain; the closed-pure-array case
+is the negative control that shows the compiler can still copy outside the
+model.
+\end{enumerate}
+
+The chain is conditional: the C semantics of the primitives, replay-to-backend
+identity, address identity, free and cascade, the emitted callee and the source
+correspondence are not part of it and are listed in \Cref{sec:limits}. The
+controls are not footnotes: without each premise the corresponding step fails,
+which is why they are proved beside the positive results.
+
 The paper makes five contributions. (i) A model heap and a decidable checker
 whose soundness is a Lean theorem (\Cref{thm:check-sound}); an entry invariant
 supplies the heap facts the checker cannot see (\Cref{thm:entry-inv}).
@@ -691,50 +736,6 @@ closure-held array & shared, copy & agree \\
 \bottomrule
 \end{tabular}
 \end{center}
-
-\section{The chain to an in-place write}\label{sec:chain}
-The preceding sections prove separate facts. Read in order, they give the
-expectation; each step names the premise it uses and the control that shows the
-premise is necessary.
-
-\begin{enumerate}[leftmargin=1.8em, itemsep=2pt]
-\item \textbf{The entry state.} \lean{EntryInv} gives unique ownership, client
-separation and root completeness, and \lean{initEntryInv} establishes it for a
-fresh array. Premise: no client alias. Control: the alias context of
-Example~2 is refused.
-\item \textbf{Static acceptance.} A write requires an owned handle of
-multiplicity one; \lean{check\_sound} and \lean{checkN\_sound\_of\_entryInv}
-turn acceptance plus \lean{Inv} into an exclusive write in the model. Control:
-the held context with multiplicity two is refused.
-\item \textbf{Recognition.} \lean{execAST\_recognized} and its nested
-counterpart make the recognition hypothesis load-bearing: the executed trace is
-the recognised prefix. Control: the token-preserving near misses are rejected.
-\item \textbf{Correspondence.} \lean{project\_sound},
-\lean{recognized\_write\_in\_place}, and
-\lean{index\_path\_simulates\_model}
-identify the emitted outcome with the model's \lean{inPlaceOutcome}. Premise:
-the layout, agreement and entry facts, and the contracts A1--A12/N1--N12.
-\item \textbf{Temporary handles.} \lean{pair\_accounting} shows the extraction
-pair returns the parent and child counts to their entry values; the no-free and
-retained-alias controls leave a count of two.
-\item \textbf{Restoration.} \lean{putBack\_exclusive\_of\_wellFormed} derives the
-mutate branch from the counted boundary and the child-call boundary; the shared,
-persistent and retained-parent controls reach the copy branch or are excluded.
-\item \textbf{Runtime model.} Under \lean{Corr}, \lean{checkExclusive\_no\_abort}
-and \lean{setAt\_inPlace\_of\_entryInv} make the check return and the set mutate;
-\lean{prefix\_abort\_impossible} states the same at the emitted-semantics
-boundary. Controls: shared and persistent sources, and a dirty allocator cursor.
-\item \textbf{Linked corpus.} The gate and the differential corpus observe the
-agreement of the primitives on the pinned toolchain; the closed-pure-array case
-is the negative control that shows the compiler can still copy outside the
-model.
-\end{enumerate}
-
-The chain is conditional: the C semantics of the primitives, replay-to-backend
-identity, address identity, free and cascade, the emitted callee and the source
-correspondence are not part of it and are listed in \Cref{sec:limits}. The
-controls are not footnotes: without each premise the corresponding step fails,
-which is why they are proved beside the positive results.
 
 \section{Limits and non-claims}\label{sec:limits}
 \needspace{10\baselineskip}\begin{nonclaim}
