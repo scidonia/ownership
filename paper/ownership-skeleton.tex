@@ -165,7 +165,10 @@ model.
 
 The physical reading also carries the environment-side \lean{OwnersAccounted}
 and the heap-side \lean{CountFidelity}; \lean{alias\_not\_accounted} shows why
-the raw invariant does not imply the first. The chain is conditional: the C
+the raw invariant does not imply the first. The extraction/restoration steps are
+the nested counted protocol; the flat \lean{principal\_write} is the composed
+flat result, and the nested counted execution composition is outstanding. The
+chain is conditional: the C
 semantics of the primitives, replay-to-backend identity, address identity, free
 and cascade, the emitted callee, the accounting contracts and the source
 correspondence are not part of it and are listed in \Cref{sec:limits}. The
