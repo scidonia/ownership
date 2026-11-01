@@ -20,4 +20,5 @@ import OwnershipLcnf.Principal
 #print axioms OwnershipLcnf.Runtime.setAt_inPlace_of_entryInv
 #print axioms OwnershipLcnf.prefix_abort_impossible
 #print axioms OwnershipLcnf.principal_write
+#print axioms Ownership.initCtx_accounted
 #print axioms Ownership.alias_not_accounted

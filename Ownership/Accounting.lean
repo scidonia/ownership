@@ -291,6 +291,35 @@ def CountFidelity (H : Heap) (c : Ctx) (vars : List Var) : Prop :=
   ∀ r, H.rc r = IncomingCount H r + EnvOwnerCount c vars r
 
 
+
+/-- The initializer's only owning variable is variable 0. -/
+theorem initCtx_us_eq (r : Ref) (x : Var) :
+    (Runner.initCtx r).us x = .owned ↔ x = 0 := by
+  by_cases hx : x = 0
+  · subst x; simp [Runner.initCtx]
+  · by_cases hx1 : x = 1
+    · subst x; simp [Runner.initCtx]
+    · by_cases hx2 : x = 2
+      · subst x; simp [Runner.initCtx]
+      · simp [Runner.initCtx, hx, hx1, hx2]
+
+/-- The initializer's context satisfies the environment accounting. -/
+theorem initCtx_accounted (r : Ref) : OwnersAccounted (Runner.initCtx r) := by
+  constructor
+  · intro r' x hm hx hr
+    have hx0 : x = 0 := (initCtx_us_eq r x).mp hx
+    subst x
+    have hrr : r = r' := Option.some.inj (by simpa [Runner.initCtx] using hr)
+    subst r'
+    simp [Runner.initCtx] at hm
+  · intro r' hm x y hx hy hrx hry
+    have hx0 : x = 0 := (initCtx_us_eq r x).mp hx
+    have hy0 : y = 0 := (initCtx_us_eq r y).mp hy
+    subst x
+    subst y
+    rfl
+
+
 /-- The alias configuration is not accounted: `Inv` preserves it, but
 `OwnersAccounted` rejects it. -/
 theorem alias_not_accounted (n : Nat) :
