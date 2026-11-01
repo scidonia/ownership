@@ -82,8 +82,8 @@ abbreviated where the text says so.}
 \begin{abstract}
 Purely functional programming is attractive for its equational reasoning, but
 without in-place updates some operations become asymptotically more expensive:
-an array write that copies under sharing turns a linear traversal into a
-quadratic one. Lean~4 recovers in-place updates through a \emph{dynamic}
+an array write that copies under sustained sharing can turn a linear traversal
+into a quadratic one. Lean~4 recovers in-place updates through a \emph{dynamic}
 mechanism: the runtime updates an array in place exactly when its reference count
 is one, and copies otherwise. The branch is decided at run time, by the heap's
 current sharing, not by the program's type. This paper asks whether a static type
@@ -99,32 +99,12 @@ model. We derive the temporary extraction pair's count accounting and the
 put-back's exclusive branch, build a concrete runtime model in which the
 exclusivity check cannot abort under the correspondence, and bind the result to
 the pinned toolchain with an artifact/IR/C gate and a differential corpus. The
-boundary is explicit: the C runtime's semantics, replay-to-backend identity, the
+guarantee carries two accounting contracts---the environment owner count and the
+heap/runtime count fidelity---and a kernel countermodel shows that the raw
+invariant does not imply them. The boundary is explicit: the C runtime's semantics, replay-to-backend identity, the
 emitted recursive callee and the source correspondence remain assumptions or open
 obligations.
 \end{abstract}
-
-\section*{Argument map}
-The argument has nine steps. Each is a claim below; the prose introduces why the
-step is needed, and the Lean statement is the evidence.
-\begin{center}
-\small
-\begin{tabular}{@{}lll@{}}
-\toprule
-Step & Claim & Carrier \\
-\midrule
-1 & accepted writes are exclusive & \Cref{thm:check-sound} \\
-2 & the entry invariant supplies count one and separation & \Cref{thm:entry-inv} \\
-3 & the emitted write prefix is recognised and corresponds & \Cref{thm:prefix-sound} \\
-4 & the recognised write lands in place & \Cref{thm:prefix-in-place} \\
-5 & the nested path corresponds without a callee hypothesis & \Cref{thm:path-sound} \\
-6 & the extraction pair returns to count one & \Cref{thm:pair} \\
-7 & the put-back's exclusive branch is derived & \Cref{thm:putback} \\
-8 & the runtime model cannot abort under the correspondence & \Cref{thm:no-abort} \\
-9 & the linked behaviour agrees on a corpus & \Cref{sec:empirical} \\
-\bottomrule
-\end{tabular}
-\end{center}
 
 \section{Introduction}
 Reference-counted functional languages such as Lean~4 and Koka update a shared
@@ -136,12 +116,12 @@ the count is one at the write would make the in-place branch a property of the
 program rather than of its current heap, and would let a library or a compiler
 rule out the copy branch without a dynamic test.
 
-The difficulty is that Lean~4 has no linear, affine or uniqueness types, and
-adding them would change the kernel, the elaborator and every library. The
-development therefore does not extend the source type system. It states the
-count-one property over the compiler's own LCNF, checks it with an ordinary Lean
-function, and proves that the checked fragment corresponds to a model in which
-the write is exclusive.
+Lean~4 has no linear, affine or uniqueness types, and this development does not
+add them. The distinction is not the absence of a kernel change but the verified
+composition: a count-one checker, the recognised emitted prefix, the
+extraction/restoration accounting and a runtime model, joined at the boundary
+the paper names. Linearity is a checked property of a recognised fragment under
+named contracts, not a typing judgement for every program.
 \subsection{The chain to an in-place write}\label{sec:chain}
 The result is a chain of eight conditional steps. Read in order, they say why an
 accepted update is in place; each names the premise it uses and the control that
@@ -158,13 +138,14 @@ turn acceptance plus \lean{Inv} into an exclusive write in the model. Control:
 the held context with multiplicity two is refused.
 \item \textbf{Recognition.} \lean{execAST\_recognized} and its nested
 counterpart make the recognition hypothesis load-bearing: the executed trace is
-the recognised prefix. Control: the token-preserving near misses are rejected.
+the recognised prefix. Control: the token-preserving near misses in the mutation corpus are rejected.
 \item \textbf{Correspondence.} The three theorems
 \lean{project\_sound},
 \lean{recognized\_write\_in\_place} and
 \lean{index\_path\_simulates\_model}
 identify the emitted outcome with the model's \lean{inPlaceOutcome}. Premise:
-the layout, agreement and entry facts, and the contracts A1--A12/N1--N12.
+the layout, agreement and entry facts, the finite-path \lean{PathContract}, and
+the contracts A1--A12/N1--N12.
 \item \textbf{Temporary handles.} \lean{pair\_accounting} shows the extraction
 pair returns the parent and child counts to their entry values; the no-free and
 retained-alias controls leave a count of two.
@@ -181,13 +162,28 @@ is the negative control that shows the compiler can still copy outside the
 model.
 \end{enumerate}
 
-The chain is conditional: the C semantics of the primitives, replay-to-backend
-identity, address identity, free and cascade, the emitted callee and the source
+The physical reading also carries the environment-side \lean{OwnersAccounted}
+and the heap-side \lean{CountFidelity}; \lean{alias\_not\_accounted} shows why
+the raw invariant does not imply the first. The chain is conditional: the C
+semantics of the primitives, replay-to-backend identity, address identity, free
+and cascade, the emitted callee, the accounting contracts and the source
 correspondence are not part of it and are listed in \Cref{sec:limits}. The
 controls are not footnotes: without each premise the corresponding step fails,
 which is why they are proved beside the positive results.
 
-The paper makes five contributions. (i) A model heap and a decidable checker
+\paragraph{Closest prior work.}
+Marc Huisinga's 2023 thesis \cite{huisinga} implements a static uniqueness
+analysis for a model of Lean's IR and studies its checker; soundness and compiler
+integration remain future work there. Lean's \lean{Array.markLinear}
+\cite{marklinear} is a dynamic facility: it can copy an array to establish
+uniqueness and, with \lean{LEAN\_ABORT\_ON\_NONLINEAR}, abort on later
+nonlinear use. Translation validation \cite{translationvalidation} checks a
+particular compiler run; this paper does not validate arbitrary transformations.
+The advance here is the verified composition of the count-one checker, the
+recognised emitted prefix, the extraction/restoration accounting and a runtime
+model, not a claim to the first static uniqueness analysis for Lean.
+
+The paper makes six contributions. (i) A model heap and a decidable checker
 whose soundness is a Lean theorem (\Cref{thm:check-sound}); an entry invariant
 supplies the heap facts the checker cannot see (\Cref{thm:entry-inv}).
 (ii) Strict recognisers for the emitted array-write prefixes, with structural
@@ -196,48 +192,57 @@ recognised LCNF to the model (\Cref{thm:prefix-sound} and \Cref{thm:path-sound})
 the finite nested path. (iv) A counted extraction/call/restoration argument
 (\Cref{thm:pair} and \Cref{thm:putback}). (v) A concrete runtime model and an
 abort-impossibility theorem (\Cref{thm:no-abort}), bound to the pinned toolchain
-by a gate and a differential corpus.
+by a gate and a differential corpus. (vi) The environment-side and heap-side
+accounting contracts (\lean{OwnersAccounted}, \lean{CountFidelity}), with a
+kernel countermodel showing why the raw invariant does not imply them, and the
+composed flat theorem \lean{principal\_write}.
 
-Nothing in the development changes Lean's kernel, elaborator or set of type
-formers. The discipline is a shallow embedding: \lean{Ctx}, \lean{Heap},
-\lean{check}, \lean{run} and their theorems are ordinary Lean definitions; the
-model programs are \lean{Code}/\lean{NCode} values; the source is Lean, lowered to LCNF, and a recognised prefix is mapped to a model program. A new
-linear type former would require changing the kernel, unification and every
-library; the checker avoids that. The price is that linearity is a checked
-property of a recognised fragment under named contracts rather than a typing
-judgement for all programs. We state that boundary explicitly.
+The discipline is a deep embedding: \lean{Code} and \lean{NCode} are explicit
+syntax interpreted by \lean{run}/\lean{runN}, and \lean{Ctx}, \lean{Heap},
+\lean{check} and the theorems are ordinary Lean definitions. The source is Lean,
+lowered to LCNF; a recognised prefix is mapped to a model program. The guarantee
+is conditional on the named contracts, including the environment-side accounting
+and the heap/runtime count fidelity, and it does not extend to the linked C
+runtime beyond the measured gate.
 
 \begin{table}[h]
 \centering
-\small
-\begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}p{2.7cm}>{\raggedright\arraybackslash}p{3.3cm}>{\raggedright\arraybackslash}p{3.1cm}>{\raggedright\arraybackslash}X@{}}
+\scriptsize
+\setlength{\tabcolsep}{3pt}
+\begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}p{2.4cm}>{\raggedright\arraybackslash}p{3.0cm}>{\raggedright\arraybackslash}p{2.3cm}X@{}}
 \toprule
-System & Linearity at the write & Enforced by & Change to the host \\
+System & Guarantee & Enforced by & Integration boundary \\
 \midrule
+Huisinga 2023 \cite{huisinga} & uniqueness for a model of Lean IR & checker in Lean & no compiler link; soundness future work \\
+Lean \lean{Array.markLinear} \cite{marklinear} & dynamic mark/abort & runtime flag & source annotation \\
+Translation validation \cite{translationvalidation} & per-run transform validation & validator & outside the compiler \\
 Linear Haskell \cite{linearhaskell} & linear arrows, multiplicities & type checker & language extension \\
 Rust \cite{rustbelt} & ownership and borrows & borrow checker & type system \\
 Clean \cite{uniqueness} & uniqueness types & type system & language \\
 Alias/ownership types \cite{aliastypes,ownershiptypes,cyclone} & alias restriction & type system & language \\
 Koka/Perceus \cite{koka,perceus} & reference counting with reuse & compiler and runtime & compiler \\
-This work & checked count-one discipline & external checker, Lean proofs & none to Lean's core \\
+This work & checked count one, recognised prefix & external checker, Lean proofs & source unchanged; LCNF proof; C assumed \\
 \bottomrule
 \end{tabularx}
-\caption{Linearity at the write across disciplines.}
+\caption{Guarantees and integration boundaries.}
 \label{tab:compare}
 \end{table}
 
-Table~\ref{tab:compare} places the approach. Linear Haskell, Clean, alias types,
-ownership types and Cyclone change the type system or the language; Rust's
-borrow checker is part of the type system; Koka and Perceus rely on the compiler's
-reference counting and reuse. This work leaves the type system alone and checks
-the count-one condition externally, with proofs in Lean and a correspondence to
-the emitted code.
+Table~\ref{tab:compare} separates the guarantees from the integration boundary.
+Linear Haskell, Clean, alias types, ownership types and Cyclone put linearity in
+the type system; Rust's borrow checker is part of the type system; Koka and
+Perceus rely on the compiler's count and reuse. Huisinga analyses a model of
+Lean's IR without a compiler link. This work checks the emitted fragment and
+proves the connection to a model and a runtime model, with the linked C runtime
+remaining a measured assumption.
 
 \section{Setting: Lean 4, LCNF, and reference counting}
 Lean~4 compiles through a sequence of IRs. The last LCNF phase inserts
 reference-count operations, and the backend emits C. The runtime decides an array
 update with \lean{lean\_is\_exclusive}: count one and non-persistent means in
-place; every other case copies. The development pins the toolchain, the sibling
+place; every other case copies. The runtime is single-threaded; count one and
+non-persistence characterise this test in that setting and are not a claim about
+every Lean runtime mode. The development pins the toolchain, the sibling
 revision and the captured LCNF artifacts, so every claim names the code it is
 about.
 The problem is not to implement reference counting, but to know statically that
@@ -285,6 +290,39 @@ this semantics. They are neither Lean source nor LCNF: \lean{projectPrefix} and
 \lean{indexModelTerm} read a \lean{Code}/\lean{NCode} off the recognised
 operands, and \lean{execAST}/\lean{execNested} execute the recognised trace. The
 correspondence theorems relate that execution to the model run.
+
+\subsection{A running example: the nested write}
+The source is the array case of \lean{Layout5.setAt} in the sibling. It takes
+the element out, checks the extracted focus, recurses on it and puts the result
+back:
+\begin{minted}{lean4}
+| _, .index i q, y, s =>
+    if h : i < s.size then
+      match takeOutAt (assertExclusiveArray openSite s) i h (stateDefault _) with
+      | ⟨(sib, focus), hbound⟩ =>
+        plugAt sib i hbound (setAt q y (assertExclusive structSite focus))
+    else s
+\end{minted}
+The emitted C for this arm is the sequence the development names: a
+\lean{lean\_is\_exclusive} test for the array, the \lean{takeOut} exchange
+(\lean{lean\_array\_fget}, \lean{lean\_array\_fset}, the pair allocation), the
+child check on the extracted element, the recursive call and the
+\lean{lean\_array\_fset} put-back. The recogniser \lean{projectNested} accepts
+the \lean{Path.index} arm, \lean{PairProjection} accepts the two pair arms, and
+\lean{execNestedAST} executes the accepted trace. The model term is
+\lean{Path.build path value body ls}; \lean{checkN} checks it from
+\lean{initCtx}.
+
+The example separates what the tool computes from what a client supplies. The
+compiler computes the LCNF and the C; \lean{projectNested} computes the prefix;
+\lean{Prefix.toModel}/\lean{indexModelTerm} compute the model program;
+\lean{checkN} computes the checker result. The client supplies the source
+declaration, the \lean{Path} and the take-out name, and the proofs of
+\lean{Agrees}, \lean{LevelMatch}, \lean{PathContract} and \lean{EntryInv} (the
+path/slot and entry facts the checker cannot see). The finite-path induction
+discharges the tail contract; the leaf contract and the emitted call's meaning
+(N10) remain. A nearby rejected variant is the flat \lean{aliasSet} example
+below, refused because the array's multiplicity is two.
 
 \section{The ownership discipline}
 
@@ -502,6 +540,48 @@ def Exclusive (H : Heap) (r : Ref) : Prop :=
   ∃ o, H.cells r = some o ∧ o.rc = 1 ∧ o.persistent = false
 \end{minted}
 
+The displayed invariant relates the heap count to the context multiplicity, but it
+does not count the environment's owning variables: \lean{Inv.owned} only requires
+\lean{1 ≤ c.mult r}. \lean{bindOwned} preserves \lean{Inv} without changing
+\lean{mult}, so two owned variables can denote one count-one cell. The raw
+invariant therefore does not imply physical uniqueness. The kernel countermodel
+\lean{alias\_not\_accounted} constructs exactly that state: \lean{initCtx} has
+one owner, and binding a second owned variable leaves the multiplicity at one.
+
+The guarantee therefore carries two accounting contracts. The environment side is
+\lean{OwnersAccounted}: multiplicity zero has no owner, and multiplicity one has
+at most one owner. The heap side is \lean{CountFidelity}: the object's count is
+its incoming heap edges plus the owning environment variables in the supplied
+support.
+
+\begin{minted}{lean4}
+def OwnersAccounted (c : Ctx) : Prop :=
+  (∀ r x, c.mult r = 0 → c.us x = .owned → c.refOf x = some r → False) ∧
+  (∀ r, c.mult r = 1 → ∀ x y, c.us x = .owned → c.us y = .owned →
+      c.refOf x = some r → c.refOf y = some r → x = y)
+
+def IncomingCount (H : Heap) (r : Ref) : Nat :=
+  ((List.range H.next).map fun q =>
+    match H.cells q with
+    | some o => (o.fields.toList.filter (fun v => v = .ref r)).length
+    | none => 0).sum
+
+def EnvOwnerCount (c : Ctx) (vars : List Var) (r : Ref) : Nat :=
+  (vars.filter (fun x => c.us x = .owned ∧ c.refOf x = some r)).length
+
+def CountFidelity (H : Heap) (c : Ctx) (vars : List Var) : Prop :=
+  ∀ r, H.rc r = IncomingCount H r + EnvOwnerCount c vars r
+\end{minted}
+
+\lean{Ownership/Accounting.lean} proves preservation of \lean{OwnersAccounted}
+under a non-owning \lean{setUs}, \lean{move} of an owned handle, \lean{inc}, and
+\lean{bindOwned}/\lean{dec} with explicit preconditions: no existing owner for
+the target of \lean{bindOwned}, and at most one other owner for \lean{dec}. The
+checker's take-out and \lean{dec} rules do not yet enforce those preconditions;
+the principal theorem carries them as client obligations. The heap-side
+\lean{CountFidelity} is an implementation assumption, not a theorem about the C
+runtime.
+
 \needspace{10\baselineskip}\begin{claim}[Checker soundness]\label{thm:check-sound}\end{claim}
 \begin{minted}{lean4}
 theorem check_sound {c : Code} {ctx ctx' : Ctx} {H : Heap} {env : Env}
@@ -540,9 +620,13 @@ replaced by structural facts.
 A source-level discipline is only useful if it survives lowering. The compiler
 rewrites the program, inlines helpers and chooses the emitted shape; the
 recogniser therefore walks the actual LCNF value, pinning operation order,
-arities, operand identities and branch constructors. It rejects any
-token-preserving near miss, so the correspondence is about the code we name, not
-a look-alike.
+arities, operand identities and branch constructors. It rejects the token-preserving near misses in its mutation corpus (eleven at the
+top level, ten on the nested path, fourteen per pair arm), so the correspondence
+is about the code we name, not a look-alike. No universal rejection theorem is
+claimed. The accepted grammar fixes the check's argument, the array-set's array,
+index and value operands, the instruction order from check to set, the pair
+constructor and its two projections, the two \lean{Path} branches and their join,
+and the continuation boundary; every other shape is rejected.
 Three shapes are recognised: the top-level \lean{execP} write, the nested
 \lean{setAt} path, and the two \lean{Path.left}/\lean{Path.right} pair arms with
 their joins. The pair arms are the test that the recogniser handles control flow
@@ -583,6 +667,16 @@ theorem recognized_write_in_place
 \end{minted}
 \noindent{\small\itshape The machine, environment and heap are implicit.
 
+\lean{PrefixOutcome} records the target, the result binder, the heap, the
+disposition, the fault and the write trace. It discards the machine's variable map
+and any unrecognised suffix. The write trace preserves each covered write's
+exclusive/copy bit, so a projection to final contents would lose the property and
+is not used. The recogniser and executor share the prefix representation;
+\lean{execAST\_recognized} is the decoding adequacy lemma, not an independent
+instruction semantics. The independent meanings are the primitive contracts
+A1--A12; the shared representation is why the decoding hypothesis is
+load-bearing.
+
 The nested path is where a finite model meets recursive code. The model nests
 take-out, call and put-back per level; the finite-path induction discharges the
 callee contract from the tail and leaves only the leaf contract and the emitted
@@ -595,7 +689,8 @@ theorem index_path_simulates_model
     (declName takeOut : Name) (assign : FVarId → Ownership.Var)
     (p : NestedPrefix) (code : Code .impure)
     (hproj : projectNested declName takeOut code = some p)
-    (ls : List Level) :
+    (ls : List Level)
+    (hpath : PathContract path value body tip l rest H mEnv c cb y) :
     NestedOutcome.ofExec assign p
         (execNestedAST declName takeOut assign body p code s) =
       NestedOutcome.ofModel (Nested.runN (build path value body ls) mEnv H) ∧
@@ -645,6 +740,31 @@ theorem no_free_components_not_exclusive
     B.2.rc p = 2 ∧ B.2.rc c = 2 ∧ ¬ Heap.Exclusive B.2 p
 \end{minted}
 
+\begin{table}[h]
+\centering
+\footnotesize
+\begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}p{2.9cm}>{\raggedright\arraybackslash}p{1.7cm}>{\raggedright\arraybackslash}p{1.7cm}>{\raggedright\arraybackslash}p{2.0cm}X@{}}
+\toprule
+Stage & parent rc & child rc & pair & ownership \\
+\midrule
+entry & 1 & 1 & absent & root and element owned \\
+take-out constructor & 1 & 1 & holds both & fields moved; no new component owners \\
+projections & 2 & 2 & live & temporary local handles \\
+free unique pair & 1 & 1 & gone & both edges released \\
+child call & 1 & 1 & suspended parent & child runs in the isolated context \\
+put-back & 1 & 1 & gone & mutate branch; parent and child restored \\
+\bottomrule
+\end{tabularx}
+\caption{The counted protocol at the extraction boundary.}
+\label{tab:protocol}
+\end{table}
+
+The take-out shape is the \lean{Path.index} arm recognised by
+\lean{projectNested}; the left/right arms are recognised by \lean{PairProjection},
+which reads the model term off the operands. The execution correspondence between
+the recognised pair and \lean{Ownership.Pair.runP} is a named next step; the
+counted protocol above is the accounting model, not that correspondence.
+
 The put-back is the second place where a copy can hide. The operation has two
 dispositions: at count one it mutates the parent; at a higher count or a
 persistent parent it allocates a fresh cell and decrements the input. The
@@ -656,11 +776,12 @@ returned-handle accounting remains a named premise.
 \begin{minted}{lean4}
 theorem putBack_exclusive_of_wellFormed
     (hw : CountedPair.WellFormedEntry H p c i)
-    (hc : ChildCall Hin Hout env ctx state path x body p c) :
-    ∃ H',
-      putBack H p i c = some (p, H') ∧
-      H'.cells p = (mutate H p o i c).cells p ∧
-      Heap.Exclusive H' p ∧ H.rc p = 1
+    (hc : PutBack.ChildCall (protocol H p c i).snd Hc env ctx state path x body p c) :
+    ∃ op,
+      putBack Hc p i c = some (p, mutate Hc p (parentAfter op i) i c) ∧
+      (mutate Hc p (parentAfter op i) i c).rc p = 1 ∧
+      (mutate Hc p (parentAfter op i) i c).rc c = 1 ∧
+      Heap.Exclusive (mutate Hc p (parentAfter op i) i c) p
 \end{minted}
 \noindent{\small\itshape The child's admitted body and the returned-handle accounting are implicit;
 the conclusion is the exclusive branch and the parent's count.}
@@ -682,9 +803,8 @@ branch cannot overwrite a live cell.
 \needspace{10\baselineskip}\begin{claim}[No abort]\label{thm:no-abort}\end{claim}
 \begin{minted}{lean4}
 theorem checkExclusive_no_abort {H : Heap} {R : RHeap} {r : Ref}
-    (hC : Corr H R) (hx : H.Exclusive r) :
-    checkExclusive R r = .ok r ∧
-      ∀ r', checkExclusive R r ≠ .abort r'
+    (hc : Corr H R) (hex : H.Exclusive r) (r' : Ref) :
+    checkExclusive R r ≠ Runtime.CheckOutcome.abort r'
 \end{minted}
 \begin{minted}{lean4}
 theorem setAt_inPlace_of_entryInv
@@ -693,7 +813,9 @@ theorem setAt_inPlace_of_entryInv
     (hR : R.cells root = some o') (hin : i < o.fields.size) :
     ∃ H',
       setAt R root i (.scalar vn) = some (.inPlace H' root) ∧
-      Corr (inPlaceOutcome root i vn o H).heap H'
+      Corr (inPlaceOutcome root i vn o H).heap H' ∧
+      (inPlaceOutcome root i vn o H).target = some root ∧
+      ((H'.cells root).bind fun o => o.field? i) = some (.scalar vn)'
 \end{minted}
 
 \needspace{10\baselineskip}\begin{claim}[Emitted-semantics abort impossibility]\label{thm:prefix-no-abort}\end{claim}
@@ -711,6 +833,63 @@ theorem prefix_abort_impossible
 \noindent{\small\itshape The layout and the remaining entry premises are implicit; this is the
 emitted-semantics form of the no-abort result.}
 
+\section{The principal guarantee and its contracts}\label{sec:principal}
+The model, the recognised LCNF and the runtime model are separate semantics.
+Their composition at the flat recognised write is \lean{principal\_write}:
+\begin{minted}{lean4}
+theorem principal_write
+    (hproj : projectPrefix code = some p) (hl : Layout assign p)
+    (hEntry : EntryInv H env (Runner.initCtx root) root client)
+    (hacc : OwnersAccounted (Runner.initCtx root)) (vars : List Var)
+    (hcount : CountFidelity H (Runner.initCtx root) vars)
+    (hag : Agrees assign p s env H root i v)
+    (hcell : H.cells root = some o) (hin : i < o.fields.size)
+    (hc : Corr H R) (ho' : R.cells root = some o') :
+    PrefixOutcome.ofExec assign p (execAST assign p code s) =
+        some (inPlaceOutcome root i v o H) ∧
+      PrefixOutcome.ofModel (Ownership.run (Prefix.toModel assign p) env H) =
+        inPlaceOutcome root i v o H ∧
+      ∃ H', Runtime.setAt R root i (.scalar v) =
+          some (.inPlace H' root) ∧
+        Corr (inPlaceOutcome root i v o H).heap H' ∧
+        (inPlaceOutcome root i v o H).target = some root ∧
+        ((H'.cells root).bind fun o => o.field? i) = some (.scalar v)
+\end{minted}
+The proof is the conjunction of \lean{recognized\_write\_in\_place} and
+\lean{Runtime.setAt\_inPlace\_of\_entryInv}; the accounting hypotheses are not
+used by those proofs. They are the contracts that make the model's count one the
+physical count one; \lean{alias\_not\_accounted} shows why the environment side
+cannot be omitted. The theorem is flat: the nested path is the separate
+\lean{index\_path\_simulates\_model}, whose \lean{PathContract} is discharged for
+a finite level list by \lean{PathRecursion} and leaves the leaf contract and N10.
+
+\begin{table}[h]
+\centering
+\footnotesize
+\begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}p{2.5cm}>{\raggedright\arraybackslash}p{3.4cm}>{\raggedright\arraybackslash}p{2.6cm}X@{}}
+\toprule
+Contract & Proposition & Provider & Status or remaining obligation \\
+\midrule
+\lean{EntryInv} & unique tree, client separation, root completeness & client entry & \lean{initEntryInv} for fresh arrays; arbitrary heap is a client obligation \\
+\lean{Agrees} & heap/environment/code agreement and annotations & client & supplied per declaration \\
+A1--A12 & primitive, layout and call signatures & implementation assumption & documented; not proved of the C runtime \\
+N1--N12 & nested path and call contracts & implementation/leaf & N10 and the leaf body remain \\
+\lean{OwnersAccounted} & environment owner count at zero and one & client obligation & predicate and preservation lemmas; checker take-out/\lean{dec} preconditions not enforced \\
+\lean{CountFidelity} & heap count = incoming edges + owning variables & implementation assumption & not proved; the residual runtime fidelity \\
+\lean{PathContract} & finite-path child contract & client & tail discharged by induction; leaf remains \\
+\lean{Corr} & runtime model correspondence & proved relation & C semantics and address identity remain assumptions \\
+linked runtime & \lean{lean\_is\_exclusive}, \lean{lean\_array\_uset} & empirical & gate and differential corpus, not a proof \\
+source correspondence & Lean source to emitted LCNF & assumption & not attempted \\
+\bottomrule
+\end{tabularx}
+\caption{Contracts of the principal guarantee, classified by provider.}
+\label{tab:contracts}
+\end{table}
+
+\noindent{\small\itshape The full type of \lean{principal\_write} is in
+Appendix~\ref{sec:theorems}; the model and LCNF claims are stated separately in
+their sections.}
+
 \section{Empirical alignment}\label{sec:empirical}
 The model is only as good as its match to the compiler. A compiled probe compares
 the model's predicates with \lean{lean\_is\_exclusive} and address identity on a
@@ -722,20 +901,39 @@ even though the source looks unique. The gate also binds the pinned artifacts,
 the IR shapes, the generated C and the runtime header. The corpus is evidence,
 not an exhaustive equivalence.
 
-\begin{center}
-\small
-\begin{tabular}{@{}lll@{}}
+\begin{table}[h]
+\centering
+\footnotesize
+\begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}p{2.3cm}>{\raggedright\arraybackslash}p{2.5cm}>{\raggedright\arraybackslash}p{2.3cm}>{\raggedright\arraybackslash}p{2.2cm}>{\raggedright\arraybackslash}p{2.1cm}X@{}}
 \toprule
-Case & Predicted & Observed \\
+Case & Checker/model & Runtime count & Buffer & Result & Config \\
 \midrule
-unique array & exclusive, in place & agree \\
-live alias (count two) & shared, copy & agree \\
-alias released before the write & exclusive, in place & agree \\
-persistent literal & shared, copy & agree \\
-closure-held array & shared, copy & agree \\
+unique array & accepted & exclusive & in place & preserved & off; on passes \\
+live alias (count two) & rejected & shared & copy & alias 0 & off; on aborts \\
+alias released before write & runtime-only & exclusive & in place & preserved & off; on passes \\
+persistent literal & not certified & shared & copy & preserved & off; on aborts \\
+closure-held array & not certified & shared & copy & preserved & off; on aborts \\
+closed-pure-array & not certified & shared & copy & preserved & off \\
+nested \lean{setAt} & model/LCNF accepted & model in place & pair allocation & C/IR gate & no linked differential \\
 \bottomrule
-\end{tabular}
-\end{center}
+\end{tabularx}
+\caption{Observed alignment for the flat probe and the nested LCNF/IR gate.}
+\label{tab:empirical}
+\end{table}
+
+Table~\ref{tab:empirical} separates the checker result from the runtime
+disposition. The linked probe covers the flat primitives; the nested sequence is
+bound at the generated-C/IR level, not by a linked differential. The
+closed-pure-array case is the negative control: a pure closed array is lifted to a
+\lean{\_\_\_closed} constant read through \lean{lean\_obj\_once}, so it is shared
+and the write copies even though the source looks unique. The corpus is evidence,
+not an exhaustive equivalence.
+
+The cost claim is conditional. A single alias need not force a copy on every
+iteration: after the first copy the array can be unique, so the quadratic effect
+requires sustained sharing at each update. No timing is claimed. The temporary
+extraction pair may allocate even when the certified array write is in place;
+no-copy certification is not an allocation-free execution theorem.
 
 \section{Limits and non-claims}\label{sec:limits}
 \needspace{10\baselineskip}\begin{nonclaim}
@@ -744,12 +942,24 @@ replay-to-backend identity (A10) and address identity remain assumptions; the
 emitted recursive callee and continuation (N10) are not captured; the model's
 flat environment cannot express the emitted per-invocation index; the leaf body
 contract and several heap-shape facts remain supplied; free/cascade, persistence,
-concurrency and callbacks are outside the fragment; and the M7 source
+concurrency and callbacks are outside the fragment; and the source
 correspondence is not attempted.
+
+The accounting contracts are not consequences of \lean{Inv}. The environment side
+(\lean{OwnersAccounted}) has a kernel countermodel and explicit
+\lean{bindOwned}/\lean{dec} preconditions that the checker does not yet enforce;
+the heap side (\lean{CountFidelity}) is an implementation assumption about the
+runtime's count. The recognition claim is scoped to the accepted grammar and the
+mutation corpus, not a universal rejection theorem for every token-preserving
+near miss. The nested linked runtime is not measured; only the flat probe is.
 \end{nonclaim}
 
 \section{Related work}
-Reference counting and reuse: Perceus and Counting Immutable Beans
+Huisinga's 2023 uniqueness analysis for a model of Lean's IR
+\cite{huisinga} is the closest predecessor; Lean's \lean{Array.markLinear}
+\cite{marklinear} is a dynamic mark/abort facility, and translation validation
+\cite{translationvalidation} checks a compiler run rather than proving a static
+discipline. Reference counting and reuse: Perceus and Counting Immutable Beans
 \cite{perceus,countingbeans}, and Koka's effect typing \cite{koka}. Linear and
 uniqueness disciplines: Wadler's linear types \cite{wadler-linear}, Linear
 Haskell \cite{linearhaskell}, Clean's uniqueness \cite{uniqueness}, alias types
@@ -764,31 +974,98 @@ fragment and proves the connection in Lean.
 
 \section{Conclusion}
 The development proves the count-one discipline at the model, the recognised
-LCNF and the runtime model, under named contracts; it measures the linked
-primitive on a corpus and gates the pinned evidence. What remains is the C
+LCNF and the runtime model, under named contracts, and composes the flat
+guarantee as \lean{principal\_write}. It measures the linked primitive on a
+corpus and gates the pinned evidence. The accounting contracts and the C
 semantics, the replay/backend identity, the emitted callee and the source
-correspondence. The next step is either a verified runtime model or a stronger
-backend gate; the static discipline itself is complete for the recognised
-fragment.
+correspondence remain the boundary. The next step is either a verified runtime
+model or a stronger backend gate; the development proves soundness for the
+accepted fragment, not completeness of the analysis.
 
 \appendix
-\section{Theorem map and artifacts}
+\section{Theorem map and artifacts}\label{sec:theorems}
 The table lists the headline declarations and their status. ``Proved'' means a
 kernel-checked theorem; ``contracts'' and ``leaf/N10'' name the assumptions under
 which the theorem is stated; ``measured'' means the compilation gate and the
 corpus, not a proof.
+
+\subsection{Headline declarations}
 \begin{description}[leftmargin=1.4em, style=nextline, itemsep=2pt, font=\small]
-\item[\lean{check\_sound}] \lean{Ownership/Soundness.lean} --- proved.
-\item[\lean{checkN\_sound\_of\_entryInv}] \lean{Ownership/Entry.lean} --- proved.
-\item[\lean{project\_sound}] \lean{OwnershipLcnf/Semantics.lean} --- proved under the primitive contracts.
-\item[\lean{recognized\_write\_in\_place}] \lean{OwnershipLcnf/Semantics.lean} --- proved under the primitive contracts.
-\item[\lean{index\_path\_simulates\_model}] \lean{OwnershipLcnf/PathRecursion.lean} --- proved; leaf contract and N10 remain.
-\item[\lean{pair\_accounting}] \lean{Ownership/CountedPair.lean} --- proved; restricted free.
-\item[\lean{putBack\_exclusive\_of\_wellFormed}] \lean{Ownership/PutBack.lean} --- proved; returned-handle accounting remains.
-\item[\lean{checkExclusive\_no\_abort}] \lean{OwnershipLcnf/RuntimeModel.lean} --- proved in the runtime model.
-\item[\lean{prefix\_abort\_impossible}] \lean{OwnershipLcnf/NoAbort.lean} --- proved under A6/A8.
-\item[\lean{differential corpus}] \lean{runtime-bridge} --- measured.
+\item[\lean{Ownership.check\_sound}] \lean{Ownership/Soundness.lean} --- proved; model.
+\item[\lean{Ownership.Entry.checkN\_sound\_of\_entryInv}] \lean{Ownership/Entry.lean} --- proved; model, \lean{EntryInv} and \lean{Agrees}.
+\item[\lean{OwnershipLcnf.project\_sound}] \lean{OwnershipLcnf/Semantics.lean} --- proved under the primitive contracts.
+\item[\lean{OwnershipLcnf.recognized\_write\_in\_place}] \lean{OwnershipLcnf/Semantics.lean} --- proved under the primitive contracts.
+\item[\lean{OwnershipLcnf.index\_path\_simulates\_model}] \lean{OwnershipLcnf/PathRecursion.lean} --- proved with \lean{PathContract}; the finite tail is discharged; leaf and N10 remain.
+\item[\lean{Ownership.CountedPair.pair\_accounting}] \lean{Ownership/CountedPair.lean} --- proved; restricted free.
+\item[\lean{Ownership.PutBack.putBack\_exclusive\_of\_wellFormed}] \lean{Ownership/PutBack.lean} --- proved; returned-handle accounting remains.
+\item[\lean{OwnershipLcnf.Runtime.checkExclusive\_no\_abort}] \lean{OwnershipLcnf/RuntimeModel.lean} --- proved in the runtime model.
+\item[\lean{OwnershipLcnf.Runtime.setAt\_inPlace\_of\_entryInv}] \lean{OwnershipLcnf/RuntimeModel.lean} --- proved in the runtime model.
+\item[\lean{OwnershipLcnf.prefix\_abort\_impossible}] \lean{OwnershipLcnf/NoAbort.lean} --- proved under A6/A8.
+\item[\lean{OwnershipLcnf.principal\_write}] \lean{OwnershipLcnf/Principal.lean} --- proved by composing the flat LCNF and runtime-model claims; carries the accounting contracts.
+\item[\lean{Ownership.OwnersAccounted}, \lean{Ownership.CountFidelity}] \lean{Ownership/Accounting.lean} --- definitions; preservation lemmas for \lean{setUs}, \lean{move}, \lean{inc}, \lean{bindOwned}, \lean{dec} with explicit preconditions.
+\item[\lean{Ownership.alias\_not\_accounted}] \lean{Ownership/Accounting.lean} --- kernel countermodel; the raw \lean{Inv} admits two owners at multiplicity one.
+\item[\lean{differential corpus}, \lean{runtime-binding gate}] \lean{runtime-bridge}, \lean{scripts/check\_runtime\_binding.sh} --- measured.
 \end{description}
+
+\subsection{Full principal type}
+\begin{minted}[breaklines=true,fontsize=\scriptsize]{lean4}
+theorem principal_write
+    {code : Lean.Compiler.LCNF.Code Lean.Compiler.LCNF.Purity.impure}
+    {p : Prefix} {assign : Lean.FVarId → Var}
+    (hproj : projectPrefix code = some p) (hl : Layout assign p)
+    (s : Machine) (env : Env) (H : Heap)
+    (root : Ref) (client : List Ref) (i v : Nat) (o : Obj)
+    (hEntry : Entry.EntryInv H env (Runner.initCtx root) root client)
+    (hacc : OwnersAccounted (Runner.initCtx root))
+    (vars : List Var)
+    (hcount : CountFidelity H (Runner.initCtx root) vars)
+    (hag : Agrees assign p s env H root i v)
+    (hcell : H.cells root = some o) (hin : i < o.fields.size)
+    {R : Runtime.RHeap} {o' : Runtime.RObj}
+    (hc : Runtime.Corr H R) (ho' : R.cells root = some o') :
+    PrefixOutcome.ofExec assign p (execAST assign p code s) =
+        some (inPlaceOutcome root i v o H) ∧
+      PrefixOutcome.ofModel (Ownership.run (Prefix.toModel assign p) env H) =
+        inPlaceOutcome root i v o H ∧
+      ∃ H',
+        Runtime.setAt R root i (Val.scalar v) =
+            some (Runtime.SetOutcome.inPlace H' root) ∧
+          Runtime.Corr (inPlaceOutcome root i v o H).heap H' ∧
+            (inPlaceOutcome root i v o H).target = some root ∧
+              ((H'.cells root).bind fun o => o.field? i) = some (Val.scalar v)
+\end{minted}
+
+\subsection{Reproduction}
+Pinned toolchain: \lean{leanprover/lean4:v4.35.0-rc3}. Pinned sibling:
+\lean{lean-examples}, clean, at
+\par\noindent\lean{66e64334a1c968d829903b8aec8d22f7e3b9fd3f}.
+The paper's local TeX build is not part of the artifact.
+
+\begin{minted}[breaklines=true,fontsize=\small]{bash}
+nix develop -c lake build Ownership
+nix develop -c lake build OwnershipLcnf
+nix develop -c lake build OwnershipTest
+nix develop -c lake env lean scripts/check_axioms.lean
+nix develop -c bash scripts/check_artifacts.sh
+nix develop -c bash scripts/check_runtime_binding.sh
+\end{minted}
+
+Observed on 1 November 2026 at the base revision
+\lean{fcab2f39e9bf086cbb5817c947dadc1f68c8c605}: all three Lean targets build;
+the artifact gate reports ``artifacts match the pinned sibling and toolchain'';
+the runtime gate reports ``pinned artifacts, IR shapes, C/runtime primitives and
+probe modes agree''. The probe exits zero for \lean{separate-exact},
+\lean{separate-spare}, \lean{inline-io}, \lean{sealed}, \lean{inline-exact},
+\lean{closed-case} and \lean{differential} with the check off, and for
+\lean{separate-exact}, \lean{inline-io} and \lean{sealed} with the check on;
+\lean{inline-exact} and \lean{closed-case} exit one with the check on. The axiom
+script reports only \lean{propext}, \lean{Classical.choice} and
+\lean{Quot.sound} for the headline theorems and \lean{propext} for
+\lean{alias\_not\_accounted}.
+
+The C semantics, replay-to-backend identity, address identity, free/cascade and
+the emitted recursive callee remain outside the artifact. The runtime gate binds
+presence and observed behaviour, not a refinement of the C semantics.
 
 \bibliographystyle{plain}
 \bibliography{references}
