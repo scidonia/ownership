@@ -165,7 +165,7 @@ questions.
 | Extraction/restoration | addressed with a named composition gap | Protocol count table; `pair_accounting`/`putBack_exclusive_of_wellFormed`; `PairProjection` model term. The nested interpreter abstracts the pair traffic and unconditional restoration; its closure does not contain the counted-pair/put-back declarations, so the counted nested execution composition is outstanding. |
 | Recognition/observations | addressed with a trace scope | Accepted grammar and mutation-corpus scope; `PrefixOutcome` preservation paragraph; shared decoder/adequacy boundary. The nested trace records designated scalar writes, not extraction/restoration stores. |
 | Example/evaluation | addressed | Running `Layout5.setAt` source example; flat probe table with checker/runtime/buffer/result/config; nested C/IR gate; cost/allocation qualification. |
-| Reproducibility | addressed with a gate scope | Appendix A.3 commands; test and gate results; `scripts/check_axioms.lean`; pinned sibling `66e64334...`; toolchain. The gate's `expect` checks exit status, and the differential mode compares recorded expectations rather than executing the model. |
+| Reproducibility | addressed with a gate scope | Appendix A.3 commands; test and gate results; `scripts/check_axioms.lean`; pinned sibling `66e64334...`; toolchain. The probe's modes assert their observations and the gate checks the status; the differential mode compares recorded expectations rather than executing the model. |
 | Manuscript consistency | addressed | Abstract/introduction/principal/limits/conclusion describe the same conditional guarantee; deep embedding, single-threaded restriction and "complete" are corrected. |
 
 Remaining named obligations:
@@ -177,8 +177,9 @@ Remaining named obligations:
 - `CountFidelity` for arbitrary entry heaps, and the runtime's count fidelity;
 - the counted protocol's integration into the nested execution simulation;
 - extraction/restoration disposition events for a full nested no-copy claim;
-- a linked differential for the nested protocol (the current nested evidence is
-  the model/LCNF and the generated-C/IR gate);
+- a model-driven differential and a linked differential for the nested protocol
+  (the current flat differential compares recorded expectations; the nested
+  evidence is the model/LCNF and the generated-C/IR gate);
 - the Lean-source-to-LCNF correspondence.
 
 A second implementation audit (`docs/notes/ownership-implementation-audit.md`)

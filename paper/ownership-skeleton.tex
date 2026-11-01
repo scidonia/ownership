@@ -1080,10 +1080,10 @@ nix develop -c bash scripts/check_runtime_binding.sh
 \end{minted}
 
 Observed on 1 November 2026 at the base revision
-\lean{bb9af670c2983e5756fa6977249ff7f3b3c2567c}: all three Lean targets build;
+\lean{272eb48169e52faa3824fbac54f72e15fc280d5b}: all three Lean targets build;
 the artifact gate reports ``artifacts match the pinned sibling and toolchain'';
 the runtime gate reports ``pinned artifacts, IR shapes, C/runtime primitives and
-probe modes agree''. The probe exits zero for \lean{separate-exact},
+probe modes agree''. Each probe mode asserts its observed exclusivity, address, functional value and sealed result; a mismatch returns one. The probe exits zero for \lean{separate-exact},
 \lean{separate-spare}, \lean{inline-io}, \lean{sealed}, \lean{inline-exact},
 \lean{closed-case} and \lean{differential} with the check off, and for
 \lean{separate-exact}, \lean{inline-io} and \lean{sealed} with the check on;
