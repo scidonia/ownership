@@ -1068,6 +1068,50 @@ theorem principal_write
               ((H'.cells root).bind fun o => o.field? i) = some (Val.scalar v)
 \end{minted}
 
+\subsection{Full nested and restoration types}
+\begin{minted}[breaklines=true,fontsize=\scriptsize]{lean4}
+theorem index_path_simulates_model (declName takeOut : Lean.Name)
+    (assign : Lean.FVarId → Ownership.Var)
+    (p : OwnershipLcnf.NestedPrefix)
+    (code : Lean.Compiler.LCNF.Code Lean.Compiler.LCNF.Purity.impure)
+    (hproj : OwnershipLcnf.projectNested declName takeOut code = some p)
+    (hl : OwnershipLcnf.NestedLayout assign p)
+    (path value : Ownership.Var) (body : Ownership.Nested.NCode)
+    (rest : List Ownership.Path.Level) (l : Ownership.Path.Level)
+    (s : OwnershipLcnf.NestedMachine) (mEnv : Ownership.Env) (H : Ownership.Heap)
+    (rA : Ownership.Ref) (o : Ownership.Obj) (i v pv : Nat) (childRef : Ownership.Ref)
+    (hm : OwnershipLcnf.LevelMatch assign p l path value rA o i childRef)
+    (hag : OwnershipLcnf.NestedAgrees assign p s mEnv H rA i v pv)
+    (c : Ownership.Ctx) (tip : Ownership.Ref) (cb : Ownership.Ctx) (y : Ownership.Var)
+    (hpath : OwnershipLcnf.PathContract path value body tip l rest H mEnv c cb y) :
+    OwnershipLcnf.NestedOutcome.ofExec assign p
+        (OwnershipLcnf.execNestedAST declName takeOut assign
+          (Ownership.Path.build path value body rest) p code s) =
+      some (OwnershipLcnf.NestedOutcome.ofModel
+        (Ownership.Nested.runN (Ownership.Path.build path value body (l :: rest)) mEnv H)) ∧
+    ∃ H' env' ws,
+      Ownership.Nested.runN (Ownership.Path.build path value body (l :: rest)) mEnv H =
+        Ownership.Res.done H' env' (Ownership.Val.ref rA) ws ∧
+        ∀ (w : Ownership.Write), w ∈ ws → w.snd = true
+\end{minted}
+\begin{minted}[breaklines=true,fontsize=\scriptsize]{lean4}
+theorem putBack_exclusive_of_wellFormed {H : Ownership.Heap} {p c : Ownership.Ref}
+    {i : Nat} (hw : Ownership.CountedPair.WellFormedEntry H p c i)
+    {Hc : Ownership.Heap} {env : Ownership.Env} {ctx : Ownership.Ctx}
+    {state path x : Ownership.Var} {body : Ownership.Nested.NCode}
+    (hcall : Ownership.PutBack.ChildCall
+      (Ownership.CountedPair.protocol H p c i).snd Hc env ctx state path x body p c) :
+    ∃ op,
+      Ownership.PutBack.putBack Hc p i c =
+          some (p, Ownership.PutBack.mutate Hc p (Ownership.PutBack.parentAfter op i) i c) ∧
+        (Ownership.PutBack.mutate Hc p (Ownership.PutBack.parentAfter op i) i c).rc p = 1 ∧
+          (Ownership.PutBack.mutate Hc p (Ownership.PutBack.parentAfter op i) i c).rc c = 1 ∧
+            Ownership.Heap.Exclusive
+              (Ownership.PutBack.mutate Hc p (Ownership.PutBack.parentAfter op i) i c) p ∧
+              Ownership.Heap.Exclusive
+                (Ownership.PutBack.mutate Hc p (Ownership.PutBack.parentAfter op i) i c) c
+\end{minted}
+
 \subsection{Reproduction}
 Pinned toolchain: \lean{leanprover/lean4:v4.35.0-rc3}. Pinned sibling:
 \lean{lean-examples}, clean, at
