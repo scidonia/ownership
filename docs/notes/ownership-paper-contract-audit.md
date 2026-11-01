@@ -162,10 +162,10 @@ questions.
 | Principal theorem | addressed | `OwnershipLcnf.principal_write` composes the flat LCNF and runtime-model claims; its full type is in Appendix A.2. |
 | Alias/accounting | addressed with named preconditions | `Ownership.OwnersAccounted`, `CountFidelity`, `alias_not_accounted`; Section 3.3; the checker's take-out/`dec` preconditions are client obligations, not hidden. |
 | Recursive scope | addressed | `index_path_simulates_model` displays `PathContract`; `PathRecursion` discharges the finite tail; leaf and N10 are stated. |
-| Extraction/restoration | addressed | Protocol count table; `pair_accounting`/`putBack_exclusive_of_wellFormed`; `PairProjection` model term and the named execution-correspondence step. |
-| Recognition/observations | addressed | Accepted grammar and mutation-corpus scope; `PrefixOutcome` preservation paragraph; shared decoder/adequacy boundary. |
+| Extraction/restoration | addressed with a named composition gap | Protocol count table; `pair_accounting`/`putBack_exclusive_of_wellFormed`; `PairProjection` model term. The nested interpreter abstracts the pair traffic and unconditional restoration; its closure does not contain the counted-pair/put-back declarations, so the counted nested execution composition is outstanding. |
+| Recognition/observations | addressed with a trace scope | Accepted grammar and mutation-corpus scope; `PrefixOutcome` preservation paragraph; shared decoder/adequacy boundary. The nested trace records designated scalar writes, not extraction/restoration stores. |
 | Example/evaluation | addressed | Running `Layout5.setAt` source example; flat probe table with checker/runtime/buffer/result/config; nested C/IR gate; cost/allocation qualification. |
-| Reproducibility | addressed | Appendix A.3 commands; test and gate results; `scripts/check_axioms.lean`; pinned sibling `66e64334...`; toolchain. |
+| Reproducibility | addressed with a gate scope | Appendix A.3 commands; test and gate results; `scripts/check_axioms.lean`; pinned sibling `66e64334...`; toolchain. The gate's `expect` checks exit status, and the differential mode compares recorded expectations rather than executing the model. |
 | Manuscript consistency | addressed | Abstract/introduction/principal/limits/conclusion describe the same conditional guarantee; deep embedding, single-threaded restriction and "complete" are corrected. |
 
 Remaining named obligations:
@@ -175,7 +175,17 @@ Remaining named obligations:
 - the emitted recursive callee and continuation (N10) and the leaf contract;
 - the checker's take-out/`dec` accounting preconditions (`hno`/`hother`);
 - `CountFidelity` for arbitrary entry heaps, and the runtime's count fidelity;
+- the counted protocol's integration into the nested execution simulation;
+- extraction/restoration disposition events for a full nested no-copy claim;
 - a linked differential for the nested protocol (the current nested evidence is
   the model/LCNF and the generated-C/IR gate);
 - the Lean-source-to-LCNF correspondence.
+
+A second implementation audit (`docs/notes/ownership-implementation-audit.md`)
+confirms the alias witness and the nested-composition/trace findings above. Its
+positive points are retained: the flat `recognized_write_in_place` specifies the
+single `(root, true)` write, `ChildCall.parent` derives parent preservation, and
+the counted-pair accounting has explicit increments and controls. The paper now
+presents the flat `principal_write` as the composed result and the nested path as
+a separate finite model with the counted composition outstanding.
 

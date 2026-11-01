@@ -101,9 +101,10 @@ exclusivity check cannot abort under the correspondence, and bind the result to
 the pinned toolchain with an artifact/IR/C gate and a differential corpus. The
 guarantee carries two accounting contracts---the environment owner count and the
 heap/runtime count fidelity---and a kernel countermodel shows that the raw
-invariant does not imply them. The boundary is explicit: the C runtime's semantics, replay-to-backend identity, the
-emitted recursive callee and the source correspondence remain assumptions or open
-obligations.
+invariant does not imply them. The boundary is explicit: the C runtime's
+semantics, replay-to-backend identity, the emitted recursive callee, the counted
+protocol's nested execution composition, the extraction/restoration event
+coverage and the source correspondence remain assumptions or open obligations.
 \end{abstract}
 
 \section{Introduction}
@@ -671,7 +672,9 @@ theorem recognized_write_in_place
 disposition, the fault and the write trace. It discards the machine's variable map
 and any unrecognised suffix. The write trace preserves each covered write's
 exclusive/copy bit, so a projection to final contents would lose the property and
-is not used. The recogniser and executor share the prefix representation;
+is not used. For the flat designated prefix the trace is the single
+\lean{(root, true)} event, so the all-recorded-writes predicate is not vacuous
+there. The recogniser and executor share the prefix representation;
 \lean{execAST\_recognized} is the decoding adequacy lemma, not an independent
 instruction semantics. The independent meanings are the primitive contracts
 A1--A12; the shared representation is why the decoding hypothesis is
@@ -689,13 +692,19 @@ theorem index_path_simulates_model
     (declName takeOut : Name) (assign : FVarId → Ownership.Var)
     (p : NestedPrefix) (code : Code .impure)
     (hproj : projectNested declName takeOut code = some p)
-    (ls : List Level)
+    (hl : NestedLayout assign p)
+    (path value : Var) (body : NCode) (rest : List Level) (l : Level)
+    (s : NestedMachine) (mEnv : Env) (H : Heap)
+    (hm : LevelMatch assign p l path value rA o i childRef)
+    (hag : NestedAgrees assign p s mEnv H rA i v pv)
     (hpath : PathContract path value body tip l rest H mEnv c cb y) :
     NestedOutcome.ofExec assign p
-        (execNestedAST declName takeOut assign body p code s) =
-      NestedOutcome.ofModel (Nested.runN (build path value body ls) mEnv H) ∧
+        (execNestedAST declName takeOut assign
+          (Path.build path value body rest) p code s) =
+      some (NestedOutcome.ofModel
+        (Nested.runN (Path.build path value body (l :: rest)) mEnv H)) ∧
     ∃ H' env' ws,
-      Nested.runN (build path value body ls) mEnv H =
+      Nested.runN (Path.build path value body (l :: rest)) mEnv H =
         .done H' env' (.ref rA) ws ∧ (∀ w ∈ ws, w.2 = true)
 \end{minted}
 \noindent{\small\itshape The level facts, agreement and entry state are implicit; the leaf
@@ -764,6 +773,16 @@ The take-out shape is the \lean{Path.index} arm recognised by
 which reads the model term off the operands. The execution correspondence between
 the recognised pair and \lean{Ownership.Pair.runP} is a named next step; the
 counted protocol above is the accounting model, not that correspondence.
+
+The nested interpreter abstracts the pair increments and the pair release, and it
+performs the put-back unconditionally. The dependency closure of
+\lean{index\_path\_simulates\_model} does not contain \lean{pair\_accounting}
+or \lean{putBack\_exclusive\_of\_wellFormed}; the counted protocol is not yet
+integrated into an execution simulation. The nested trace also records the
+designated scalar writes, not the extraction and restoration field stores, so the
+all-recorded-writes predicate is not a claim about those stores. The flat
+\lean{principal\_write} is the composed result; the counted nested composition is
+outstanding.
 
 The put-back is the second place where a copy can hide. The operation has two
 dispositions: at count one it mutates the parent; at a higher count or a
@@ -951,7 +970,13 @@ The accounting contracts are not consequences of \lean{Inv}. The environment sid
 the heap side (\lean{CountFidelity}) is an implementation assumption about the
 runtime's count. The recognition claim is scoped to the accepted grammar and the
 mutation corpus, not a universal rejection theorem for every token-preserving
-near miss. The nested linked runtime is not measured; only the flat probe is.
+near miss. The nested linked runtime is not measured; only the flat probe is. The
+nested interpreter abstracts the pair traffic and unconditional restoration, so
+the counted protocol's execution composition is outstanding; the nested trace
+does not include extraction/restoration stores. The runtime gate's \lean{expect}
+checks exit status, and the differential mode compares recorded expectations
+rather than executing the Ownership model; the check-enabled modes are the
+negative controls.
 \end{nonclaim}
 
 \section{Related work}
@@ -974,8 +999,9 @@ fragment and proves the connection in Lean.
 
 \section{Conclusion}
 The development proves the count-one discipline at the model, the recognised
-LCNF and the runtime model, under named contracts, and composes the flat
-guarantee as \lean{principal\_write}. It measures the linked primitive on a
+LCNF and the runtime model for the flat recognised write, under named contracts,
+and composes that guarantee as \lean{principal\_write}. The nested path is a
+separate finite model; its counted protocol composition remains open. It measures the linked primitive on a
 corpus and gates the pinned evidence. The accounting contracts and the C
 semantics, the replay/backend identity, the emitted callee and the source
 correspondence remain the boundary. The next step is either a verified runtime
@@ -1051,7 +1077,7 @@ nix develop -c bash scripts/check_runtime_binding.sh
 \end{minted}
 
 Observed on 1 November 2026 at the base revision
-\lean{fcab2f39e9bf086cbb5817c947dadc1f68c8c605}: all three Lean targets build;
+\lean{bb9af670c2983e5756fa6977249ff7f3b3c2567c}: all three Lean targets build;
 the artifact gate reports ``artifacts match the pinned sibling and toolchain'';
 the runtime gate reports ``pinned artifacts, IR shapes, C/runtime primitives and
 probe modes agree''. The probe exits zero for \lean{separate-exact},
