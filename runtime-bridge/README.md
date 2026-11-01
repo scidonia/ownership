@@ -30,7 +30,9 @@ toolchain is the repository flake's Lean 4.35.0-rc3. Run a mode with and without
 | `differential` | the model's predicate corpus: unique, alias (count two), drop-back-to-one, persistent literal, closure-held | all six predictions agree, exit 0 | — (the copy cases would abort under the armed check) |
 
 "In place" means `exclusive_before = true`, the array buffer and the focused
-struct keep their addresses, and `ok = true`.
+struct keep their addresses, and `ok = true`. Each mode asserts its observed
+exclusivity, address, functional value and sealed result; a mismatch returns
+nonzero. The gate's `expect` checks that status.
 
 ## Cause
 

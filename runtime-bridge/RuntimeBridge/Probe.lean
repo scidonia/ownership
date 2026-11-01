@@ -36,7 +36,7 @@ def freshStructs (n : Nat) (slack : Nat) : Array (UInt64 × UInt64) := Id.run do
 
 /-- The update in its own function: the array is the function's input and is not
 used after the call. -/
-def separateCase (name : String) (slack : Nat) : IO Unit := do
+def separateCase (name : String) (slack : Nat) : IO UInt32 := do
   let a := freshStructs 8 slack
   let e := exclusive a
   let ab ← addressIO a
@@ -44,7 +44,9 @@ def separateCase (name : String) (slack : Nat) : IO Unit := do
   let (b, ok) := Layout5.setLeaf p3 (77 : UInt64) a
   let aa ← addressIO b
   let fa ← addressIO (b[3]!)
+  let good := e && (ab == aa) && (fb == fa) && ok && b[3]! == (77, 104)
   IO.println s!"{name}: exclusive_before={e} same_buffer={ab == aa} same_focused={fb == fa} ok={ok} value={b[3]!}"
+  return if good then 0 else 1
 
 /-- The sealed interface: the array is created inside `runFresh`; the client sees
 only the program's results. -/
@@ -55,7 +57,7 @@ def freshStructsIO (n : Nat) (slack : Nat) : IO (Array (UInt64 × UInt64)) := do
   return a
 
 /-- A parameterless case: the same pure construction, but closed. -/
-def closedCase : IO Unit := do
+def closedCase : IO UInt32 := do
   let a := freshStructs 8 0
   let e := exclusive a
   let ab ← addressIO a
@@ -63,14 +65,17 @@ def closedCase : IO Unit := do
   let (b, ok) := Layout5.setLeaf p3 (77 : UInt64) a
   let aa ← addressIO b
   let fa ← addressIO (b[3]!)
+  let good := !e && (ab != aa) && (fb != fa) && ok && b[3]! == (77, 104)
   IO.println s!"closed-case: exclusive_before={e} same_buffer={ab == aa} same_focused={fb == fa} ok={ok} value={b[3]!}"
+  return if good then 0 else 1
 
-def sealedCase : IO Unit := do
+def sealedCase : IO UInt32 := do
   let r ← Structured.runFresh { size := 8, fill := 1 } (do
     let w0 ← Structured.Program.set 0 17
     let w1 ← Structured.Program.set 1 23
     return (w0, w1))
   IO.println s!"sealed: writes={r}"
+  return if r.1 && r.2 then 0 else 1
 
 def mkAIO (n : Nat) : IO (Array Nat) := do
   let mut a : Array Nat := Array.mkEmpty n
@@ -134,9 +139,9 @@ def differential : IO UInt32 := do
 
 def main (args : List String) : IO UInt32 := do
   match args with
-  | ["separate-exact"] => separateCase "separate-exact" 0; return 0
-  | ["separate-spare"] => separateCase "separate-spare" 1; return 0
-  | ["closed-case"] => closedCase; return 0
+  | ["separate-exact"] => separateCase "separate-exact" 0
+  | ["separate-spare"] => separateCase "separate-spare" 1
+  | ["closed-case"] => closedCase
   | ["inline-io"] =>
     let a ← freshStructsIO 8 0
     let e := exclusive a
@@ -145,10 +150,11 @@ def main (args : List String) : IO UInt32 := do
     let (b, ok) := Layout5.setLeaf p3 (77 : UInt64) a
     let aa ← addressIO b
     let fa ← addressIO (b[3]!)
+    let good := e && (ab == aa) && (fb == fa) && ok && b[3]! == (77, 104)
     IO.println s!"inline-io: exclusive_before={e} same_buffer={ab == aa} same_focused={fb == fa} ok={ok} value={b[3]!}"
-    return 0
+    return if good then 0 else 1
   | ["differential"] => differential
-  | ["sealed"] => sealedCase; return 0
+  | ["sealed"] => sealedCase
   | ["inline-exact"] =>
     let a := freshStructs 8 0
     let e := exclusive a
@@ -157,8 +163,9 @@ def main (args : List String) : IO UInt32 := do
     let (b, ok) := Layout5.setLeaf p3 (77 : UInt64) a
     let aa ← addressIO b
     let fa ← addressIO (b[3]!)
+    let good := !e && (ab != aa) && (fb != fa) && ok && b[3]! == (77, 104)
     IO.println s!"inline-exact: exclusive_before={e} same_buffer={ab == aa} same_focused={fb == fa} ok={ok} value={b[3]!}"
-    return 0
+    return if good then 0 else 1
   | ["inline-spare"] =>
     let a := freshStructs 8 1
     let e := exclusive a
@@ -167,8 +174,9 @@ def main (args : List String) : IO UInt32 := do
     let (b, ok) := Layout5.setLeaf p3 (77 : UInt64) a
     let aa ← addressIO b
     let fa ← addressIO (b[3]!)
+    let good := !e && (ab != aa) && (fb != fa) && ok && b[3]! == (77, 104)
     IO.println s!"inline-spare: exclusive_before={e} same_buffer={ab == aa} same_focused={fb == fa} ok={ok} value={b[3]!}"
-    return 0
+    return if good then 0 else 1
   | _ =>
     IO.eprintln "usage: probe separate-exact|separate-spare|inline-exact|inline-spare|sealed"
     return 2
