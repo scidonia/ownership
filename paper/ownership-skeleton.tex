@@ -551,6 +551,9 @@ does not count the environment's owning variables: \lean{Inv.owned} only require
 invariant therefore does not imply physical uniqueness. The kernel countermodel
 \lean{alias\_not\_accounted} constructs exactly that state: \lean{initCtx} has
 one owner, and binding a second owned variable leaves the multiplicity at one.
+The initializer's context does satisfy \lean{OwnersAccounted}
+(\lean{initCtx\_accounted}); the heap-side \lean{CountFidelity} at an arbitrary
+entry remains the implementation assumption.
 
 The guarantee therefore carries two accounting contracts. The environment side is
 \lean{OwnersAccounted}: multiplicity zero has no owner, and multiplicity one has
@@ -879,7 +882,8 @@ theorem principal_write
 \end{minted}
 The proof is the conjunction of \lean{recognized\_write\_in\_place} and
 \lean{Runtime.setAt\_inPlace\_of\_entryInv}; the accounting hypotheses are not
-used by those proofs. They are the contracts that make the model's count one the
+used by those proofs. For the initializer, \lean{initCtx\_accounted} discharges
+the environment side; the heap-side \lean{CountFidelity} remains the contract. They are the contracts that make the model's count one the
 physical count one; \lean{alias\_not\_accounted} shows why the environment side
 cannot be omitted. The theorem is flat: the nested path is the separate
 \lean{index\_path\_simulates\_model}, whose \lean{PathContract} is discharged for
@@ -896,7 +900,7 @@ Contract & Proposition & Provider & Status or remaining obligation \\
 \lean{Agrees} & heap/environment/code agreement and annotations & client & supplied per declaration \\
 A1--A12 & primitive, layout and call signatures & implementation assumption & documented; not proved of the C runtime \\
 N1--N12 & nested path and call contracts & implementation/leaf & N10 and the leaf body remain \\
-\lean{OwnersAccounted} & environment owner count at zero and one & client obligation & predicate and preservation lemmas; checker take-out/\lean{dec} preconditions not enforced \\
+\lean{OwnersAccounted} & environment owner count at zero and one & client obligation & predicate, preservation lemmas, and \lean{initCtx\_accounted}; arbitrary context and checker take-out/\lean{dec} preconditions remain \\
 \lean{CountFidelity} & heap count = incoming edges + owning variables & implementation assumption & not proved; the residual runtime fidelity \\
 \lean{PathContract} & finite-path child contract & client & tail discharged by induction; leaf remains \\
 \lean{Corr} & runtime model correspondence & proved relation & C semantics and address identity remain assumptions \\
@@ -1031,7 +1035,7 @@ corpus, not a proof.
 \item[\lean{OwnershipLcnf.Runtime.setAt\_inPlace\_of\_entryInv}] \lean{OwnershipLcnf/RuntimeModel.lean} --- proved in the runtime model.
 \item[\lean{OwnershipLcnf.prefix\_abort\_impossible}] \lean{OwnershipLcnf/NoAbort.lean} --- proved under A6/A8.
 \item[\lean{OwnershipLcnf.principal\_write}] \lean{OwnershipLcnf/Principal.lean} --- proved by composing the flat LCNF and runtime-model claims; carries the accounting contracts.
-\item[\lean{Ownership.OwnersAccounted}, \lean{Ownership.CountFidelity}] \lean{Ownership/Accounting.lean} --- definitions; preservation lemmas for \lean{setUs}, \lean{move}, \lean{inc}, \lean{bindOwned}, \lean{dec} with explicit preconditions.
+\item[\lean{Ownership.OwnersAccounted}, \lean{Ownership.CountFidelity}] \lean{Ownership/Accounting.lean} --- definitions; preservation lemmas for \lean{setUs}, \lean{move}, \lean{inc}, \lean{bindOwned}, \lean{dec} with explicit preconditions; \lean{initCtx\_accounted} for the initializer.
 \item[\lean{Ownership.alias\_not\_accounted}] \lean{Ownership/Accounting.lean} --- kernel countermodel; the raw \lean{Inv} admits two owners at multiplicity one.
 \item[\lean{differential corpus}, \lean{runtime-binding gate}] \lean{runtime-bridge}, \lean{scripts/check\_runtime\_binding.sh} --- measured.
 \end{description}
@@ -1080,7 +1084,7 @@ nix develop -c bash scripts/check_runtime_binding.sh
 \end{minted}
 
 Observed on 1 November 2026 at the base revision
-\lean{272eb48169e52faa3824fbac54f72e15fc280d5b}: all three Lean targets build;
+\lean{202b15d7b214b3ad5130463a262e9400380bde78}: all three Lean targets build;
 the artifact gate reports ``artifacts match the pinned sibling and toolchain'';
 the runtime gate reports ``pinned artifacts, IR shapes, C/runtime primitives and
 probe modes agree''. Each probe mode asserts its observed exclusivity, address, functional value and sealed result; a mismatch returns one. The probe exits zero for \lean{separate-exact},
