@@ -69,6 +69,12 @@ under the supplied leaf contract and the admitted-call abstraction — the
 recursive call runs a supplied model body; the emitted callee is not captured —
 with the child contract derived at every level; the pair-arms correspondence is
 still open, with its reason recorded in `PLAN.md`.
+`OwnershipLcnf.principal_supported_path` composes that nested path with the
+counted extraction/call/restoration protocol and the counted interpreter's
+recognised-prefix boundary at one arbitrary level, conditional on the child call
+(`CountedChildCall`), and `OwnershipTest/Principal.lean` is its closed,
+kernel-checked instance at the recogniser's own layout; the emitted callee and
+trace-level agreement beyond the counted prefix are still not claimed.
 
 ## Building
 

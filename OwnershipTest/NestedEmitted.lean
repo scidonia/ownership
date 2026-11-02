@@ -90,8 +90,9 @@ def p : NestedPrefix :=
     restored := ⟨`nested.restored⟩
     indexDec := ⟨`nested.indexDec⟩ }
 
-/-- The layout: the model's variables take slots `0`–`7`, the auxiliary binders
-`8`–`18`. -/
+/-- The layout: the model's variables take slots `0`–`7` and the auxiliary
+binders `8`–`17`. `indexDec` is not a layout entry, so the `assign` value below
+for `indexDec` is unconstrained and unused. -/
 def assign (f : FVarId) : Ownership.Var :=
   if f.name = `nested.array then 0
   else if f.name = `nested.index then 1
@@ -115,7 +116,7 @@ def assign (f : FVarId) : Ownership.Var :=
   else 0
 
 theorem layout : NestedLayout assign p := by
-  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ <;>
+  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ <;>
     simp [assign, p]
 
 /-- The model environment: the root handle at the array variable, the child

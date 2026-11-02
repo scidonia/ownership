@@ -95,6 +95,7 @@ Stage 1 landed in the accepted revision at `9eb0bf8`. It closes Gate A and the i
 | The principal theorem transports accounting into a runtime guarantee | **Corrected; still no transport.** `principal_write` no longer carries `hacc`/`vars`/`hcount`; `principal_accounted` consumes `Accounted` at `Runner.initCtx` and derives the three facts. No transport theorem, no physical-ownership conclusion, no runtime claim. |
 | Rejected variants are kernel-checked | **Closed.** `alias_rejected`, `inc_rejected`, `outOfRange_rejected`/`outOfRange_accepted`, `bindAlone_rejected`, `scalarOverwrite_rejected`, `decTwo_rejected`, `dupSupport_witness`, `omittedOwner_witness`, `unboundRoot_witness`; and the two independence theorems `aliasEntryInv` (`EntryInv` with no support accounted) and `accountedNotEntryInv` (accounted with no `EntryInv`). |
 | The counted nested protocol implements the recognised nested execution | **Conditionally closed, at the boundaries.** `counted_nested_chain` composes the counted extraction, the child call's accounting and the derived restoration, and relates the counted post-state to the model's `runN` by `HeapCompat`; the pair-live state is provably outside `Accounted`, so the relation is a boundary relation. Open: the counted interpreter's trace-level abstraction, N10, and Gap 4's store events. |
+| The nested composed principal theorem | **Closed at code level.** `OwnershipLcnf.principal_supported_path` composes the recognised prefix's model correspondence, the counted chain and the counted prefix's boundary for one arbitrary level of a finite supported path, conditional on `CountedChildCall` (N10). `OwnershipTest.principal_instance` is a closed instance at the recogniser's layout; the retained-parent copy is the negative control. Not claimed: the emitted callee, trace-level agreement beyond the counted prefix, and whole-path non-growth outside the root's mutable footprint. |
 | Flat checker/prefix and finite-path results | **Existing and unchanged**: checker soundness, the recognised flat prefix, the finite-path correspondence, and the nested extraction/restoration exclusivity result. |
 | Linked runtime behaviour for all supported inputs | **Open and out of scope**: C semantics, replay/backend identity, address identity, free/cascade, differentials and source-to-LCNF. |
 
@@ -136,7 +137,7 @@ M1–M6 and the claims half of M7 are applied: the introduction's “verified co
 
 ### Next
 
-Gate B's flat half is closed (Stage 2) and Gate C's counted block is closed at its accounted boundaries (Stage 3), with the trace-level abstraction and the emitted callee remaining open. Gate D's obligation — one explicit call boundary, stated on every claim surface — is applied in the paper revision the reproduction section records, and its status is in §5. Gate E, the artifact and the paper rewrite follow in that order unless the 2027 CFP changes the constraints.
+Gate B's flat half is closed (Stage 2) and Gate C's counted block is closed at its accounted boundaries (Stage 3), with the trace-level abstraction and the emitted callee remaining open. Gate D's obligation — one explicit call boundary, stated on every claim surface — is applied in the paper revision the reproduction section records, and its status is in §5. Gate E is applied at code level (`OwnershipLcnf.principal_supported_path` and the closed instance `OwnershipTest.principal_instance`, status in §5), with the artifact and the paper rewrite following unless the 2027 CFP changes the constraints.
 
 ## 5. Proof work required for the preferred paper
 
@@ -230,6 +231,39 @@ Quantify over supported indices and replacement values rather than proving only 
 For each main premise, say whether it is checked, derived, supplied by the caller, or trusted as a primitive contract. Show which proof step uses it. Retain explicit C/runtime fidelity assumptions; do not make physical pointer identity an implicit corollary.
 
 **Done when:** a reviewer can follow an actual proof dependency path from recognition and acceptance to the counted-store conclusion. Mutating that path or violating a substantive premise has an explanatory negative control.
+
+**Gate E status (2 November 2026).** The gate is exposed as one nested theorem.
+`OwnershipLcnf.principal_supported_path` (`OwnershipLcnf/Principal.lean`) is
+parametric in the level list, the level, the selected index, the call's value and
+path scalars and the leaf body, and its conclusion is an inline `\exists`
+conjunction in four groups: the recognition-to-model correspondence with the
+model run's own completed, copy-free trace (`index_path_simulates_model`); the
+counted protocol's boundary and final accounting, pair release, cursor, both
+exclusive targets, the `mutate` disposition, the functional restoration and its
+restored slot, and the post-call `HeapCompat` (`counted_nested_chain`); the
+counted interpreter's recognised-prefix boundary, including the write trace
+(`execCounted_protocol_boundary`); and the child call's frame with the
+restoration's locality. Premise suppliers: `projectNested`'s verdict, the
+`NestedLayout` slot assignment, this level's `LevelMatch`, the initial
+`NestedAgrees`, the finite path's `PathContract`, and the entry's `Accounted` are
+checked, derived or client-supplied; the child call is the trusted contractual
+boundary (`CountedChildCall`, N10). The emitted callee is not captured, and no
+trace-level agreement beyond the counted prefix is claimed.
+
+Non-vacuity is a closed instance: `OwnershipTest.principal_instance`
+(`OwnershipTest/Principal.lean`) instantiates the theorem at the recogniser's own
+layout on a reified transcription of the captured `setAt._redArg` declaration.
+Recognition there is a kernel-checked verdict on that `Code` value; the level's
+data (`NestedLayout`, `LevelMatch`, `NestedAgrees`, `PathContract`), the entry's
+`Accounted` and the child call at the counted protocol's boundary are all
+supplied, so the instance's type has no leading hypotheses. Each conjunct is
+type-ascribed in the fixture, and the retained-parent copy is the explanatory
+negative control: at a parent of count two the disposition is `copy`, so the
+theorem's `mutate` conjunct fails. The axiom audit reports only `propext`,
+`Classical.choice` and `Quot.sound` for the theorem and the instance. The
+whole-path non-growth outside the root's mutable footprint is not a conjunct: it
+needs the leaf body's write account. The paper's seven claim surfaces and the
+README, `AGENTS.md` and the gap note carry the same boundary.
 
 ## 6. Paper rewrite: provisional 16-page budget
 

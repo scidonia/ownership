@@ -189,6 +189,19 @@
   and restoration dispositions (Gap 4/Stage 4).
   `OwnershipTest/ExtractionExclusive.lean` instantiates the nested result on the
   depth-two path certificate and prints the axioms.
+- `OwnershipLcnf.principal_supported_path` (`OwnershipLcnf/Principal.lean`) is
+  the nested composed theorem: it composes `index_path_simulates_model`,
+  `counted_nested_chain` and `execCounted_protocol_boundary` at one arbitrary
+  level of a finite supported path, conditional on the child-call contract
+  `Ownership.CountedChildCall` (N10). `OwnershipTest/Principal.lean` supplies
+  every premise at the recogniser's own layout on a reified transcription of the
+  captured declaration, so `OwnershipTest.principal_instance` has no
+  hypotheses and each conjunct is type-ascribed; the retained-parent copy is its
+  explanatory negative control. `OwnershipLcnf.NestedLayout` constrains
+  eighteen read binders (slots `0`–`17`): the emitted index decrement acts on
+  the index binder itself, the recognizer reads `p.indexDec = p.index`, and the
+  layout constrains no separate slot for it — so a fixture's `assign` value for
+  `indexDec` is unconstrained and unused.
 - The heap and the checker are models: `Ownership/Heap.lean` says so
   explicitly. `Ownership/`'s theorems are statements about those models.
   `OwnershipLcnf/Semantics.lean` adds the AST link: `execAST` executes the

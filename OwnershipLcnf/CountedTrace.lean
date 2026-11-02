@@ -443,39 +443,39 @@ theorem execCounted_protocol_boundary (assign : Lean.FVarId → Ownership.Var)
       CountedPair.takeOut_cells_pair hpn, Ownership.Env.set, List.nil_append, hnextChain, CountedPair.protocol,
       hl.array, hl.index, hl.value, hl.parent, hl.child, hl.path, hl.recursive, hl.restored,
       hl.node, hl.childArray, hl.sizeResult, hl.bound, hl.arraySite, hl.arrayCheck, hl.dflt,
-      hl.pair, hl.childSite, hl.childCheck, hl.indexDec, hcc] using hstep
+      hl.pair, hl.childSite, hl.childCheck, hcc] using hstep
   refine ⟨hheap, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
   · rw [hheap]; exact hcompat
   · rw [countedPrefix_fragment p]
     simp [execCounted, execNested, harr0, hnode, hcell, hslot, hslot', hins, hex, Ownership.Env.set,
       hl.array, hl.index, hl.value, hl.parent, hl.child, hl.path, hl.recursive, hl.restored,
       hl.node, hl.childArray, hl.sizeResult, hl.bound, hl.arraySite, hl.arrayCheck, hl.dflt,
-      hl.pair, hl.childSite, hl.childCheck, hl.indexDec, hcc]
+      hl.pair, hl.childSite, hl.childCheck, hcc]
   · rw [countedPrefix_fragment p]
     simp [execCounted, execNested, harr0, hnode, hcell, hslot, hslot', hins, hex, Ownership.Env.set,
       hl.array, hl.index, hl.value, hl.parent, hl.child, hl.path, hl.recursive, hl.restored,
       hl.node, hl.childArray, hl.sizeResult, hl.bound, hl.arraySite, hl.arrayCheck, hl.dflt,
-      hl.pair, hl.childSite, hl.childCheck, hl.indexDec, hcc]
+      hl.pair, hl.childSite, hl.childCheck, hcc]
   · rw [countedPrefix_fragment p]
     simp [execCounted, execNested, harr0, hnode, hcell, hslot, hslot', hins, hex, Ownership.Env.set,
       hl.array, hl.index, hl.value, hl.parent, hl.child, hl.path, hl.recursive, hl.restored,
       hl.node, hl.childArray, hl.sizeResult, hl.bound, hl.arraySite, hl.arrayCheck, hl.dflt,
-      hl.pair, hl.childSite, hl.childCheck, hl.indexDec, hcc]
+      hl.pair, hl.childSite, hl.childCheck, hcc]
   · rw [countedPrefix_fragment p]
     simp [execCounted, execNested, harr0, hnode, hcell, hslot, hslot', hins, hex, Ownership.Env.set,
       hl.array, hl.index, hl.value, hl.parent, hl.child, hl.path, hl.recursive, hl.restored,
       hl.node, hl.childArray, hl.sizeResult, hl.bound, hl.arraySite, hl.arrayCheck, hl.dflt,
-      hl.pair, hl.childSite, hl.childCheck, hl.indexDec, hcc]
+      hl.pair, hl.childSite, hl.childCheck, hcc]
   · rw [countedPrefix_fragment p]
     simp [execCounted, execNested, harr0, hnode, hcell, hslot, hslot', hins, hex, Ownership.Env.set,
       hl.array, hl.index, hl.value, hl.parent, hl.child, hl.path, hl.recursive, hl.restored,
       hl.node, hl.childArray, hl.sizeResult, hl.bound, hl.arraySite, hl.arrayCheck, hl.dflt,
-      hl.pair, hl.childSite, hl.childCheck, hl.indexDec, hcc]
+      hl.pair, hl.childSite, hl.childCheck, hcc]
   · rw [countedPrefix_fragment p]
     simp [execCounted, execNested, harr0, hnode, hcell, hslot, hslot', hins, hex, Ownership.Env.set,
       hl.array, hl.index, hl.value, hl.parent, hl.child, hl.path, hl.recursive, hl.restored,
       hl.node, hl.childArray, hl.sizeResult, hl.bound, hl.arraySite, hl.arrayCheck, hl.dflt,
-      hl.pair, hl.childSite, hl.childCheck, hl.indexDec, hcc]
+      hl.pair, hl.childSite, hl.childCheck, hcc]
 
 end OwnershipLcnf
 

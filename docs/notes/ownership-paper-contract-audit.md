@@ -20,6 +20,8 @@ reports only `propext`, `Classical.choice` and `Quot.sound`.
 | `project_sound` | `OwnershipLcnf.project_sound` | `projectPrefix`, `Layout`, `Machine`, `Agrees`, cell and bounds facts; equality of the executed and model `PrefixOutcome` | proved lemma, LCNF |
 | `recognized_write_in_place` | `OwnershipLcnf.recognized_write_in_place` | the same recogniser/layout/agreement facts, with `EntryInv H env (Runner.initCtx root) root client`; both outcomes are `inPlaceOutcome root i v o H` | proved lemma, LCNF |
 | `index_path_simulates_model` | `OwnershipLcnf.index_path_simulates_model` | `projectNested`, `NestedLayout`, `LevelMatch`, `NestedAgrees`, and **`PathContract path value body tip l rest H mEnv c cb y`**; returns the nested outcome equality and a completed nested run whose writes are exclusive | proved lemma, LCNF, **leaf contract supplied; child contract derived at every level** |
+| `principal_supported_path` | `OwnershipLcnf.principal_supported_path` | `projectNested`, `NestedLayout`, `LevelMatch`, `NestedAgrees`, **`PathContract`**, **`Accounted`**, and the counted child-call contract **`CountedChildCall`**; an inline `\exists` conclusion with the recognition-to-model correspondence, the counted boundary and final accounting, the counted prefix's boundary, and the child frame with restoration locality | proved lemma, LCNF, **child call supplied (N10); emitted callee not captured; no trace-level agreement beyond the counted prefix** |
+| `principal_instance` | `OwnershipTest.principal_instance` | no hypotheses: the theorem at the recogniser's layout on the reified captured declaration, with `NestedLayout`, `LevelMatch`, `NestedAgrees`, `PathContract`, `Accounted` and `CountedChildCall` all supplied | proved instance, closed; `retained_parent_copies` is the negative control |
 | `pair_accounting` | `Ownership.CountedPair.pair_accounting` | `WellFormedEntry H p c i`; the protocol result has parent and child at count one, live and exclusive, with counts equal to the entry heap | proved lemma, counted pair |
 | `putBack_exclusive_of_wellFormed` | `Ownership.PutBack.putBack_exclusive_of_wellFormed` | `WellFormedEntry H p c i` and `ChildCall ...`; the put-back selects the mutate branch and leaves parent and child at count one and exclusive | proved lemma, restoration, child-call boundary supplied |
 | `checkExclusive_no_abort` | `OwnershipLcnf.Runtime.checkExclusive_no_abort` | `Corr H R` and `H.Exclusive r`; the runtime check is not an abort | proved lemma, runtime model |
@@ -175,7 +177,7 @@ questions.
 | --- | --- | --- |
 | Novelty | addressed | `Closest prior work` in the introduction; Table 1; related work. Huisinga, `Array.markLinear` and translation validation are compared; "no kernel change" is no longer the distinction. |
 | Assumptions | addressed | Table 3 classifies entry/agreement, A/N contracts, accounting, `PathContract`, `Corr`, linked runtime and source correspondence; the appendix gives full principal type, names and status. |
-| Principal theorem | addressed | `OwnershipLcnf.principal_write` composes the flat LCNF and runtime-model claims; its full type is in Appendix A.2. |
+| Principal theorem | addressed | `OwnershipLcnf.principal_write` composes the flat LCNF and runtime-model claims; its full type is in Appendix A.2. `OwnershipLcnf.principal_supported_path` composes the nested recognition, counted chain and counted prefix at one level of a finite supported path, conditional on `CountedChildCall`; `OwnershipTest.principal_instance` is its closed instance. |
 | Alias/accounting | addressed with named preconditions | `Ownership.OwnersAccounted`, `CountFidelity`, `alias_not_accounted`, `initCtx_accounted`; Section 3.3; the checker's take-out/`dec` preconditions and arbitrary-entry `CountFidelity` are client/implementation obligations, not hidden. |
 | Recursive scope | addressed | `index_path_simulates_model` displays `PathContract`; `PathRecursion` discharges the finite tail; leaf and N10 are stated. |
 | Extraction/restoration | addressed at the model level, with named composition gaps | Protocol count table; `pair_accounting`/`putBack_exclusive_of_wellFormed`; `PairProjection` model term. `ExtractionExclusive`/`checkN_extraction_exclusive_of_entryInv` prove each accepted take-out and put-back targets an exclusive array cell. The nested interpreter abstracts the pair traffic and unconditional restoration, and the pair-live state is provably outside `Accounted`; because of that, the counted protocol is stated at its accounted boundaries (`Ownership.counted_nested_chain`). What remains open is the counted interpreter's trace-level abstraction and the LCNF-level extraction/restoration store events. |
@@ -206,7 +208,8 @@ confirms the alias witness and the nested-composition/trace findings above. Its
 positive points are retained: the flat `recognized_write_in_place` specifies the
 single `(root, true)` write, `ChildCall.parent` derives parent preservation, and
 the counted-pair accounting has explicit increments and controls. The paper now
-presents the flat `principal_write` as the composed result and the nested path as
-a separate finite model whose counted protocol composes at its accounted
-boundaries.
+presents the flat `principal_write` as the composed result and
+`principal_supported_path` as the nested composed result, conditional on the
+counted child call, whose counted protocol composes at its accounted boundaries
+and whose emitted callee and trace-level suffix are not claimed.
 

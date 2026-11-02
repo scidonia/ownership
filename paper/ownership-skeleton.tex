@@ -103,7 +103,14 @@ recorded expectations. The composed guarantee is the flat recognised write; the
 extraction/restoration accounting is a model-level result. The recursive call is
 a contract on an admitted model body, with the child contract derived at every
 level for a finite level path and the emitted callee is not captured. The counted
-protocol composes at its accounted boundaries. The accounting layer is a proved
+protocol composes at its accounted boundaries, and the nested companion
+\lean{principal\_supported\_path} composes
+the recognised prefix's model correspondence, the counted protocol and the
+counted interpreter's recognised-prefix boundary for one arbitrary level of a
+finite supported path, conditional on the child call and on the caller's
+complete accounting. That nested theorem's conclusion is the reached in-place
+store; it makes no claim about the emitted callee and none about trace-level
+agreement beyond the counted prefix. The accounting layer is a proved
 relation over the model heap, which implies the environment owner count and the
 heap/runtime count fidelity, and a kernel countermodel shows that the raw
 invariant does not imply them. The boundary is explicit: the C runtime's
@@ -176,8 +183,12 @@ whose implications are the environment-side \lean{OwnersAccounted} and the
 heap-side \lean{CountFidelity}; \lean{alias\_not\_accounted} shows why the raw
 invariant does not imply the first. The extraction/restoration steps are
 the nested counted protocol; the flat \lean{principal\_write} is the composed
-flat result, and the counted protocol composes at its accounted boundaries;
-beyond that boundary the trace-level agreement is not claimed. The
+flat result, the counted protocol composes at its accounted boundaries, and
+\lean{principal\_supported\_path} composes the recognised prefix's model
+correspondence, the counted chain and the counted prefix's own boundary at one
+level of a finite supported path; beyond that boundary the trace-level agreement
+is not claimed, and the nested theorem's child call is a contract on an admitted
+model body rather than the emitted callee. The
 chain is conditional: the C
 semantics of the primitives, replay-to-backend identity, address identity, free
 and cascade, the emitted callee, the runtime reading of the accounting
@@ -216,7 +227,9 @@ by a gate and a differential corpus. (vi) The complete accounting relation \lean
 environment-side and heap-side predicates (\lean{OwnersAccounted},
 \lean{CountFidelity}) and yields the count-one dichotomy, with a kernel
 countermodel showing why the raw invariant does not imply the equation, and the
-composed flat theorem \lean{principal\_write}.
+two composed theorems: the flat \lean{principal\_write} and the nested
+\lean{principal\_supported\_path}, the latter for one arbitrary level of a
+finite supported path and conditional on the child-call contract.
 
 The discipline is a deep embedding: \lean{Code} and \lean{NCode} are explicit
 syntax interpreted by \lean{run}/\lean{runN}, and \lean{Ctx}, \lean{Heap},
@@ -967,11 +980,44 @@ The accounting layer is supplied by \lean{Accounted}, which implies
 dichotomy; \lean{principal\_accounted} consumes it at the initializer.
 \lean{alias\_not\_accounted} shows why the environment side cannot be omitted.
 Nothing here makes the model's count one a physical count one: both heaps in the
-conclusion are models. The theorem is flat: the nested path is the separate
-\lean{index\_path\_simulates\_model}, whose call is a contract on an admitted
-model body. \lean{PathContract} is supplied level data and
-\lean{childContracts\_of\_path} derives the child contract at every level; the
-supplied leaf computation and N10 remain.
+conclusion are models. The flat theorem is accompanied by a nested one, at one
+arbitrary level of a finite supported path:
+\begin{minted}{lean4}
+theorem principal_supported_path
+    (hproj : projectNested declName takeOut code = some p)
+    (hl : NestedLayout assign p)
+    (hm : LevelMatch assign p l path value rA o i childRef)
+    (hag : NestedAgrees assign p s mEnv H rA i v pv)
+    (hpath : PathContract path value body tip l rest H mEnv c cb y)
+    (hacc : Accounted support H mEnv c)
+    (hcall : CountedChildCall
+      (CountedPair.protocol H rA childRef i).snd Hout
+      ((mEnv.set l.parentVar (.ref rA)).set l.childVar (.ref childRef))
+      ((c.move l.arrayVar l.parentVar).bindOwned l.childVar childRef)
+      l.childVar path value (build path value body rest) rA childRef
+      (l.childVar :: replaceVar support l.arrayVar l.parentVar)) :
+    ∃ Hm envm ws Hf, … -- the four groups below
+\end{minted}
+\noindent{\small\itshape The level list, the level, the selected index, the
+call's two scalars and the leaf body are parameters, so this is not a fixture
+instance; the conclusion's groups are abbreviated above.}
+Its conclusion is the reached in-place store in four groups: the recognition to
+model correspondence, with the model run's own completed and copy-free trace; the
+counted protocol's boundary and final accounting, its pair release and cursor,
+both exclusive targets, the \lean{mutate} disposition, the functional
+restoration and its restored slot, and the post-call \lean{HeapCompat}; the
+counted interpreter's recognised-prefix boundary, including the write trace; and
+the child call's frame together with the restoration's locality. The recognised
+prefix's model correspondence is \lean{index\_path\_simulates\_model}, whose
+call is a contract on an admitted model body; \lean{PathContract} is supplied
+level data and \lean{childContracts\_of\_path} derives the child contract at
+every level, so the supplied leaf computation and N10 remain. The nested
+theorem's own child call is \lean{CountedChildCall} and is the only termination
+premise; \lean{OwnershipTest/Principal.lean} inhabits it at the recogniser's own
+layout on a reified transcription of the captured declaration, where every
+premise is supplied and the conclusion therefore has no hypotheses. The
+whole-path non-growth outside the root's mutable footprint is not concluded:
+it needs the leaf body's write account.
 
 \begin{table}[h]
 \centering
@@ -987,6 +1033,7 @@ N1--N12 & nested path and call contracts & implementation/leaf & N10 and the sup
 \lean{OwnersAccounted} & environment owner count at zero and one & model-layer predicate & implied by \lean{Accounted}; checker take-out/\lean{dec} premises for arbitrary contexts remain stage 2 \\
 \lean{CountFidelity} & heap count = incoming edges + owning variables & model-layer predicate & implied by \lean{Accounted} at its support; the residual runtime fidelity is not proved \\
 \lean{PathContract} & finite-path level data & client & supplies the leaf; the child contract at every level is derived by \lean{childContracts\_of\_path} \\
+\lean{CountedChildCall} & counted child-call boundary and the caller's \lean{Accounted} at the child's return & contract (N10) & the admitted model body, not the emitted callee; inhabited at the boundary fixture \\
 \lean{Corr} & runtime model correspondence & proved relation & between two models; binds no physical C object or address; C semantics and address identity remain assumptions \\
 linked runtime & \lean{lean\_is\_exclusive}, \lean{lean\_array\_uset} & empirical & gate and differential corpus, not a proof \\
 source correspondence & Lean source to emitted LCNF & assumption & not attempted \\
@@ -1075,7 +1122,11 @@ near miss. The nested linked runtime is not measured; only the flat probe is. Th
 nested interpreter abstracts the pair traffic and unconditional restoration. The
 recursive call is a contract on an admitted model body and the emitted callee is
 not captured; the claim is the finite path's own syntax, not data-dependent
-recursion. The counted protocol composes at its accounted boundaries; beyond the
+recursion. The counted protocol composes at its accounted boundaries, and the nested
+composed theorem \lean{principal\_supported\_path} is conditional on
+\lean{CountedChildCall}: its child call is an admitted model body, not the
+emitted callee, and its conclusion is the reached in-place store at that level,
+not the whole path's non-growth outside the root's mutable footprint. Beyond the
 counted prefix's boundary no trace-level agreement between the counted and
 nested interpreters is claimed. The nested trace still does not include
 extraction/restoration stores, but each such step's target
@@ -1113,8 +1164,12 @@ The development proves the count-one discipline at the model, the recognised
 LCNF and the runtime model for the flat recognised write, under named contracts,
 and composes that guarantee as \lean{principal\_write}. The nested path is a
 separate finite model; its counted extraction, call and restoration compose at
-accounted boundaries, while the counted interpreter's trace-level abstraction and
-the emitted callee remain open. It measures
+accounted boundaries, and \lean{principal\_supported\_path} composes the
+recognised prefix's model correspondence, the counted chain and the counted
+interpreter's recognised-prefix boundary at one arbitrary level of a finite
+supported path, conditional on the child call. The counted interpreter's
+trace-level abstraction beyond that boundary and the emitted callee remain
+open. It measures
 the linked primitive on a corpus and gates the pinned evidence. The accounting
 relation is supplied at the model level; the C semantics, the replay/backend
 identity, address identity, free/cascade, the emitted callee and the source
@@ -1149,6 +1204,8 @@ corpus, not a proof.
 \item[\lean{OwnershipLcnf.Runtime.setAt\_inPlace\_of\_entryInv}] \lean{OwnershipLcnf/RuntimeModel.lean} --- proved in the runtime model, a second operational model rather than physical memory.
 \item[\lean{OwnershipLcnf.prefix\_abort\_impossible}] \lean{OwnershipLcnf/NoAbort.lean} --- proved under A6/A8.
 \item[\lean{OwnershipLcnf.principal\_write}] \lean{OwnershipLcnf/Principal.lean} --- proved by composing the flat LCNF and runtime-model claims; takes no accounting premise.
+\item[\lean{OwnershipLcnf.principal\_supported\_path}] \lean{OwnershipLcnf/Principal.lean} --- proved with \lean{PathContract}, \lean{Accounted} and \lean{CountedChildCall}; one arbitrary level of a finite supported path, composing the recognised prefix's model correspondence, the counted chain and the counted prefix's boundary; the child call is a contract (N10), the emitted callee is not captured, the conclusion is the reached store at that level, and no trace-level agreement beyond the counted prefix is claimed.
+\item[\lean{OwnershipTest/Principal.lean}] --- the closed, kernel-checked instance at the recogniser's own layout: the reified transcription of the captured declaration is recognised, every premise of the theorem is supplied, and the conclusion has no hypotheses.
 \item[\lean{Ownership.Accounted}] \lean{Ownership/CompleteAccounting.lean} --- complete accounting relation: initializer, context and step lemmas, refutations, and the count-one dichotomy.
 \item[\lean{OwnershipLcnf.principal\_accounted}] \lean{OwnershipLcnf/Principal.lean} --- proved; consumes \lean{Accounted} at the initializer and yields \lean{OwnersAccounted}, \lean{CountFidelity} and the count-one dichotomy.
 \item[\lean{Ownership.OwnersAccounted}, \lean{Ownership.CountFidelity}] \lean{Ownership/Accounting.lean} --- definitions; preservation lemmas for \lean{setUs}, \lean{move}, \lean{inc}, \lean{bindOwned}, \lean{dec} with explicit preconditions; \lean{initCtx\_accounted} for the initializer.

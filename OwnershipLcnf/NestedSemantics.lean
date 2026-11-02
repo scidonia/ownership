@@ -45,13 +45,14 @@ emitted recursive declaration. That link is an outstanding obligation.
 
 **Explicit theorem premises** (each named at the theorem that takes it):
 
-* `NestedLayout`: the nineteen binders whose environment traffic the fragment
-  performs occupy the nineteen distinct slots `0`–`18`. Slots `0`–`7` are the
-  model's variables (array parameter, index, value, parent, child, path,
-  recursive result, restored array); `8`–`18` are the projections, bounds,
-  assertion, default, pair, site and decrement results the model has no variable
-  for. This is the fresh-binder fact emitted LCNF supplies, and it is what keeps
-  the auxiliary writes from touching a model variable.
+* `NestedLayout`: the eighteen read binders whose environment traffic the
+  fragment performs occupy the eighteen distinct slots `0`–`17`. Slots `0`–`7`
+  are the model's variables (array parameter, index, value, parent, child, path,
+  recursive result, restored array); `8`–`17` are the projections, bounds,
+  assertion, default, pair and site results the model has no variable for. This
+  is the fresh-binder fact emitted LCNF supplies, and it is what keeps the
+  auxiliary writes from touching a model variable. `p.indexDec` is not a slot:
+  the emitted decrement acts on the index binder itself.
 * `NestedAgrees`: the initial-state relation between the machine and the model
   environment — the machine's array slot and the model's name the same
   reference, the model's index and value variables are the reified node field
@@ -449,13 +450,16 @@ def NestedOutcome.ofExec (assign : FVarId → Ownership.Var) (p : NestedPrefix)
 
 /-! ## The variable layout and the initial-state relation -/
 
-/-- The variable layout the fragment and the model share: the nineteen binders
-whose environment traffic the fragment performs occupy the nineteen distinct
-slots `0`–`18`. Slots `0`–`7` are the model's variables (array parameter, index,
-value, parent, child, path, recursive result, restored array); `8`–`18` are the
-projections, bounds, assertion, default, pair and site results the model has no
-variable for. Which binder takes which slot is the caller's choice; that the
-slots are distinct is the fresh-binder fact emitted LCNF supplies. -/
+/-- The variable layout the fragment and the model share: the eighteen read
+binders whose environment traffic the fragment performs occupy the eighteen
+distinct slots `0`–`17`. Slots `0`–`7` are the model's variables (array
+parameter, index, value, parent, child, path, recursive result, restored array);
+`8`–`17` are the projections, bounds, assertion, default, pair and site results
+the model has no variable for. Which binder takes which slot is the caller's
+choice; that the slots are distinct is the fresh-binder fact emitted LCNF
+supplies. `p.indexDec` is not a slot: the emitted decrement acts on the index
+binder itself, so the recognizer reads `p.indexDec = p.index` and the layout
+constrains no separate binder for it. -/
 structure NestedLayout (assign : FVarId → Ownership.Var) (p : NestedPrefix) : Prop where
   array : assign p.array = 0
   index : assign p.index = 1
@@ -475,7 +479,6 @@ structure NestedLayout (assign : FVarId → Ownership.Var) (p : NestedPrefix) : 
   pair : assign p.pair = 15
   childSite : assign p.childSite = 16
   childCheck : assign p.childCheck = 17
-  indexDec : assign p.indexDec = 18
 
 /-- The initial-state agreement between the machine the fragment executes from
 and the model environment: the machine's array slot and the model's name the

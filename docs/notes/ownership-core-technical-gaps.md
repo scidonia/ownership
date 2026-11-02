@@ -388,3 +388,45 @@ What this does not say, and why:
   `HeapCompat` is not an invariant of the counted window between the take-out and
   the pair release, and the counted composition is the model-level
   `counted_nested_chain`.
+
+### Stage 4 / Gate E status (2 November 2026)
+
+The nested principal theorem is now exposed at code level.
+`OwnershipLcnf.principal_supported_path` (`OwnershipLcnf/Principal.lean`)
+composes, at one arbitrary level of a finite supported path, the recognised
+prefix's model correspondence (`index_path_simulates_model`), the counted
+extraction/call/restoration chain (`counted_nested_chain`) and the counted
+interpreter's recognised-prefix boundary (`execCounted_protocol_boundary`). Its
+conclusion is the reached in-place store: the model run's completed, copy-free
+trace; the counted boundary's and final accounting, with the pair release,
+cursor, both exclusive targets, the `mutate` disposition, the functional
+restoration and its restored slot, and the post-call `HeapCompat`; the counted
+prefix's boundary, including the write trace; and the child call's frame with the
+restoration's locality. Premises: the recogniser's verdict, the layout, the
+level's operand match, the initial machine/model agreement, the finite path's
+contract and the accounted entry are checked, derived or client-supplied; the
+child call is the trusted `CountedChildCall` contract (N10).
+
+Non-vacuity is a closed instance. `OwnershipTest/Principal.lean` reifies the
+captured `setAt._redArg` declaration, has the recogniser's verdict checked by the
+kernel, and supplies every premise at the recogniser's own layout, so
+`OwnershipTest.principal_instance` has no hypotheses and each conjunct is
+type-ascribed. `retained_parent_copies` is the paired negative control: a parent
+at count two takes the copy branch, so the theorem's `mutate` conjunct fails
+there. The axiom audit reports only `propext`, `Classical.choice` and
+`Quot.sound`.
+
+What this does not say, and what remains open:
+
+* **The emitted callee is not captured (N10).** The child call is a contract on
+  an admitted model body, and the theorem's termination is contractual.
+* **No trace-level suffix agreement.** `execCounted_protocol_boundary` relates the
+  counted prefix only; beyond it `HeapCompat` is not an invariant of the counted
+  window, and no correspondence over the whole fragment is claimed.
+* **The extraction/restoration store events remain outside the trace** (Gap 4):
+  their target-cell dispositions are theorems, not `Write` records.
+* **Whole-path non-growth is not a conjunct.** The theorem does not conclude that
+  the whole path leaves every cell outside the root's mutable footprint
+  unchanged; that needs the leaf body's write account (`WritesIn`).
+* **No transport.** Both heaps in the conclusion are named-cell models; nothing
+  here relates them to physical counted references or to the C runtime.

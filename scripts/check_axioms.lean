@@ -196,3 +196,5 @@ import OwnershipLcnf.CountedTrace
 #print axioms Ownership.counted_nested_chain_extraction
 #print axioms Ownership.counted_nested_chain_restoration
 
+
+#print axioms OwnershipLcnf.principal_supported_path
