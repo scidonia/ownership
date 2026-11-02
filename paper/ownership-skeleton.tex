@@ -178,8 +178,8 @@ gate.
 Lean~4 compiles through a sequence of IRs. The last LCNF phase inserts
 reference-count operations, and the backend emits C. The runtime decides an array
 update with \lean{lean\_is\_exclusive}: count one and non-persistent means in
-place; every other case copies. The runtime is single-threaded; count one and
-non-persistence characterise this test in that setting and are not a claim about
+place; every other case copies. In this setting the object is single-threaded;
+count one and non-persistence characterise this test and are not a claim about
 every Lean runtime mode. The development pins the toolchain, the sibling
 revision and the captured LCNF artifacts, so every claim names the code it is
 about.
@@ -373,8 +373,8 @@ The object language is untyped: there is no type former for a program, and the
 checker does not infer one by unification. The typing judgement is
 $c \vdash \mathit{code} \Rightarrow c'$, defined to hold exactly when
 \lean{check c code = some c'}; the context is the type of the program point. A
-context is a usage map, a reference map and a multiplicity map, and the checker
-is the syntax-directed decision procedure for the rules below.
+context is a usage, reference and multiplicity map; the checker is
+syntax-directed.
 
 \begin{minted}{lean4}
 inductive U where
@@ -416,7 +416,7 @@ Rule & Obligation & Effect \\
 \lean{inc x n} & \lean{x} owned & multiplicity $+n$ \\
 \lean{dec x n} & \lean{x} owned; $n <$ multiplicity & multiplicity $-n$; \lean{x} dead \\
 \lean{takeOut a i fst snd e} & \lean{a} owned, multiplicity one; \lean{i} scalar; \lean{e} multiplicity one; \lean{fst}, \lean{snd} dead and distinct; \lean{e ≠ a}; no open frame at \lean{a} & push the frame; bind parent and element \\
-\lean{putBack a e i result} & \lean{a}, \lean{e} owned, multiplicity one; the frame is \lean{(a,i,e)}; \lean{result} dead & pop the frame; bind the result \\
+\lean{putBack a e i result} & \lean{a}, \lean{e} owned, multiplicity one; \lean{i} scalar; \lean{e ≠ a}; \lean{e ≠ result}; the frame is \lean{(a,i,e)}; \lean{result} dead & pop the frame; bind the result \\
 \lean{callAt state path x result body} & \lean{state} owned, multiplicity one; \lean{path}, \lean{x} scalar; \lean{result} dead; \lean{CountFree body}; no open frame at \lean{state}; the body is accepted from the isolated context and returns \lean{state} & call the body; bind the result \\
 \lean{ret x} & no frame: \lean{x} owned or scalar; one frame: \lean{x} is the frame's element; deeper: refused & exit \\
 \bottomrule
@@ -427,8 +427,7 @@ Rule & Obligation & Effect \\
 
 Two consequences are worth stating. \lean{dec} is affine, not the last drop: its
 premise is $n <$ the object's multiplicity, so it consumes a duplicate handle and
-leaves the object live; the last release would free the cell, which this fragment
-does not model. And linearity at the write is the side condition
+leaves the object live. And linearity at the write is the side condition
 \lean{multOf x = 1}, not the usage tag alone.
 
 \paragraph{A derivation.}
@@ -457,21 +456,14 @@ second rule is the context the first produces; no type variable is solved.
 Composing the two gives
 $c_0 \vdash \texttt{execSet } 0\ 3\ 1\ 2 \Rightarrow c_1$, i.e.
 \lean{check (initCtx 0) (execSet 0 3 1 2) = some ((initCtx 0).move 0 3)}.
-The checker computes $c_1$; the derivation is the rule applications, and the
-accepted program is the one the first example's guard checks.
+The checker computes $c_1$; the derivation is the rule applications.
 
 The frame stack is the local form of the ownership invariant. An extraction
 opens a frame naming the array, index and element; a put-back closes the matching
 frame; a call checks its body under an isolated context and continues with the
-result. The exit rule is deliberately conservative: with one open frame only the
-extracted element may return, and a deeper stack must be restored first.
+result.
 
 \subsection{Two examples}
-The first two of the repository's fixtures isolate the write rule; the
-extraction, stale-slot, call and suspended-parent fixtures are exercised where
-their rules arise. Each example is a \lean{Code} or \lean{NCode} value; the
-\lean{\#guard} is the executable check.
-
 \needspace{10\baselineskip}\begin{example}[A unique write]\label{ex:unique}\end{example}
 \begin{minted}{lean4}
 def execSet (x y i v : Var) : Code :=
@@ -505,10 +497,9 @@ separation and root completeness, and \lean{checkN\_sound\_of\_entryInv} adds
 those facts and \lean{Agrees} to the checker's acceptance, concluding the same
 invariant and fault-free run for the nested program.
 
-The checker's local rules do not name the heap's path structure. The path theory
-supplies it: agreement composes through take-out, call and put-back,
-annotation reachability follows the path, and the safety results lift the checker
-to every finite path. The extraction and restoration stores are not trace
+The checker's local rules do not name the heap's path structure; the path theory
+supplies it, composing agreement through take-out, call and put-back and lifting
+the checker to every finite path. The extraction and restoration stores are not trace
 events; their target-cell dispositions are the model facts
 \lean{checkN\_extraction\_exclusive} and
 \lean{checkN\_extraction\_exclusive\_of\_entryInv}.
@@ -539,17 +530,19 @@ the target is exclusive. \lean{supported\_store\_exclusive} states the store's
 own pre- and post-state: it is reached with its target exclusive and its slot
 scalar, and the post-state is accounted at the checker's unchanged context.
 \lean{storeSlots\_init} supplies the slot for the initializer's measured write.
-These are the only two supplied state facts; the rest is derived.
 
 \paragraph{Three hard cases.}
-The accounting is not bookkeeping at three places. The projections temporarily
-raise both counts because the pair's edge and the projected handle are both live;
+The projections temporarily raise both counts because the pair's edge and the
+projected handle are both live;
 the free of the unique pair removes exactly those two edges, which is why
 \lean{pair\_accounting} returns to the entry counts and the no-free control does
 not. The suspended parent remains exclusive across the child call because the
 child's contract is confined to the child's mutable footprint, not because the
-parent's exclusivity is assumed: \lean{callAt\_frame\_confined} derives it from
-the caller's separation fact. And the put-back's mutate branch is derived from
+parent's exclusivity is assumed: \lean{callAt\_frame\_confined} takes
+\lean{AnnotationsIn}, checker acceptance, the return variable, the isolated
+\lean{Inv} and \lean{TakeOutsOK}; the parent/child separation is a
+\lean{ChildCall.separated} fact used in the path derivation. And the put-back's
+mutate branch is derived from
 the protocol boundary and the child-call boundary, not from an assumed final
 state.
 
@@ -557,63 +550,54 @@ state.
 \subsection{Recognition and the flat correspondence}
 A source-level discipline is only useful if it survives lowering. The compiler
 rewrites the program, inlines helpers and chooses the emitted shape; the
-recogniser therefore walks the actual LCNF value, pinning operation order,
-arities, operand identities and branch constructors. It rejects the
-token-preserving near misses in its mutation corpus (eleven at the top level,
-ten on the nested path, fourteen per pair arm), so the correspondence is about
-the code we name, not a look-alike. No universal rejection theorem is claimed.
-The accepted grammar fixes the check's argument, the array-set's array, index and
-value operands, the instruction order from check to set, the pair constructor and
-its two projections, the two \lean{Path} branches and their join, and the
-continuation boundary; every other shape is rejected.
+recogniser walks the actual LCNF value, pinning operation order, arities,
+operand identities and branch constructors. It rejects the token-preserving near
+misses (eleven at the top level, eleven on the nested path, fourteen per pair
+arm), so the correspondence is about the code we name. No universal rejection
+theorem is claimed. The accepted grammar fixes the check's argument, the
+array-set operands and their order, the pair constructor and projections, the
+two \lean{Path} branches and their join, and the continuation boundary.
 
-\lean{project\_sound} proves the equality of the executed and model outcomes for
-the abstract prefix. Adding the entry invariant and the layout gives
-\lean{recognized\_write\_in\_place}, which concludes that the executed prefix and
-the model run both yield \lean{inPlaceOutcome root i v o H}.
+\lean{project\_sound} gives executed/model equality for the abstract prefix;
+\lean{EntryInv} and layout yield \lean{recognized\_write\_in\_place}, concluding
+both give \lean{inPlaceOutcome root i v o H}.
 
-\lean{PrefixOutcome} records the target, result binder, heap, disposition, fault
-and write trace; it discards the variable map and any unrecognised suffix. The
-trace preserves each covered write's exclusive/copy bit, and for the flat
-designated prefix it is the single \lean{(root, true)} event.
-\lean{execAST\_recognized} is the decoding adequacy lemma, not an independent
-instruction semantics: the independent meanings are the primitive contracts
-A1--A12, which is why the decoding hypothesis is load-bearing.
+\lean{PrefixOutcome} records the target, result/\lean{setResult} binders, heap,
+disposition, fault and write trace, discarding the variable map and suffix; its
+trace preserves each write's exclusive/copy bit, and the flat prefix has the
+single \lean{(root, true)} event.
+\lean{execAST\_recognized} is decoding adequacy, not a semantics; A1--A12 are
+the independent meanings, which is why decoding is load-bearing.
 
 \subsection{The finite nested path}
 The model nests take-out, call and put-back per level; the finite-path induction
 discharges the callee contract from the tail and leaves only the leaf contract
-and the emitted call's meaning (N10). The model's flat environment cannot express
-the emitted per-invocation \lean{oproj[1]} index; that bound is recorded rather
-than hidden.
+and the emitted call's meaning (N10). The flat environment cannot express the
+emitted per-invocation \lean{oproj[1]} index; that bound is recorded.
 
 \lean{index\_path\_simulates\_model} concludes that the executed nested prefix's
 \lean{NestedOutcome} is the model run of
-\lean{Path.build path value body (l :: rest)}, and that the model run completes
-with an all-exclusive write trace. Its premises are the recogniser's verdict, the
-layout, the level match, the nested agreement and the finite path contract.
+\lean{Path.build path value body (l :: rest)}, completing with an all-exclusive
+trace, under the recogniser's verdict, layout, level match, agreement and path
+contract.
 
-For a finite level path the contract is derived at every level rather than
-assumed: \lean{childContracts\_of\_path} takes the level list's own data and one
-leaf computation and yields the child contract at each level, whose body is the
-remaining levels' \lean{build}; \lean{childContract\_of\_path} is the single-step
-form. The leaf computation---agreement, checker acceptance, exit variable,
-count-freedom and annotation for the innermost body---is the one function-level
-fact supplied, and it is not derived from the level list. The claim is the finite
-path's own syntax, not data-dependent recursion. The emitted recursive callee is
-not captured: \lean{execNested}'s call rule runs the admitted model body on the
-environment that exposes only the call's own state, path and value (N10), and a
-deeper level that takes its index by re-projecting the continuation is outside
-the model.
+For a finite level path the contract is derived at every level:
+\lean{childContracts\_of\_path} takes the level list and one leaf computation and
+yields the child contract at each level, whose body is the remaining levels'
+\lean{build}; \lean{childContract\_of\_path} is the single-step form. The leaf
+computation (agreement, checker acceptance, exit variable, count-freedom,
+annotation) is the one supplied function-level fact. The claim is the finite
+path's syntax, not data-dependent recursion. The emitted callee is not captured:
+\lean{execNested}'s call rule runs the admitted model body with only the call's
+state, path and value (N10); a deeper level that re-indexes by re-projecting the
+continuation is outside the model.
 
 \subsection{Counted extraction, call and restoration}
-The emitted take-out creates a pair whose fields are the parent and the extracted
-child. The constructor moves the handles into the pair; the projections
-increment them; freeing the unique pair releases both edges. The counts are
-therefore equal at the boundary, but only because the pair is freed: the
-negative controls show that omitting the free, or retaining an alias, leaves a
-count of two. Without this accounting, the protocol's neutrality would be a
-modeling premise rather than a derived fact.
+The take-out builds a pair of the parent and extracted child; the constructor
+moves the handles in, the projections increment both, and freeing the unique pair
+releases both edges. The counts return to their entry values only because the
+pair is freed: the negative controls show that omitting the free, or retaining an
+alias, leaves a count of two.
 
 \needspace{10\baselineskip}\begin{claim}[Pair accounting]\label{thm:pair}\end{claim}
 \begin{minted}{lean4}
@@ -626,8 +610,8 @@ theorem pair_accounting {H : Heap} {p c : Ref} {i : Nat}
       B.2.rc p = H.rc p ∧ B.2.rc c = H.rc c
 \end{minted}
 The no-free control, \lean{no\_free\_components\_not\_exclusive}, leaves both
-components at count two, neither exclusive, and the pair live.
-\lean{WellFormedEntry} is the definition that both components enter at count one.
+components at count two, neither exclusive, and the pair live;
+\lean{WellFormedEntry} fixes both at count one.
 
 \begin{table}[h]
 \centering
@@ -645,61 +629,51 @@ child call & 1 / 1 & 0 / 0 & 1 & 1 & \lean{CountedChildCall}: parent suspended; 
 put-back & 1 / 0 & 0 / 1 & 1 & 1 & \lean{putBack\_exclusive\_of\_wellFormed}: mutate; child restored to the slot \\
 \bottomrule
 \end{tabularx}
-\caption{The counted protocol at an accounted caller entry; entries are parent /
-child. The pair-live state between take-out and release is outside
-\lean{Accounted} (\lean{pairPhase\_refused}); the intermediate rows are per-stage
-count effects from the named lemmas, not boundary facts.}
+\caption{The counted protocol at an accounted caller entry. The pair-live state is
+outside \lean{Accounted} (\lean{pairPhase\_refused}); intermediate rows are
+per-stage count effects from the named lemmas, not boundary facts.}
 \label{tab:protocol}
 \end{table}
 
-\lean{counted\_takeOut} consumes the heap facts the checker cannot see---the
-array's cell, the selected slot's content---and the context facts the chain
-derives from \lean{checkNF}; it derives the boundary accounting,
-\lean{HeapCompat} to the abstract take-out heap, the pair cell's freshness and
-the cursor advance. \lean{CountedChildCall} adds exactly one field to the model
-child-call contract: the caller's \lean{Accounted} at the child's return.
-\lean{counted\_restore} derives the mutate branch and the accounted post-state;
+\lean{counted\_takeOut} consumes the array's cell and selected slot plus the
+context facts from \lean{checkNF}; it derives the boundary accounting,
+\lean{HeapCompat}, the pair's freshness and cursor advance. \lean{CountedChildCall} adds one field to the
+model child-call contract: the caller's \lean{Accounted} at the child's return.
+\lean{counted\_restore} derives the mutate branch and accounted post-state;
 \lean{putBack\_exclusive\_of\_wellFormed} concludes that branch and
-\lean{Heap.Exclusive} for both the parent and the restored child;
-\lean{counted\_nested\_chain} relates the counted post-state to the model's own
-\lean{runN} by \lean{HeapCompat}. The pair-live state is provably outside
-\lean{Accounted}, which is why the relation is a boundary relation rather than an
-every-instruction one.
+\lean{Heap.Exclusive} for both the parent and restored child;
+\lean{counted\_nested\_chain} relates the counted post-state to \lean{runN} by
+\lean{HeapCompat}. The pair-live state is outside \lean{Accounted}: this is a
+boundary relation, not an every-instruction invariant.
 
-The counted interpreter \lean{execCounted} executes five heap-touching
-operations; \lean{countedPrefix} restricts
-\lean{execCounted\_protocol\_boundary} to the first nineteen, through the pair's
-release. That block's heap is the protocol boundary heap, \lean{HeapCompat} to the
-abstract take-out heap, and its non-heap fields---including the write
-trace---agree with \lean{execNested}'s. Beyond that boundary no trace-level
-agreement is claimed: \lean{HeapCompat} is not an invariant of the counted
-window, and the restoration lies outside \lean{countedPrefix}. The extraction and
-restoration stores are not trace events; their dispositions are the model facts
-\lean{checkN\_extraction\_exclusive}.
+The counted interpreter executes five heap-touching operations;
+\lean{countedPrefix} restricts \lean{execCounted\_protocol\_boundary} to the first
+nineteen, through the pair's release. Its heap is the protocol boundary,
+\lean{HeapCompat} to the abstract take-out heap, and its non-heap fields
+(including the write trace) agree with \lean{execNested}'s. Beyond it no
+trace-level agreement is claimed: \lean{HeapCompat} is not invariant in the
+counted window, and the restoration lies outside \lean{countedPrefix}. Extraction
+and restoration stores are not trace events; their dispositions are the model
+facts \lean{checkN\_extraction\_exclusive}.
 
-The take-out shape is the \lean{Path.index} arm recognised by
-\lean{projectNested}; the left/right arms are recognised by \lean{projectPair},
-which reads the model term off the operands. The execution correspondence between
-the recognised pair and \lean{Ownership.Pair.runP} is a named next step; the
-counted protocol above is the accounting model, not that correspondence.
+The take-out shape is \lean{projectNested}'s \lean{Path.index} arm; the
+left/right arms are \lean{projectPair}'s, which reads the model term off the
+operands. \lean{Ownership.Pair.runP} correspondence is a named next step; the
+protocol is the accounting model, not that correspondence.
 
 \subsection{The runtime model}
-The model's count is a ghost count, and so is the runtime model's.
 \lean{OwnershipLcnf.RuntimeModel} is a second operational model, related to
 \lean{Ownership.Heap} by \lean{Corr}: the correspondence is between two models and
 binds no physical C object or address. It preserves refs, cells, counts,
-persistence, fields and the cursor; from it the model's exclusivity implies the
-runtime model's, the check returns, and the write mutates. A guarded allocator
-refuses a dirty cursor, so the copy branch cannot overwrite a live cell.
+persistence, fields and cursor, so model exclusivity implies the check returns and
+the write mutates.
 
-Three statements carry the runtime reading. \lean{checkExclusive\_no\_abort}
-says that under \lean{Corr} and model exclusivity the runtime model's check never
-returns \lean{abort}. \lean{setAt\_inPlace\_of\_entryInv} says that the runtime
-model's \lean{setAt} returns the in-place outcome, preserves \lean{Corr}, keeps
-the target and writes the scalar, under the entry invariant and the cell
-premises. \lean{prefix\_abort\_impossible} states the same no-abort fact at the
-emitted-semantics boundary. None of the three binds a physical C object or an
-address.
+Three statements carry the reading: \lean{checkExclusive\_no\_abort} (under
+\lean{Corr} and model exclusivity the check never returns \lean{abort}),
+\lean{setAt\_inPlace\_of\_entryInv} (the set returns in place, preserves
+\lean{Corr}, keeps the target and writes the scalar), and
+\lean{prefix\_abort\_impossible} (the same at the emitted-semantics boundary).
+None binds a physical C object or address.
 
 \subsection{The composed guarantee}\label{sec:principal}
 The model, the recognised LCNF and the runtime model are separate semantics.
@@ -718,78 +692,58 @@ theorem principal_write
       PrefixOutcome.ofModel (Ownership.run (Prefix.toModel assign p) env H) =
         inPlaceOutcome root i v o H ∧
       ∃ H', Runtime.setAt R root i (.scalar v) = some (.inPlace H' root) ∧
-        Corr (inPlaceOutcome root i v o H).heap H' ∧
-        (inPlaceOutcome root i v o H).target = some root ∧
-        ((H'.cells root).bind fun o => o.field? i) = some (.scalar v)
+        Corr (inPlaceOutcome root i v o H).heap H'
+        -- and the target and field conclusions
 \end{minted}
 The proof is the conjunction of \lean{recognized\_write\_in\_place} and
-\lean{Runtime.\allowbreak setAt\_inPlace\_of\_entryInv}, and it takes no
-accounting premise.
-The accounting layer is not transported by it: \lean{Accounted} is consumed at the
-initializer by \lean{principal\_accounted}, which yields \lean{OwnersAccounted},
-\lean{CountFidelity} and the count-one dichotomy. \lean{alias\_not\_accounted}
-shows why the environment side cannot be omitted. Nothing here makes the model's
-count one a physical count one: both heaps in the conclusion are models.
-
-The flat theorem is accompanied by a nested one, at one arbitrary level of a
-finite supported path. Its premises include the accounted caller state
-(\lean{hacc}) and the child-call contract (\lean{hcall}); its conclusion is the
-reached in-place store in four groups.
+\lean{Runtime.\allowbreak setAt\_inPlace\_of\_entryInv}; it takes no accounting
+premise. \lean{Accounted} is consumed at the initializer by
+\lean{principal\_accounted}, which yields \lean{OwnersAccounted},
+\lean{CountFidelity} and the count-one dichotomy; \lean{alias\_not\_accounted}
+shows the environment side cannot be omitted. Both heaps in the conclusion are
+models, so the model's count one is not a physical count. The nested companion is
+one level of a finite supported path.
 
 \needspace{10\baselineskip}\begin{claim}[Nested principal guarantee]\label{thm:principal-path}\end{claim}
 \begin{minted}{lean4}
 theorem principal_supported_path
-    (hproj : projectNested declName takeOut code = some p)
-    (hl : NestedLayout assign p) (hm : LevelMatch assign p l path value rA o i childRef)
-    (hag : NestedAgrees assign p s mEnv H rA i v pv)
-    (hpath : PathContract path value body tip l rest H mEnv c cb y)
-    (hacc : Accounted support H mEnv c)
-    (hcall : CountedChildCall
-      (CountedPair.protocol H rA childRef i).snd Hout … ) :
+    (hproj : projectNested …) (hacc : Accounted support H mEnv c)
+    (hcall : CountedChildCall …) :
     ∃ Hm envm ws Hf, … -- the four groups below
 \end{minted}
-\noindent{\small\itshape The level list, the level, the selected index, the call's two scalars,
-the leaf body and the counted parameters are parameters, so this is not a fixture
-instance; the conclusion's groups are abbreviated above.}
+\noindent{\small\itshape \lean{hacc} and \lean{hcall} are shown; the remaining premises and the
+conclusion groups are abbreviated. The level list, level, index, call scalars,
+leaf body and counted parameters are parameters, not a fixture.}
 
-Group 1 is the recognition-to-model correspondence, with the model run's own
-completed and copy-free trace. Group 2 is the counted protocol's boundary and
-final accounting, its pair release and cursor, both exclusive targets, the
-\lean{mutate} disposition, the functional restoration and its restored slot, and
-the post-call \lean{HeapCompat}. Group 3 is the counted interpreter's
-recognised-prefix boundary, including the write trace. Group 4 is the child call's
-frame together with the restoration's locality. The recognised prefix's model
-correspondence is \lean{index\_path\_simulates\_model}, whose call is a contract
-on an admitted model body; \lean{PathContract} is supplied level data and
+Group 1 is the recognition-to-model correspondence with the model's completed,
+copy-free trace. Group 2 is the counted boundary and final accounting, pair
+release and cursor, both exclusive targets, the \lean{mutate} disposition,
+restoration and slot, and post-call \lean{HeapCompat}. Group 3 is the
+counted-prefix boundary, including the write trace. Group 4 is the child frame
+and restoration locality. \lean{PathContract} is supplied;
 \lean{childContracts\_of\_path} derives the child contract at every level, so the
-supplied leaf computation and N10 remain. The nested theorem's own child call is
-\lean{CountedChildCall} and is the only termination premise;
-\lean{OwnershipTest/Principal.lean} inhabits it at the recogniser's own layout on
-a reified transcription of the captured declaration, where every premise is
-supplied and the conclusion therefore has no hypotheses. The whole-path
-non-growth outside the root's mutable footprint is not concluded: it needs the
-leaf body's write account.
+leaf and N10 remain. The child call is \lean{CountedChildCall}, the only
+termination premise; \lean{OwnershipTest/Principal.lean} inhabits it with every
+premise supplied. Whole-path non-growth
+outside the root's footprint is not concluded: it needs the leaf's write account.
 
-\lean{Prefix.toModel\_supported} places the certified flat model in the counted
-fragment. \lean{supported\_run} therefore applies to it once \lean{StoreSlots} is
-supplied, but \lean{storeSlots\_init} supplies that fact only at \lean{execSet},
-not for a general \lean{p.toModel}; the two results are adjacent, not one
-theorem.
+\lean{Prefix.toModel\_supported} puts the certified flat model in the counted
+fragment, so \lean{supported\_run} applies once \lean{StoreSlots} is supplied;
+\lean{storeSlots\_init} supplies that fact only at \lean{execSet}, not for general
+\lean{p.toModel}. The results are adjacent, not one theorem.
 
 \begin{table}[h]
 \centering
 \scriptsize
 \setlength{\tabcolsep}{3pt}
-\begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}p{3.6cm}>{\raggedright\arraybackslash}p{3.0cm}X@{}}
+\begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}p{4.6cm}X@{}}
 \toprule
-Contract & Provider & Status or remaining obligation \\
+Contract & Provider and status \\
 \midrule
-\lean{EntryInv}, \lean{Agrees} & client entry & unique tree, separation and completeness; heap/environment/code agreement; \lean{initEntryInv} for fresh arrays, the rest supplied per declaration \\
-A1--A12 / N1--N12 & implementation/leaf & primitive, layout, path and call signatures; N10 and the supplied leaf body remain; the emitted recursive callee is not captured; not proved of the C runtime \\
-\lean{OwnersAccounted} & model-layer predicate & implied by \lean{Accounted} (\lean{ownersAccounted}); the checker's take-out/\lean{dec} certificates are carried by \lean{Supported}; \lean{StoreSlots} is the remaining supplied state fact \\
-\lean{CountFidelity} & model-layer predicate & the heap count equation, implied by \lean{Accounted} (\lean{countFidelity}) at its support; the residual runtime fidelity is not proved \\
-\lean{PathContract}, \lean{CountedChildCall} & client; contract (N10) & finite-path level data and the counted child-call boundary; the leaf is supplied, the child contract at every level is derived, and the child call is the admitted model body, not the emitted callee \\
-\lean{Corr}; linked runtime; source correspondence & proved; empirical; assumption & \lean{Corr} is between two models and binds no physical C object or address; the linked gate is evidence, not proof; the source correspondence is not attempted \\
+\lean{EntryInv}, \lean{Agrees}; A1--A12 / N1--N12 & client/implementation: unique tree, separation, completeness; agreement; primitive/layout/path/call signatures; \lean{initEntryInv} for fresh arrays; N10 and the supplied leaf remain; not proved of the C runtime \\
+\lean{OwnersAccounted}, \lean{CountFidelity} & model-layer: both are implied by \lean{Accounted} (\lean{ownersAccounted}, \lean{countFidelity} at its support); the checker's take-out/\lean{dec} certificates are carried by \lean{Supported}; \lean{StoreSlots} is supplied; residual runtime fidelity is not proved \\
+\lean{PathContract}, \lean{CountedChildCall} & client; contract (N10): the level data supplies the leaf, the child contract at every level is derived, and the child call is the admitted model body, not the emitted callee \\
+\lean{Corr}; linked runtime; source correspondence & proved/empirical/assumption: \lean{Corr} is between two models and binds no physical C object or address; the linked gate is evidence, not proof; source correspondence is not attempted \\
 \bottomrule
 \end{tabularx}
 \caption{Contracts and model-layer predicates, classified by provider.}
@@ -799,44 +753,36 @@ A1--A12 / N1--N12 & implementation/leaf & primitive, layout, path and call signa
 \section{The closed instance and the evidence}\label{sec:case}
 \subsection{The instance and its controls}
 \lean{principal\_instance} inhabits \lean{principal\_supported\_path} at the
-recogniser's own layout on a reified transcription of the captured declaration:
-every premise is supplied, so the conclusion has no hypotheses. It is a
-25-conjunct existential; its first group is quoted below and the remaining 22
-conjuncts are the counted boundary, restoration, counted-prefix and locality
-groups.
+recogniser's layout on a reified transcription of the captured declaration; every
+premise is supplied, so the conclusion has no hypotheses. It is a 25-conjunct
+existential; the first group is below and 22 further conjuncts cover the counted
+boundary, restoration, counted prefix and locality.
 
 \begin{minted}{lean4}
 theorem principal_instance :
     ∃ Hm envm ws Hf,
-      NestedOutcome.ofExec assign capturedPrefix … =
-        some (NestedOutcome.ofModel …) ∧
+      NestedOutcome.ofExec assign capturedPrefix … = some (NestedOutcome.ofModel …) ∧
       Nested.runN (Path.build pathVar valueVar body [l]) entryEnv H =
-        .done Hm envm (.ref 0) ws ∧
-      (∀ w ∈ ws, w.2 = true)
+        .done Hm envm (.ref 0) ws ∧ (∀ w ∈ ws, w.2 = true)
       -- and 22 further conjuncts
 \end{minted}
-\noindent{\small\itshape The statement is abbreviated at the first group; the full existential is
-in \lean{OwnershipTest/Principal.lean}.}
+\noindent{\small\itshape Abbreviated at the first group; the full existential is in
+\lean{OwnershipTest/Principal.lean}.}
 
-The retained-parent control is the negative side of the put-back:
-\lean{retained\_parent\_not\_mutate} shows that a parent at count two does not
-take the theorem's mutate branch, and \lean{retained\_parent\_copies} records the
-copy result and the untouched sibling. The depth-two witness in
-\lean{OwnershipTest/\allowbreak PathRecursion.lean} is the correspondence's
-instance; \lean{OwnershipTest/\allowbreak PathConsolidation.lean} supplies a
-depth-three leaf in
-\lean{takeOut}/\lean{putBack} form as a supplied-leaf witness, not an instance of
-the correspondence. Both are kernel-checked.
+The retained-parent control: \lean{retained\_parent\_not\_mutate} shows a
+count-two parent does not mutate; \lean{retained\_parent\_copies} records the copy
+and untouched sibling. \lean{OwnershipTest/\allowbreak PathRecursion.lean} is the
+depth-two witness; \lean{OwnershipTest/\allowbreak PathConsolidation.lean}
+supplies a depth-three leaf, not an instance. Both are kernel-checked.
 
 \subsection{Evidence}
 A compiled probe compares the model's predicates with \lean{lean\_is\_exclusive}
-and address identity on a corpus: a unique array, a live alias, a persistent
-literal and a closure-held array. The closed-pure-array case is the important
-negative: a pure closed array is lifted to a \lean{\_\_\_closed} constant read
-through \lean{lean\_obj\_once}, so it is shared and the write copies even though
-the source looks unique. The gate also binds the pinned artifacts, the IR shapes,
-the generated C and the runtime header; the corpus is evidence, not an exhaustive
-equivalence.
+and address identity on a corpus including a unique array, a live alias, the
+alias dropped back to one, a persistent literal and a closure-held array. The
+closed-pure-array negative lifts a pure closed array to a \lean{\_\_\_closed}
+constant read through \lean{lean\_obj\_once}, so it is shared and copies although
+the source looks unique. The gate binds the pinned artifacts, IR shapes, C and
+header; this is evidence, not equivalence.
 
 \begin{table}[h]
 \centering
@@ -852,28 +798,25 @@ closed-pure-array & not certified & shared, copy & \lean{inline-exact}, \lean{cl
 nested \lean{setAt} & model/LCNF accepted & model in place; pair allocation & no probe mode & C/IR gate result \\
 \bottomrule
 \end{tabularx}
-\caption{Observed at revision \lean{d330fa0}: alignment for the flat probe and the nested
-LCNF/IR gate. The probe rows are observations captured by the named mode; the
-nested row is a C/IR gate result.}
+\caption{Observed at \lean{d330fa0}: flat-probe alignment and nested LCNF/IR gate;
+probe rows are observations, the nested row a gate result.}
 \label{tab:empirical}
 \end{table}
 
 The table records observations at \lean{d330fa0}, not a current re-run.
 
 \subsection{Theorem map}\label{sec:map}
-The table lists the declarations this paper displays and the support lemmas it
-names; it is not an audited list of every declaration.
+The table maps declarations and support lemmas to roles; it is not exhaustive.
 
 \begin{table}[h]
 \centering
 \scriptsize
-\setlength{\tabcolsep}{3pt}
-\begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}p{7.4cm}X@{}}
+\setlength{\tabcolsep}{2pt}
+\begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}p{9.0cm}X@{}}
 \toprule
 Declarations & Role \\
 \midrule
-\lean{check\_sound}; \lean{checkN\_sound\_of\_entryInv}; \lean{Accounted} (\lean{mult\_eq}, \lean{count\_one\_dichotomy}, \lean{at\_most\_one\_owner}, \lean{countFidelity}); \lean{initCtx}; \lean{initCtx\_accounted}; \lean{OwnersAccounted}; \lean{alias\_not\_accounted}; \lean{aliasEntryInv}; \lean{accountedNotEntryInv} & checker; accounting and independence \\
-\lean{Supported}; \lean{supported\_check}; \lean{supported\_run}; \lean{supported\_store\_exclusive}; \lean{storeSlots\_init} & preservation with \lean{Accounted} + \lean{StoreSlots} \\
+\lean{check\_sound}; \lean{checkN\_sound\_of\_entryInv}; \lean{Accounted} (\lean{mult\_eq}, \lean{count\_one\_dichotomy}, \lean{at\_most\_one\_owner}, \lean{countFidelity}); \lean{initCtx}; \lean{initCtx\_accounted}; \lean{OwnersAccounted}; \lean{alias\_not\_accounted}; \lean{aliasEntryInv}; \lean{accountedNotEntryInv}; \lean{Supported}; \lean{supported\_check}; \lean{supported\_run}; \lean{supported\_store\_exclusive}; \lean{storeSlots\_init} & checker; accounting and independence; preservation with \lean{Accounted} + \lean{StoreSlots} \\
 \lean{project\_sound}; \lean{recognized\_write\_in\_place}; \lean{execAST\_recognized}; \lean{index\_path\_simulates\_model}; \lean{childContracts\_of\_path}; \lean{childContract\_of\_path} & recognition and correspondence \\
 \lean{pair\_accounting}; \lean{pair\_traffic\_neutral}; \lean{boundary\_correspondence}; \lean{no\_free\_components\_not\_exclusive}; \lean{pairPhase\_refused}; \lean{counted\_takeOut}; \lean{CountedChildCall}; \lean{counted\_restore}; \lean{counted\_nested\_chain}; \lean{HeapCompat} & counted protocol; N10 \\
 \lean{putBack\_exclusive\_of\_wellFormed}; \lean{execCounted\_protocol\_boundary}; \lean{checkExclusive\_no\_abort}; \lean{setAt\_inPlace\_of\_entryInv}; \lean{prefix\_abort\_impossible}; \lean{checkN\_extraction\_exclusive}; \lean{checkN\_extraction\_exclusive\_of\_entryInv} & restoration; counted prefix; runtime model; store targets \\
@@ -972,8 +915,8 @@ fact rather than a silent absence. The pair-arms correspondence with
 
 The recognition claim is scoped to the accepted grammar and the mutation corpus,
 not a universal rejection theorem. The differential mode compares recorded
-expectations rather than executing the \lean{Ownership} model; the check-enabled
-modes are the negative controls. The probe returns two on an ordinary mismatch,
+expectations rather than executing the \lean{Ownership} model. The probe returns
+two on an ordinary mismatch,
 but \lean{sealed} returns one and so cannot be distinguished from the exclusivity
 abort; that path is not exercised. The table's observations are at
 \lean{d330fa0}, two commits behind the Lean development's head, not a current
@@ -981,17 +924,16 @@ re-run.
 \end{nonclaim}
 
 \paragraph{Conclusion.}
-The development proves the count-one discipline at the model, the recognised LCNF
-and the runtime model for the flat recognised write, and composes it as
-\lean{principal\_write}, which takes no accounting premise. The nested
-\lean{principal\_supported\_path} composes the finite-path correspondence, the
-counted chain and the counted-prefix boundary at one level, from an accounted
-caller state (\lean{hacc}) and conditional on the child-call contract
-(\lean{hcall}); beyond that boundary, and the emitted callee, remain open. The
-result buys a checked count one for a recognised fragment, not a type system or a
-physical count. Next: the C semantics, replay-to-backend identity, address
-identity, free and cascade, and the emitted callee; soundness is proved for the
-accepted fragment, not completeness.
+The count-one discipline is proved at the model, the recognised LCNF and the
+runtime model for the flat write, composed as \lean{principal\_write}, which takes
+no accounting premise. The nested \lean{principal\_supported\_path} composes the
+finite-path correspondence, the counted chain and the counted-prefix boundary at
+one level, from an accounted caller state (\lean{hacc}) and conditional on the
+child-call contract (\lean{hcall}); beyond that boundary, and the emitted callee,
+remain open. The result buys a checked count one for a recognised fragment, not a
+type system or a physical count. Next: the C semantics, replay/backend and
+address identity, free and cascade, and the emitted callee; soundness is proved,
+not completeness.
 
 \section*{Acknowledgements}
 \paragraph{AI assistance.}
@@ -1005,7 +947,7 @@ and assisted the Lean modules and scripts.
 
 Outputs were checked by the pinned kernel build and axiom audit; a declaration
 census checks every displayed name against the development, and the statements
-and claims are checked against the claim ledger. Kernel checking is not human
+and claims are checked against the development's declarations. Kernel checking is not human
 validation: proofs were machine-generated and spot-checked, not checked line by
 line. Dagstuhl's statement (checked
 2 November 2026) requires disclosure beyond proofreading; the conference and
