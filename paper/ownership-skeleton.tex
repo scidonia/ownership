@@ -87,115 +87,150 @@ separation logic}
 abbreviated where the text says so.}
 
 \begin{abstract}
-Reference-counted array updates copy when an extra reference survives. Lean~4
-decides the copy at run time, from the heap's count and persistence, so the
-in-place branch is not visible in the source type. We mechanise a count-one
-ownership discipline for a recognised fragment of Lean's compiler IR and prove,
-in Lean~4, (i) that a supported flat array-update fragment, from an accounted
-state (\lean{Accounted}) with the store-slot fact supplied (\lean{StoreSlots}),
-preserves a complete accounting of owning roots and incoming heap edges at every
-state it reaches, (ii) that the emitted extraction pair's count traffic is
-neutral at its boundary and that restoration takes the exclusive branch, and
-(iii) that the recognised finite path corresponds to the model. The principal
-nested theorem composes the finite-path correspondence, the counted
-extraction/call/restoration protocol at its accounted boundaries, and the
-counted interpreter's recognised-prefix boundary for one arbitrary level of a
-finite supported path, from an accounted caller state (\lean{hacc}) and
-conditional on a child-call contract (\lean{hcall}), and a closed
-kernel-checked instance inhabits it at the recogniser's own layout; the flat
-recognised write is the companion result and takes no accounting premise. The
-claim stops at that boundary: the emitted recursive callee, trace-level
-agreement beyond the counted prefix, extraction/restoration event coverage, C
-semantics, replay and address identity, and the source correspondence remain
-open, and neither model's count is a physical count.
+A reference-counted array update sits on a complexity cliff: a write to a
+uniquely referenced, non-persistent array mutates it in place, while a write to a
+shared array copies the whole array, so a sequence of updates can cost linear or
+quadratic time according to aliasing alone. Lean~4 decides the branch at run time
+from the heap's count and persistence, and its source type system has no
+ownership or linear types. A static discipline would make the in-place branch a
+compile-time guarantee; adding one to Lean would be a language change. Can the
+guarantee be recovered without one? We show that it can, for a recognised
+fragment of Lean's compiler IR, by an external count-one discipline proved in
+Lean~4 against model semantics. The proof rests on a complete accounting of
+owning roots and incoming heap edges; on preservation for a restricted flat
+fragment, whose accepted execution records only exclusive writes; and on a
+counted extraction, call and restoration protocol proved at its accounted
+boundaries, since the temporary pair that the emitted code allocates makes the
+accounting false between them. A recogniser ties the emitted LCNF to a model
+program; the flat composed guarantee relates the recognised trace, the model run
+and a runtime model at the designated write and takes no accounting premise. A
+nested theorem composes the finite-path correspondence, the counted chain and the
+counted interpreter's recognised-prefix boundary at one level of a supported
+path, conditional on an explicit, stronger counted child-call contract, with a
+closed kernel-checked instance. The claim is a checked count one for the
+fragment, not a physical count, whole-fragment execution equivalence, or C
+verification.
 \end{abstract}
 
 \section{Introduction}\label{sec:intro}
-Reference-counted array updates copy when the count at the write exceeds one.
-Lean~4 decides the branch at run time, from the heap's count and persistence
-\cite{lean4,perceus,countingbeans}, so the same source program can copy or mutate
-depending on sharing that its type does not mention. The question is whether a
-checked discipline can make the in-place branch a property of a recognised
-program fragment rather than of the current heap.
 
-The obvious argument---``the variable is owned, so the count is one''---fails.
-\lean{Inv} equates the stored count with the context's multiplicity, but does not
-count owning roots: \lean{bindOwned} preserves \lean{Inv} while leaving the
-multiplicity unchanged, and \lean{alias\_not\_accounted} exhibits the two-owner
-state. The first repair is a representation: \lean{Accounted support H env c}
-requires a duplicate-free, sound, complete and bound support, the live-cell
-domain, and the equation \lean{rc = IncomingCount + EnvOwnerCount}. At count one
-it yields \lean{count\_one\_dichotomy} and \lean{at\_most\_one\_owner}; at the
-initializer it is established by \lean{Accounted.initCtx}
-(\Cref{sec:accounting}).
+An array update should cost the same whoever else holds the array, but in a
+reference-counted language it does not. Lean~4's arrays are reference counted: a
+write mutates in place when the array is uniquely referenced and non-persistent,
+and otherwise copies it. \lean{lean\_is\_exclusive} makes this choice at run time
+\cite{lean4,perceus,countingbeans}, from heap state the source does not mention,
+so $n$ updates over an $n$-element array can cost linear or quadratic time
+according to sharing alone. A static ownership discipline would make the
+in-place branch a compile-time guarantee; Lean~4 has no ownership or linear
+types, and adding them is a language change.
 
-The second obstacle is the emitted code. The take-out builds a pair whose fields
-are the parent and the extracted child; the projections increment both; freeing
-the unique pair releases both edges. The counts return to their entry values only
-because the pair is freed: \lean{pair\_accounting} proves the boundary, and the
-no-free control leaves a count of two. Restoration has two dispositions;
-\lean{putBack\_exclusive\_of\_wellFormed} derives the mutate branch from the
-protocol boundary and the child-call boundary, not from an assumed final state
-(\Cref{sec:counted}).
+Can the guarantee be recovered without one? This paper argues yes, for a
+recognised fragment of Lean's compiler IR. We define a count-one discipline for a
+fragment recognised in the emitted LCNF and prove in Lean~4 that its counted part
+preserves a complete ownership accounting, that the counted extraction and
+restoration protocol preserves it at its boundaries, and that the recognised code
+corresponds to a model program. The guarantee stops short of physical counts and
+C semantics. The novelty is the proved connection, not a new type system.
 
-The third obstacle is the compiler connection. The checker is about a model; the
-paper relates the model to the operation trace the recogniser emits
-(\lean{project\_sound}, \lean{recognized\_write\_in\_place}) and to the finite
-nested path (\lean{index\_path\_simulates\_model}), with the ordinary child
-contract derived at every level from one supplied leaf. The counted child call is
-a stronger premise: \lean{CountedChildCall} adds the caller's complete accounting
-at the body's return, which the finite-path induction does not derive. The
-composed statements are three results with different premises.
-\lean{principal\_write} composes the emitted,
-model and runtime-model claims under the recogniser's verdict, the layout,
-\lean{EntryInv}, \lean{Agrees}, the cell and bounds facts, and \lean{Corr}; it
-takes \emph{no accounting premise}. Adjacent to it,
-\lean{Prefix.toModel\_supported} places the projected flat model in
-\lean{Supported}, so \lean{supported\_run} preserves \lean{Accounted} from an
-accounted state given \lean{StoreSlots} for that model---a fact supplied at
-\lean{execSet}, not generally for \lean{p.toModel}.
-\lean{principal\_supported\_path} composes the finite-path correspondence, the
-counted chain and the counted-prefix boundary from an accounted caller state
-(\lean{hacc}) and conditional on \lean{CountedChildCall} (\lean{hcall}); the
-emitted recursive callee is not captured, and the paper says so wherever the
-claim appears (\Cref{sec:principal}).
+The first obstruction is that count one is not one owner. The natural invariant
+equates the heap's stored count with the context's multiplicity, but a
+multiplicity is not an owner count: binding a second owned variable preserves the
+invariant without changing the multiplicity, and a kernel-checked countermodel
+gives two owning variables on a count-one cell. A count of one can therefore hide
+an alias.
 
-The take-away is a chain of three proved relations---complete accounting, a
-counted protocol at its accounted boundaries, and a fragment correspondence---not
-a type system for Lean. The boundary is part of the result: C semantics, replay
-and address identity, the emitted callee, trace-level agreement beyond the counted
-prefix, extraction/restoration event coverage, whole-path non-growth, and the
-source correspondence remain open (\Cref{sec:limits}).
+The repair is complete accounting: a duplicate-free, sound, complete and bound
+support of owning variables, a live-cell domain, and
+$\mathit{rc}(r) = \mathit{IncomingCount}(r) + \mathit{EnvOwnerCount}(r)$, the heap
+fields that reference $r$ plus the owning variables that denote it. At count one
+the equation forces one owning root and no incoming edge, or no owning root and
+exactly one incoming edge; two owning variables are the same variable. The integer
+now has a meaning.
+
+Preservation is then a theorem about a restricted fragment: no increments, only
+single decrements, and the fresh-binding certificates the checker cannot see. From
+an accounted state it runs without a fault, records only exclusive writes, and
+satisfies the accounting at every state it reaches, at the final support the step
+arithmetic determines. One premise is supplied---what the written slot holds,
+which no context records; it is discharged at the initializer's measured write,
+not in general. The checker itself is unchanged.
+
+The second obstruction is the emitted protocol. A nested update takes the element
+out of the array, allocates a pair holding the parent and child, projects both,
+frees the unique pair, calls on the child, and puts the result back. After the
+take-out the pair's field points at the parent while the caller's variable still
+owns it: the equation reads one $=$ one plus one, and the projections raise both
+counts. The accounting relation is therefore a boundary relation, attained at
+entry, after the release and after restoration. We prove the pair's traffic
+neutral at release, keep the no-free and retained-alias controls that leave counts
+elevated, derive
+restoration's mutate branch from the protocol and child-call boundaries, and
+compose take-out, an admitted child call and restoration into one chain, related
+to the model by a compatibility relation that tolerates the allocator's cursor.
+
+The third obstruction is the compiler connection, since Lean's compiler chooses
+the emitted shape, inlines and renames. The checker's programs are explicit syntax
+over a model heap, so the development is a deep embedding; a recogniser walks the
+actual LCNF value, maps a recognised prefix to one of those programs, pins
+operation order, arities, operand identities and branch constructors, and rejects
+token-preserving near misses. The trace is executed and compared with the model
+run. For the flat write this yields a composed guarantee
+(\lean{principal\_write}) over the executed prefix, the model run and a runtime
+model at the designated write, with no accounting premise. No universal
+rejection theorem is claimed.
+
+The nested result is narrower. The finite-path correspondence relates the executed
+nested prefix to the model run, and the ordinary child contract is derived at every
+level from one supplied leaf. The counted statement composes that correspondence
+with the counted chain and the counted interpreter's recognised-prefix boundary at
+one level of a finite supported path, from an accounted caller state. Its child call
+is a stronger contract: it requires the caller's complete accounting at the body's
+return, which the finite-path induction does not derive. A closed kernel-checked
+instance inhabits the statement at the recogniser's layout, with a retained-parent
+copy control; trace agreement stops at the pair's release.
+
+The closest predecessor, Huisinga's static uniqueness analysis for a Lean IR model
+\cite{huisinga}, has no compiler connection and leaves soundness as future work.
+Perceus and Counting Immutable Beans \cite{perceus,countingbeans} insert counts
+and reuse as a compiler transformation; here the question is when count one is
+justified, over an existing IR. Linear Haskell \cite{linearhaskell} and Clean's
+uniqueness types \cite{uniqueness} make ownership or uniqueness a source-level
+type property, while \lean{Array.markLinear} \cite{marklinear} establishes it
+dynamically.
+
+The guarantee is relative to entry and agreement facts, recogniser and layout
+facts, one supplied leaf contract, the stronger counted child-call contract, the
+primitive contracts, and the heap-to-runtime-model correspondence. The emitted
+callee is not captured; extraction and restoration are not trace events although
+their targets are proved exclusive; and C semantics, replay and address identity,
+whole-path non-growth and the source correspondence remain open. ``In place''
+means the modelled operation neither copies nor allocates; the pair still
+allocates, and neither count is physical.
 
 \paragraph*{Three contributions.}
 \begin{itemize}
-\item \textbf{Complete accounting and preservation for the supported flat
-fragment.} \lean{Accounted} with its support, domain and count fields,
-\lean{Supported}, \lean{supported\_run} (from \lean{Accounted} plus the supplied
-\lean{StoreSlots}), \lean{supported\_store\_exclusive}, \lean{storeSlots\_init},
-and the independence and negative results \lean{alias\_not\_accounted},
-\lean{aliasEntryInv} and \lean{accountedNotEntryInv}.
-\item \textbf{A counted extraction, call and restoration protocol at its
-accounted boundaries.} \lean{pair\_accounting},
-\lean{pair\_traffic\_neutral}, \lean{no\_free\_components\_not\_exclusive},
-\lean{counted\_takeOut}, \lean{counted\_restore}, \lean{counted\_nested\_chain},
-\lean{putBack\_exclusive\_of\_wellFormed}, \lean{HeapCompat}, and the pair-live
-refusal \lean{pairPhase\_refused}.
-\item \textbf{Fragment correspondence and a composed guarantee with a closed
-instance.} \lean{project\_sound}, \lean{recognized\_write\_in\_place},
-\lean{index\_path\_simulates\_model}, \lean{childContracts\_of\_path},
-\lean{principal\_write}, \lean{principal\_supported\_path} and
-\lean{principal\_instance}, with the \lean{CountedChildCall}/N10 boundary
-explicit.
+\item \textbf{Complete accounting and preservation.} A relation enumerating owning
+variables, covering the live cells, and equating each count with its incoming edges
+plus its owning roots yields the count-one dichotomy and rejects the two-owner
+countermodel. The preservation theorem \lean{supported\_run} takes an accounted
+state and one supplied slot fact and concludes a fault-free run, exclusively
+flagged writes, and accounting at every state reached.
+\item \textbf{A counted protocol at its accounted boundaries.} The pair's traffic
+is neutral at release; the no-free and retained-alias controls leave counts
+elevated; restoration's mutate branch is derived from the protocol and child-call
+boundaries; and \lean{counted\_nested\_chain} composes take-out, an admitted child
+call and restoration, related to the model by a cursor-tolerant compatibility
+relation. The caller's accounting at the child's return is an explicit stronger
+contract.
+\item \textbf{A checked connection from emitted LCNF to the models.} A recogniser
+walks the actual declaration, pinning operation order, arities, operand identities
+and branch constructors; its trace is executed and related to the model. The flat
+composed guarantee relates recognised execution, model run and runtime model at the
+designated in-place write, with no accounting premise. The nested statement
+(\lean{principal\_supported\_path}) composes finite-path correspondence, counted
+chain and counted-prefix boundary at one supported level, from an accounted caller
+state and the counted child-call contract, with a closed kernel-checked instance.
 \end{itemize}
-
-The discipline is a deep embedding: \lean{Code} and \lean{NCode} are explicit
-syntax interpreted by \lean{run}/\lean{runN}, and \lean{Ctx}, \lean{Heap},
-\lean{check} and the theorems are ordinary Lean definitions. The source is Lean,
-lowered to LCNF; a recognised prefix is mapped to a model program. The guarantee
-is conditional on \lean{EntryInv}, \lean{Agrees}, the contracts A1--A12/N1--N12
-and \lean{Corr}; it does not extend to the linked C runtime beyond the measured
-gate.
 
 \section{Setting and the running example}\label{sec:setting}
 Lean~4 compiles through a sequence of IRs. The last LCNF phase inserts
