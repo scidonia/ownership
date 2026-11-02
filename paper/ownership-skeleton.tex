@@ -1241,18 +1241,13 @@ nix develop -c bash scripts/check_artifacts.sh
 nix develop -c bash scripts/check_runtime_binding.sh
 \end{minted}
 
-Observed on 1 November 2026 at the base revision
-\lean{202b15d7b214b3ad5130463a262e9400380bde78}: all three Lean targets build;
-the artifact gate reports ``artifacts match the pinned sibling and toolchain'';
-the runtime gate reports ``pinned artifacts, IR shapes, C/runtime primitives and
-probe modes agree''. Each probe mode asserts its observed exclusivity, address, functional value and sealed result; an ordinary mismatch returns two, except in \lean{sealed}, which returns one on a mismatch and cannot be distinguished from the exclusivity abort by status alone, and the current corpus does not exercise that path; the armed copy controls abort with exit one and the exclusivity diagnostic. The probe exits zero for \lean{separate-exact},
+Observed at revision \lean{d330fa071abcc34f0883abe29fba1bf159348d4d} on 2 November 2026: all three Lean targets build; the axiom script reports only \lean{propext}, \lean{Classical.choice} and \lean{Quot.sound} for the headline theorems and \lean{propext} for \lean{alias\_not\_accounted}; the depth-two witness module \lean{OwnershipTest/PathRecursion.lean} checks with the standard axiom footprint.
+
+Observed at revision \lean{d330fa071abcc34f0883abe29fba1bf159348d4d} on 2 November 2026: the artifact gate reports ``artifacts match the pinned sibling and toolchain''; the runtime gate reports ``pinned artifacts, IR shapes, C/runtime primitives and probe modes agree''. Each probe mode asserts its observed exclusivity, address, functional value and sealed result; an ordinary mismatch returns two, except in \lean{sealed}, which returns one on a mismatch and cannot be distinguished from the exclusivity abort by status alone, and the current corpus does not exercise that path; the armed copy controls abort with exit one and the exclusivity diagnostic. The probe exits zero for \lean{separate-exact},
 \lean{separate-spare}, \lean{inline-io}, \lean{sealed}, \lean{inline-exact},
 \lean{closed-case} and \lean{differential} with the check off, and for
 \lean{separate-exact}, \lean{inline-io} and \lean{sealed} with the check on;
-\lean{inline-exact} and \lean{closed-case} exit one with the check on. The axiom
-script reports only \lean{propext}, \lean{Classical.choice} and
-\lean{Quot.sound} for the headline theorems and \lean{propext} for
-\lean{alias\_not\_accounted}.
+\lean{inline-exact} and \lean{closed-case} exit one with the check on.
 
 The C semantics, replay-to-backend identity, address identity, free/cascade and
 the emitted recursive callee remain outside the artifact. The runtime gate binds
