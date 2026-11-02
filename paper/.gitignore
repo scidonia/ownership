@@ -4,4 +4,7 @@
 *.bbl
 *.blg
 *.toc
-_minted-*/
+*.fls
+*.fdb_latexmk
+*.vtc
+*.synctex.gz

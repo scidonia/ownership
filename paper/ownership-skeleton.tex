@@ -1,65 +1,85 @@
-% Paper skeleton: static count-one ownership and in-place array updates in Lean 4.
+% Paper: static count-one ownership and in-place array updates in Lean 4.
 %
-% Build (observed on this host, 2 November 2026). The Debian lualatex lacks
-% luaotfload in its default path; point TEXMFLOCAL at the cached texlive-luatex
-% tree, or use a complete TeX Live:
-%   export TEXMFLOCAL="$HOME/.cache/texlive-luatex/root/usr/share/texlive/texmf-dist"
-%   cd paper
-%   lualatex -shell-escape ownership-skeleton.tex
-%   bibtex ownership-skeleton
-%   lualatex -shell-escape ownership-skeleton.tex   (twice)
+% LIPIcs article, class lipics-v2021 (v2021.1.3, class v3.1.3); see README.md
+% for the template provenance. Build, from this directory:
+%   latexmk -pdf -interaction=nonstopmode ownership-skeleton.tex
+% The page footprint is read from pdfinfo ownership-skeleton.pdf.
 %
 % Lean statements are quoted from the development, with hypotheses abbreviated
 % where a claim says so.
 
-\documentclass[11pt]{article}
+\documentclass[a4paper,UKenglish,cleveref]{lipics-v2021}
 
-\usepackage[margin=1in]{geometry}
-\usepackage{fontspec}
-\setmonofont{DejaVu Sans Mono}[Scale=0.80]
-\usepackage{microtype}
-\setlength{\emergencystretch}{3em}
 \usepackage{booktabs}
-\usepackage{tabularx}
-\usepackage{enumitem}
-\usepackage{xcolor}
-\usepackage{amsmath}
-\usepackage{amsthm}
-\usepackage{needspace}
-\usepackage{minted}
-\usepackage{hyperref}
-\usepackage{cleveref}
 
-\hypersetup{colorlinks=true, linkcolor=black, citecolor=black!70, urlcolor=blue!45!black}
+% The paper quotes many long declaration names as single typewriter tokens; the
+% class's 1em allowance and default tolerance leave an isolated overfull line,
+% so allow 3em of emergency stretch and a slightly looser acceptance threshold.
+\setlength{\emergencystretch}{3em}
+\tolerance=300
 
-\setminted{
-  style=friendly,
-  fontsize=\small,
+% Displayed declarations are one token each; the separators carry break points so
+% that a long name can wrap instead of overflowing the measure.
+\makeatletter
+\def\leansep{\penalty\z@}
+\makeatother
+\ExplSyntaxOn
+\NewDocumentCommand{\lean}{m}{
+  \tl_set:Nn \l_tmpa_tl {#1}
+  \tl_replace_all:Nnn \l_tmpa_tl {\_} {\textunderscore\leansep}
+  \tl_replace_all:Nnn \l_tmpa_tl {/} {/\leansep}
+  \tl_replace_all:Nnn \l_tmpa_tl {.} {.\leansep}
+  \texttt{\tl_use:N \l_tmpa_tl}
+}
+\ExplSyntaxOff
+
+% The class's T1 text fonts have no glyphs for these two comparison symbols, and
+% the Lean statements display them inside \lean{...}; render them in math mode
+% so no character is dropped from a displayed statement.
+\DeclareUnicodeCharacter{2264}{\ensuremath{\leq}}
+\DeclareUnicodeCharacter{2260}{\ensuremath{\neq}}
+
+% Code listings as listings blocks; the literate table renders the Unicode the
+% Lean statements use, so no glyph is dropped and no shell escape is needed.
+\lstset{
+  basicstyle=\ttfamily\small,
+  columns=fullflexible,
+  keepspaces=true,
   breaklines=true,
-  breakanywhere=false,
+  breakatwhitespace=false,
+  extendedchars=true,
   frame=leftline,
   framesep=3mm,
-  rulecolor=black!25,
-  bgcolor=black!1,
-  linenos=false,
+  rulecolor=\color{black!25},
+  backgroundcolor=\color{black!1},
+  xleftmargin=2mm,
   tabsize=2,
-  xleftmargin=2mm
+  literate=
+    {→}{{$\rightarrow$}}2
+    {∧}{{$\wedge$}}2
+    {∀}{{$\forall$}}2
+    {∃}{{$\exists$}}2
+    {≤}{{$\leq$}}2
+    {≠}{{$\neq$}}2
+    {∈}{{$\in$}}2
+    {⟨}{{$\langle$}}2
+    {⟩}{{$\rangle$}}2
+    {…}{{$\ldots$}}2
 }
 
-\newcommand{\lean}[1]{\texttt{#1}}
-
-\newtheoremstyle{claimstyle}{6pt}{2pt}{\normalfont}{}{\bfseries}{}{0.5em}%
-  {\thmname{#1}\thmnumber{ #2}\thmnote{ (#3)}.\newline}
+% The class supplies claim and example; the non-claim note reuses its style.
 \theoremstyle{claimstyle}
-\newtheorem{claim}{Claim}
-\newtheorem{example}{Example}
 \newtheorem{nonclaim}{Non-claim}
 
 \title{Mechanising Count-One Ownership for Array Updates in Lean~4}
-\author{Gavin Mendel-Gleason\\
-Scidonia Limited\\
-\texttt{gavin@scidonia.ai}}
-\date{2 November 2026}
+\titlerunning{Mechanising Count-One Ownership for Array Updates in Lean~4}
+\author{Gavin Mendel-Gleason}{Scidonia Limited}{gavin@scidonia.ai}{}{}
+\authorrunning{G. Mendel-Gleason}
+\Copyright{Gavin Mendel-Gleason}
+\ccsdesc[500]{Theory of computation~Logic and verification}
+\ccsdesc[300]{Software and its engineering~Software verification and validation}
+\keywords{reference counting, ownership, compiler verification, Lean~4,
+separation logic}
 
 \begin{document}
 \maketitle
@@ -147,8 +167,8 @@ and address identity, the emitted callee, trace-level agreement beyond the count
 prefix, extraction/restoration event coverage, whole-path non-growth, and the
 source correspondence remain open (\Cref{sec:limits}).
 
-\paragraph{Three contributions.}
-\begin{itemize}[leftmargin=1.4em, itemsep=2pt]\raggedright
+\paragraph*{Three contributions.}
+\begin{itemize}
 \item \textbf{Complete accounting and preservation for the supported flat
 fragment.} \lean{Accounted} with its support, domain and count fields,
 \lean{Supported}, \lean{supported\_run} (from \lean{Accounted} plus the supplied
@@ -201,7 +221,7 @@ compiler connection is a mapping from the recognised LCNF to these values.
 A \lean{LetF} is one of \lean{lit n}, \lean{size a}, \lean{isShared x} or
 \lean{checkAlias x}.
 
-\begin{minted}{lean4}
+\begin{lstlisting}
 inductive Code where
   | let (x : Var) (v : LetF) (k : Code)
   | inc (x : Var) (n : Nat) (k : Code)
@@ -216,7 +236,7 @@ inductive NCode where
   | putBack (a e i result : Var) (k : NCode)
   | callAt (state path x result : Var) (body : NCode) (k : NCode)
   | ret (x : Var)
-\end{minted}
+\end{lstlisting}
 
 A \lean{Code} is the straight-line array-write fragment; an \lean{NCode} adds
 extraction, restoration and the recursive call. Variables are \lean{Nat},
@@ -233,14 +253,14 @@ The correspondence theorems relate that execution to the model run.
 \subsection{The nested write}
 The source is the array case of \lean{Layout5.setAt} in the sibling. It takes the
 element out, checks the extracted focus, recurses on it and puts the result back:
-\begin{minted}{lean4}
+\begin{lstlisting}
 | _, .index i q, y, s =>
     if h : i < s.size then
       match takeOutAt (assertExclusiveArray openSite s) i h (stateDefault _) with
       | ⟨(sib, focus), hbound⟩ =>
         plugAt sib i hbound (setAt q y (assertExclusive structSite focus))
     else s
-\end{minted}
+\end{lstlisting}
 The emitted C for this arm is the sequence the development names: a
 \lean{lean\_is\_exclusive} test for the array, the \lean{takeOut} exchange
 (\lean{lean\_array\_fget}, \lean{lean\_array\_fset}, the pair allocation), the
@@ -278,8 +298,8 @@ The model heap, its counts and exclusivity are the semantic side of the
 judgement: \lean{Inv} ties the context's multiplicity to the heap count, and
 \lean{Exclusive} is count one and non-persistence.
 
-\needspace{10\baselineskip}\begin{claim}[The raw invariant and the exclusivity predicate]\label{def:inv}\end{claim}
-\begin{minted}{lean4}
+\begin{claim}[The raw invariant and the exclusivity predicate]\label{def:inv}\end{claim}
+\begin{lstlisting}
 structure Inv (H : Heap) (env : Env) (c : Ctx) : Prop where
   rc_eq         : ∀ r, H.rc r = c.mult r
   owned         : ∀ x r, c.us x = .owned → c.refOf x = some r →
@@ -288,7 +308,7 @@ structure Inv (H : Heap) (env : Env) (c : Ctx) : Prop where
                     env x = some (.ref r) ∧ H.cells r ≠ none
   scalar        : ∀ x, c.us x = .scalar → ∃ n, env x = some (.scalar n)
   nonPersistent : ∀ r o, H.cells r = some o → o.persistent = false
-\end{minted}
+\end{lstlisting}
 \noindent\lean{Exclusive H r} means that \lean{r} is a live, non-persistent cell
 whose count is one.
 
@@ -304,8 +324,8 @@ multiplicity at one. The initializer's context does satisfy
 consequence of \lean{Inv}, but it is a consequence of the relation below
 (\lean{countFidelity}); the residual runtime fidelity is not proved.
 
-\needspace{10\baselineskip}\begin{claim}[Complete accounting]\label{def:accounted}\end{claim}
-\begin{minted}{lean4}
+\begin{claim}[Complete accounting]\label{def:accounted}\end{claim}
+\begin{lstlisting}
 structure Accounted (support : List Var) (H : Heap) (env : Env) (c : Ctx) : Prop where
   inv              : Inv H env c
   support_nodup    : support.Nodup
@@ -314,14 +334,14 @@ structure Accounted (support : List Var) (H : Heap) (env : Env) (c : Ctx) : Prop
   support_bound    : ∀ x, x ∈ support → ∃ r, c.refOf x = some r
   domain           : ∀ r o, H.cells r = some o → r < H.next
   count            : ∀ r, H.rc r = IncomingCount H r + EnvOwnerCount c support r
-\end{minted}
+\end{lstlisting}
 
 The relation is deliberately redundant: the support is a duplicate-free
 enumeration of every owning variable, each entry is bound to a reference, every
 live cell lies inside the range the edge count enumerates, and the count
 equation holds over two independently computed quantities.
 
-\begin{minted}{lean4}
+\begin{lstlisting}
 def IncomingCount (H : Heap) (r : Ref) : Nat :=
   ((List.range H.next).map fun q =>
     match H.cells q with
@@ -333,7 +353,7 @@ def EnvOwnerCount (c : Ctx) (vars : List Var) (r : Ref) : Nat :=
 
 def CountFidelity (H : Heap) (c : Ctx) (vars : List Var) : Prop :=
   ∀ r, H.rc r = IncomingCount H r + EnvOwnerCount c vars r
-\end{minted}
+\end{lstlisting}
 
 \lean{mult\_eq} reads the equation through \lean{Inv.rc\_eq};
 \lean{count\_one\_dichotomy} splits count one into one owning root with no
@@ -343,7 +363,7 @@ variable; \lean{countFidelity} is the equation in the retained predicate's shape
 and \lean{ownersAccounted} recovers the environment-side predicate. The
 initializer establishes the relation (\lean{initCtx}).
 
-\paragraph{The supported fragment.}
+\paragraph*{The supported fragment.}
 \lean{Supported c s} is indexed at the pre-state \lean{c}; each constructor
 states the checker's own rule at \lean{c} and its continuation at the checker's
 post-state, and carries the certificates the checker cannot see: a fresh alias
@@ -381,7 +401,7 @@ $c \vdash \mathit{code} \Rightarrow c'$, defined to hold exactly when
 context is a usage, reference and multiplicity map; the checker is
 syntax-directed.
 
-\begin{minted}{lean4}
+\begin{lstlisting}
 inductive U where
   | owned
   | borrow
@@ -392,7 +412,7 @@ structure Ctx where
   us    : Var → U
   refOf : Var → Option Ref
   mult  : Ref → Nat
-\end{minted}
+\end{lstlisting}
 \noindent A frame records the array, index and element of an open extraction;
 \lean{check : Ctx → Code → Option Ctx} and
 \lean{checkNF : Ctx → List Frame → NCode → Option Ctx} are total.
@@ -435,7 +455,7 @@ premise is $n <$ the object's multiplicity, so it consumes a duplicate handle an
 leaves the object live. And linearity at the write is the side condition
 \lean{multOf x = 1}, not the usage tag alone.
 
-\paragraph{A derivation.}
+\paragraph*{A derivation.}
 The first example is the two rules applied in sequence. The premise of the
 second rule is the context the first produces; no type variable is solved.
 \[
@@ -469,21 +489,21 @@ frame; a call checks its body under an isolated context and continues with the
 result.
 
 \subsection{Two examples}
-\needspace{10\baselineskip}\begin{example}[A unique write]\label{ex:unique}\end{example}
-\begin{minted}{lean4}
+\begin{example}[A unique write]\label{ex:unique}\end{example}
+\begin{lstlisting}
 def execSet (x y i v : Var) : Code :=
   .let y (.checkAlias x) (.setArr y i v (.ret y))
 
 #guard (check (initCtx 0) (execSet 0 3 1 2)).isSome
-\end{minted}
+\end{lstlisting}
 
-\needspace{10\baselineskip}\begin{example}[An aliased write is refused]\label{ex:alias}\end{example}
-\begin{minted}{lean4}
+\begin{example}[An aliased write is refused]\label{ex:alias}\end{example}
+\begin{lstlisting}
 def aliasSet (x y i v : Var) : Code :=
   .inc x 1 (execSet x y i v)
 
 #guard (check (initCtx 0) (aliasSet 0 3 1 2)).isNone
-\end{minted}
+\end{lstlisting}
 The alias increments the handle, so the write's multiplicity-one obligation
 fails; the same refusal appears at the context level for a heap whose count is
 two. This is the static counterpart of the runtime copy: the checker rejects the
@@ -516,8 +536,8 @@ fault, records only exclusive writes, satisfies the complete relation at every
 state it reaches, and satisfies it at the final state at the support the step
 arithmetic determines.
 
-\needspace{10\baselineskip}\begin{claim}[Supported execution preserves accounting]\label{thm:supported-run}\end{claim}
-\begin{minted}{lean4}
+\begin{claim}[Supported execution preserves accounting]\label{thm:supported-run}\end{claim}
+\begin{lstlisting}
 theorem supported_run {c : Ctx} {s : Code} (hs : Supported c s)
     {support : List Var} {H : Heap} {env : Env}
     (hacc : Accounted support H env c) (hslots : StoreSlots H env s) :
@@ -527,7 +547,7 @@ theorem supported_run {c : Ctx} {s : Code} (hs : Supported c s)
       (∀ w ∈ ws, w.2 = true) ∧
       Accounted (resultSupport s support) H' env' c' ∧
       AccountedAlong H env c support s
-\end{minted}
+\end{lstlisting}
 
 \lean{AccountedAlong} is the conclusion, never a hypothesis: at each instruction
 the relation holds at the interpreter's own post-state, and at each array store
@@ -536,7 +556,7 @@ own pre- and post-state: it is reached with its target exclusive and its slot
 scalar, and the post-state is accounted at the checker's unchanged context.
 \lean{storeSlots\_init} supplies the slot for the initializer's measured write.
 
-\paragraph{Three hard cases.}
+\paragraph*{Three hard cases.}
 The projections temporarily raise both counts because the pair's edge and the
 projected handle are both live;
 the free of the unique pair removes exactly those two edges, which is why
@@ -614,8 +634,8 @@ releases both edges. The counts return to their entry values only because the
 pair is freed: the negative controls show that omitting the free, or retaining an
 alias, leaves a count of two.
 
-\needspace{10\baselineskip}\begin{claim}[Pair accounting]\label{thm:pair}\end{claim}
-\begin{minted}{lean4}
+\begin{claim}[Pair accounting]\label{thm:pair}\end{claim}
+\begin{lstlisting}
 theorem pair_accounting {H : Heap} {p c : Ref} {i : Nat}
     (hw : WellFormedEntry H p c i) :
     let B := protocol H p c i
@@ -623,7 +643,7 @@ theorem pair_accounting {H : Heap} {p c : Ref} {i : Nat}
       B.2.cells c ≠ none ∧ B.2.cells B.1 = none ∧
       Heap.Exclusive B.2 p ∧ Heap.Exclusive B.2 c ∧
       B.2.rc p = H.rc p ∧ B.2.rc c = H.rc c
-\end{minted}
+\end{lstlisting}
 The no-free control, \lean{no\_free\_components\_not\_exclusive}, leaves both
 components at count two, neither exclusive, and the pair live;
 \lean{WellFormedEntry} fixes both at count one.
@@ -632,7 +652,7 @@ components at count two, neither exclusive, and the pair live;
 \centering
 \scriptsize
 \setlength{\tabcolsep}{3pt}
-\begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}p{2.2cm}>{\raggedright\arraybackslash}p{1.9cm}>{\raggedright\arraybackslash}p{1.9cm}>{\raggedright\arraybackslash}p{1.1cm}>{\raggedright\arraybackslash}p{1.1cm}X@{}}
+\begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}p{2.0cm}>{\raggedright\arraybackslash}p{2.3cm}>{\raggedright\arraybackslash}p{2.3cm}>{\raggedright\arraybackslash}p{1.25cm}>{\raggedright\arraybackslash}p{1.2cm}X@{}}
 \toprule
 Stage & \lean{EnvOwnerCount} (roots) & \lean{IncomingCount} (edges) & parent rc & child rc & disposition / why \\
 \midrule
@@ -722,8 +742,8 @@ measured.
 The model, the recognised LCNF and the runtime model are separate semantics.
 Their composition at the flat recognised write is \lean{principal\_write}:
 
-\needspace{10\baselineskip}\begin{claim}[Flat principal guarantee]\label{thm:principal-write}\end{claim}
-\begin{minted}{lean4}
+\begin{claim}[Flat principal guarantee]\label{thm:principal-write}\end{claim}
+\begin{lstlisting}
 theorem principal_write
     (hproj : projectPrefix code = some p) (hl : Layout assign p)
     (hEntry : EntryInv H env (Runner.initCtx root) root client)
@@ -737,7 +757,7 @@ theorem principal_write
       ∃ H', Runtime.setAt R root i (.scalar v) = some (.inPlace H' root) ∧
         Corr (inPlaceOutcome root i v o H).heap H'
         -- and the target and field conclusions
-\end{minted}
+\end{lstlisting}
 The proof is the conjunction of \lean{recognized\_write\_in\_place} and
 \lean{Runtime.\allowbreak setAt\_inPlace\_of\_entryInv}; it takes no accounting
 premise. \lean{Accounted} is consumed at the initializer by
@@ -747,7 +767,7 @@ shows the environment side cannot be omitted. Both heaps in the conclusion are
 models, so the model's count one is not a physical count. The nested companion is
 one level of a finite supported path.
 
-\needspace{16\baselineskip}\begin{claim}[The nested counted-fragment statement]\label{thm:principal-path}\end{claim}
+\begin{claim}[The nested counted-fragment statement]\label{thm:principal-path}\end{claim}
 Work at one level of a finite supported path, with array $r_A$, extracted child
 $c_{\mathrm{ref}}$, index $i$, and write $B$ for the second component of
 \lean{CountedPair.protocol} at the caller's heap, $r_A$, $c_{\mathrm{ref}}$ and
@@ -848,14 +868,14 @@ premise is supplied, so the conclusion has no hypotheses. It is a 25-conjunct
 existential; the first group is below and 22 further conjuncts cover the counted
 boundary, restoration, counted prefix and locality.
 
-\begin{minted}{lean4}
+\begin{lstlisting}
 theorem principal_instance :
     ∃ Hm envm ws Hf,
       NestedOutcome.ofExec assign capturedPrefix … = some (NestedOutcome.ofModel …) ∧
       Nested.runN (Path.build pathVar valueVar body [l]) entryEnv H =
         .done Hm envm (.ref 0) ws ∧ (∀ w ∈ ws, w.2 = true)
       -- and 22 further conjuncts
-\end{minted}
+\end{lstlisting}
 \noindent{\small\itshape Abbreviated at the first group; the full existential is in
 \lean{OwnershipTest/Principal.lean}.}
 
@@ -957,7 +977,7 @@ comparison row for it.
 \centering
 \scriptsize
 \setlength{\tabcolsep}{3pt}
-\begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}p{2.4cm}>{\raggedright\arraybackslash}p{2.6cm}>{\raggedright\arraybackslash}p{2.5cm}>{\raggedright\arraybackslash}p{2.5cm}>{\raggedright\arraybackslash}p{2.2cm}X@{}}
+\begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}p{2.0cm}>{\raggedright\arraybackslash}p{2.2cm}>{\raggedright\arraybackslash}p{2.1cm}>{\raggedright\arraybackslash}p{2.1cm}>{\raggedright\arraybackslash}p{1.9cm}X@{}}
 \toprule
 System & Analysed object & Enforcement & Count representation & Compiler connection & Proof status \\
 \midrule
@@ -1021,7 +1041,7 @@ abort; that path is not exercised. The table's observations are at revision
 \lean{d330fa0} (2 November 2026).
 \end{nonclaim}
 
-\paragraph{Conclusion.}
+\paragraph*{Conclusion.}
 The count-one discipline is proved at the model, the recognised LCNF and the
 runtime model for the flat write, composed as \lean{principal\_write}, which takes
 no accounting premise. The nested \lean{principal\_supported\_path} composes the
@@ -1034,7 +1054,7 @@ address identity, free and cascade, and the emitted callee; soundness is proved,
 not completeness.
 
 \section*{Acknowledgements}
-\paragraph{AI assistance.}
+\paragraph*{AI assistance.}
 The development and this manuscript were produced with substantial AI
 assistance. Tools and model versions used across the development were not
 recorded; the model identifier recorded for this manuscript revision is
@@ -1052,7 +1072,7 @@ line. Dagstuhl's statement (checked
 publisher policy must be rechecked at submission. Paraphrasing does not remove
 substantive AI involvement.
 
-\bibliographystyle{plain}
+\bibliographystyle{plainurl}
 \bibliography{references}
 
 \end{document}
