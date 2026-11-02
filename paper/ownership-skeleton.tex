@@ -989,10 +989,11 @@ the counted protocol's execution composition is outstanding; the nested trace
 still does not include extraction/restoration stores, but each such step's target
 array cell is proved exclusive by \lean{checkN\_extraction\_exclusive\_of\_entryInv},
 so the store's disposition is a separate proved fact rather than a silent absence.
-The runtime gate's \lean{expect}
-checks exit status, and the differential mode compares recorded expectations
-rather than executing the Ownership model; the check-enabled modes are the
-negative controls.
+The probe returns two for an ordinary observation mismatch and one for the
+intended exclusivity abort; the runtime gate's \lean{expect} checks that status
+and, for the abort controls, the abort diagnostic. The differential mode
+compares recorded expectations rather than executing the Ownership model; the
+check-enabled modes are the negative controls.
 \end{nonclaim}
 
 \section{Related work}
@@ -1141,7 +1142,7 @@ Observed on 1 November 2026 at the base revision
 \lean{202b15d7b214b3ad5130463a262e9400380bde78}: all three Lean targets build;
 the artifact gate reports ``artifacts match the pinned sibling and toolchain'';
 the runtime gate reports ``pinned artifacts, IR shapes, C/runtime primitives and
-probe modes agree''. Each probe mode asserts its observed exclusivity, address, functional value and sealed result; a mismatch returns one. The probe exits zero for \lean{separate-exact},
+probe modes agree''. Each probe mode asserts its observed exclusivity, address, functional value and sealed result; an ordinary mismatch returns two, while the armed copy controls abort with exit one and the exclusivity diagnostic. The probe exits zero for \lean{separate-exact},
 \lean{separate-spare}, \lean{inline-io}, \lean{sealed}, \lean{inline-exact},
 \lean{closed-case} and \lean{differential} with the check off, and for
 \lean{separate-exact}, \lean{inline-io} and \lean{sealed} with the check on;

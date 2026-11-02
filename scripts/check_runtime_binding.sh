@@ -50,6 +50,31 @@ expect() {
   printf 'probe %s check=%s exit=%s\n' "$mode" "$check" "$status"
 }
 
+# The armed copy controls must fail specifically by the in-place exclusivity
+# abort, not by an ordinary observation mismatch (which exits 2).
+expect_abort() {
+  local mode=$1
+  local out status
+  set +e
+  out=$(cd runtime-bridge && SCIDONIA_CHECK_INPLACE=1 nix develop -c lake exe probe "$mode" 2>&1)
+  status=$?
+  set -e
+  if [ "$status" != "1" ]; then
+    echo "probe $mode (check=1): exit $status, expected the exclusivity abort (1)" >&2
+    printf '%s\n' "$out" >&2
+    exit 1
+  fi
+  case "$out" in
+    *"not exclusively owned"*|*"in-place check"*) ;;
+    *)
+      echo "probe $mode (check=1): exit 1 without the exclusivity abort diagnostic" >&2
+      printf '%s\n' "$out" >&2
+      exit 1
+      ;;
+  esac
+  printf 'probe %s check=1 exit=1 abort=exclusive\n' "$mode"
+}
+
 expect separate-exact 0 0
 expect separate-spare 0 0
 expect inline-io 0 0
@@ -60,7 +85,7 @@ expect differential 0 0
 expect separate-exact 1 0
 expect inline-io 1 0
 expect sealed 1 0
-expect inline-exact 1 1
-expect closed-case 1 1
+expect_abort inline-exact
+expect_abort closed-case
 
 echo "runtime binding: pinned artifacts, IR shapes, C/runtime primitives and probe modes agree"
