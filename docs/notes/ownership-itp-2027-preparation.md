@@ -1,6 +1,7 @@
 # Ownership: ITP 2027 preparation and agent handoff
 
 Prepared: 2 November 2026  
+Status: Stage 1 code at `9eb0bf8`; the Stage 1 status and one-page accounting design are §4a. Gates B–E, the paper rewrite and artifact remain.  
 Target: ITP 2027, regular research paper  
 Repository inspected: `scidonia/ownership`  
 Baseline: `61a01439f4b313fb51f7240097b29cdff53131fb`  
@@ -79,6 +80,61 @@ Source paths below are relative to the repository root. “Proved” means the c
 - Preserve the recent `ExtractionExclusive` progress. Do not continue reporting the old model-store coverage gap as wholly unresolved.
 - Label empirical table entries as observed results or predictions. Every claimed measurement needs an actual command, mode, and captured outcome.
 - Revisit the conclusion's “next step is a verified runtime model” wording: a runtime model already exists. The unresolved work is fidelity and composition at specified boundaries.
+
+## 4a. Stage 1 status and one-page accounting design (9 November 2026 deliverable)
+
+Stage 1 landed in the accepted revision at `9eb0bf8`. It closes Gate A and the immediate manuscript corrections M1–M6 and the claims half of M7. It does **not** close Gate B in general, Gates C–E, the paper rewrite, the artifact, or the runtime/source limits.
+
+### Current claim ledger delta
+
+| Claim | Status at `9eb0bf8` |
+| --- | --- |
+| Initializer satisfies complete accounting | **Closed.** `Ownership.Accounted.initCtx` establishes `Accounted` for the initializer's heap, environment and context. |
+| Count fidelity accounts for every real owner and edge | **Closed for the supported fragment.** `Accounted` carries a duplicate-free, complete and bounded support, the live-heap domain, and the count equation; `Accounted.mult_eq` relates the context multiplicity to `IncomingCount` and `EnvOwnerCount`. `CountFidelity` itself is retained unchanged. |
+| Accepted execution preserves complete accounting | **Partial.** The context and atomic-step lemmas (`setDead`, `setScalar`, `move`, `decOne`, `takeOut`, `putBack`, `setFieldsScalar`, `setArrInPlace`) are proved; general accepted-execution preservation remains Gate B / Stage 2, including the four client facts below. |
+| The principal theorem transports accounting into a runtime guarantee | **Corrected; still no transport.** `principal_write` no longer carries `hacc`/`vars`/`hcount`; `principal_accounted` consumes `Accounted` at `Runner.initCtx` and derives the three facts. No transport theorem, no physical-ownership conclusion, no runtime claim. |
+| Rejected variants are kernel-checked | **Closed.** `alias_rejected`, `inc_rejected`, `outOfRange_rejected`/`outOfRange_accepted`, `bindAlone_rejected`, `scalarOverwrite_rejected`, `decTwo_rejected`, `dupSupport_witness`, `omittedOwner_witness`, `unboundRoot_witness`. |
+| The counted nested protocol implements the recognised nested execution | **Open**, as before: Stage 3. The deferred credit ledger is its likely prerequisite. |
+| Flat checker/prefix and finite-path results | **Existing and unchanged**: checker soundness, the recognised flat prefix, the finite-path correspondence, and the nested extraction/restoration exclusivity result. |
+| Linked runtime behaviour for all supported inputs | **Open and out of scope**: C semantics, replay/backend identity, address identity, free/cascade, differentials and source-to-LCNF. |
+
+### Call boundary (Gate D choice)
+
+Use the **contractual boundary** for the first submission. The main theorem states the child-call relation explicitly, instantiates one nontrivial leaf computation, and limits the claim to the finite supported path. The emitted `setAt` recursive callee, activation-local environments and path-field reprojection are not verified; the finite model's syntactic descent is not presented as verification of that callee. The title, abstract, example, theorem, artifact and limits must use this same boundary. The later alternative — capture and interpret the emitted callee — remains a separate milestone.
+
+### One-page accounting design
+
+**State.** A heap `H`, environment `env`, checker context `c`, and a finite root support `support : List Var`.
+
+**Relation.** `Accounted support H env c` bundles:
+
+- `inv : Inv H env c`;
+- `support_nodup`, `support_sound`, `support_complete`: `support` is duplicate-free and is exactly the variables the context marks `owned`;
+- `support_bound` and `domain`: the support and the live-heap domain are within range, with no hidden out-of-range incoming edge;
+- `count : ∀ r, H.rc r = IncomingCount H r + EnvOwnerCount c support r`: the stored count is the owning roots plus the incoming owning heap edges. `Accounted.mult_eq` states the same equation at `c.mult`.
+
+`IncomingCount` counts live in-range owning edges; `EnvOwnerCount` counts the owning roots in `support`; `RefCount` and `EdgeAt` expose the two components.
+
+**Operations.** `Ownership.Supported : Ctx → Code → Prop` has eight constructors (`ret`, `bindLit`, `bindSize`, `bindShared`, `bindAlias`, `check`, `setArr`, `decOne`), each indexed at the checker's post-state. `decOne` admits `.dec x 1` at `((c.dec r 1).setUs x .dead)`; `.inc` and `.dec x n` with `n ≠ 1` are excluded. `inc x n` raises `rc` and `mult` without introducing a destination or edge, so no accounting state exists after it (`inc_rejected`); a multi-handle `dec` would discharge credits that no named owner carries (`decTwo_rejected`), and is deferred to the credit-ledger work of Stage 3. There is no `.borrow`-producing constructor.
+
+**Client facts the checker does not supply.** Gate B / Stage 2 must derive, strengthen or certificate each:
+
+1. the `checkAlias` target's freshness;
+2. the scalar `.let` target's freshness;
+3. `dec`'s single handle;
+4. the extracted child's no-second-edge condition (undetermined, not merely missing).
+
+**Principal shape.** `OwnershipLcnf.principal_write` is the flat recognised-write result with the primitive contracts; `OwnershipLcnf.principal_accounted` supplies `OwnersAccounted`, `CountFidelity` and `count_one_dichotomy` from `Accounted` at `Runner.initCtx`. The relation is load-bearing for that consuming result, not a hypothesis of the principal theorem, and it does not transport to a runtime guarantee.
+
+**Boundary.** The guarantee is conditional on `EntryInv`, `Agrees`, the A1–A12/N1–N12 contracts and `Corr`; the accounting contracts are supplied by `Accounted` and its consuming result; the runtime and C semantics remain assumptions or limits.
+
+### Immediate corrections and paper state
+
+M1–M6 and the claims half of M7 are applied: the introduction's “verified composition”, the abstract's differential framing, the principal conjunction, the runtime-model qualification, the extraction/restoration progress, the empirical labels, the conclusion's next step, and the `sealed` probe exception. The M7 code fix (`Probe.lean`'s `sealed` mismatch returning `1` instead of `2`) remains unauthorised and unexercised. The PDF is expected to stay stale because `flake.nix` supplies no TeX. The substantive 16-page rewrite in §6 remains open.
+
+### Next
+
+Gate B / Stage 2 is the next proof milestone: preservation through accepted execution and the four client facts, with `EntryInv` packaging. Gates C–E, the artifact and the paper rewrite follow in that order unless the 2027 CFP changes the constraints.
 
 ## 5. Proof work required for the preferred paper
 
