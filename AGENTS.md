@@ -174,6 +174,15 @@
   not a hidden assumption: `takeOutsOK_of_entryInv` and
   `checkN_sound_of_entryInv` both require it, because the checker cannot see which
   object a slot holds.
+- `Ownership.Nested.ExtractionExclusive` is the model-level extraction and
+  restoration disposition: every take-out and put-back target array cell is
+  `Heap.Exclusive`, proved from `Inv`, `Agrees` and checker acceptance by
+  `checkN_extraction_exclusive`, with the `EntryInv` entry point
+  `Ownership.Entry.checkN_extraction_exclusive_of_entryInv`. It covers the
+  `Ownership.Nested` write only: `OwnershipLcnf.NestedSemantics.execNested`'s own
+  take-out/`setArray` stores are not claimed, and the counted-pair/put-back
+  composition remains outstanding. `OwnershipTest/ExtractionExclusive.lean`
+  instantiates it on the depth-two path certificate and prints the axioms.
 - The heap and the checker are models: `Ownership/Heap.lean` says so
   explicitly. `Ownership/`'s theorems are statements about those models.
   `OwnershipLcnf/Semantics.lean` adds the AST link: `execAST` executes the

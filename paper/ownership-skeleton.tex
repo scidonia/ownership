@@ -790,6 +790,12 @@ all-recorded-writes predicate is not a claim about those stores. The flat
 \lean{principal\_write} is the composed result; the counted nested composition is
 outstanding.
 
+Separately, \lean{checkN\_extraction\_exclusive\_of\_entryInv} proves that every
+take-out and put-back of an accepted nested program targets an exclusive array
+cell at that step. The store is still not a trace event, but its target's
+disposition is a proved model fact; the theorem does not extend to the LCNF
+interpreter's own take-out/\lean{setArray} stores.
+
 The put-back is the second place where a copy can hide. The operation has two
 dispositions: at count one it mutates the parent; at a higher count or a
 persistent parent it allocates a fresh cell and decrements the input. The
@@ -980,7 +986,10 @@ mutation corpus, not a universal rejection theorem for every token-preserving
 near miss. The nested linked runtime is not measured; only the flat probe is. The
 nested interpreter abstracts the pair traffic and unconditional restoration, so
 the counted protocol's execution composition is outstanding; the nested trace
-does not include extraction/restoration stores. The runtime gate's \lean{expect}
+still does not include extraction/restoration stores, but each such step's target
+array cell is proved exclusive by \lean{checkN\_extraction\_exclusive\_of\_entryInv},
+so the store's disposition is a separate proved fact rather than a silent absence.
+The runtime gate's \lean{expect}
 checks exit status, and the differential mode compares recorded expectations
 rather than executing the Ownership model; the check-enabled modes are the
 negative controls.
@@ -1038,6 +1047,7 @@ corpus, not a proof.
 \item[\lean{Ownership.OwnersAccounted}, \lean{Ownership.CountFidelity}] \lean{Ownership/Accounting.lean} --- definitions; preservation lemmas for \lean{setUs}, \lean{move}, \lean{inc}, \lean{bindOwned}, \lean{dec} with explicit preconditions; \lean{initCtx\_accounted} for the initializer.
 \item[\lean{Ownership.alias\_not\_accounted}] \lean{Ownership/Accounting.lean} --- kernel countermodel; the raw \lean{Inv} admits two owners at multiplicity one.
 \item[\lean{differential corpus}, \lean{runtime-binding gate}] \lean{runtime-bridge}, \lean{scripts/check\_runtime\_binding.sh} --- measured.
+\item[\lean{Ownership.Entry.checkN\_extraction\_exclusive\_of\_entryInv}] \lean{Ownership/Entry.lean} --- proved; model, \lean{EntryInv} and \lean{Agrees}; extraction/restoration cell exclusivity, not the counted composition.
 \end{description}
 
 \subsection{Full principal type}

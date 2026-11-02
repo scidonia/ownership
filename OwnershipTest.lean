@@ -10,3 +10,4 @@ import OwnershipTest.CountedPair
 import OwnershipTest.PutBack
 import OwnershipTest.PathRecursion
 import OwnershipTest.RuntimeModel
+import OwnershipTest.ExtractionExclusive

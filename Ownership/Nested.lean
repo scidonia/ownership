@@ -1087,5 +1087,213 @@ theorem callAt_frame_sound {c : Ctx} {state path x : Var} {r : Ref} {body : NCod
   have h := (hinv.owned y r hus href).1
   simp [h]
 
+/-! ## Extraction and restoration cell exclusivity -/
+
+/-- The disposition obligation for a nested no-copy claim: at every take-out and
+put-back the operation's array cell is exclusive in the heap the step starts from.
+The predicate mirrors `TakeOutsOK`'s state indexing but carries the
+`Heap.Exclusive` fact instead of the slot contents: the invariant and the
+checker's own multiplicity rules supply it, while the slot contents remain the
+`Agrees` premise. A recursive call's body and continuation obligations have the
+same shape; the call itself stores nothing. -/
+def ExtractionExclusive (H : Heap) (env : Env) : NCode → Prop
+  | .base _ | .ret _ => True
+  | .takeOut a i fst snd e k =>
+      ∃ r o idx, env a = some (.ref r) ∧ env i = some (.scalar idx) ∧
+        H.cells r = some o ∧ Heap.Exclusive H r ∧
+        ExtractionExclusive (H.set r { o with fields := o.fields.setIfInBounds idx (.scalar 0) })
+          ((env.set fst (.ref r)).set snd (.ref e)) k
+  | .putBack a e i result k =>
+      ∃ r re o idx, env a = some (.ref r) ∧ env e = some (.ref re) ∧
+        env i = some (.scalar idx) ∧ H.cells r = some o ∧ Heap.Exclusive H r ∧
+        ExtractionExclusive (H.set r { o with fields := o.fields.set! idx (.ref re) })
+          (env.set result (.ref r)) k
+  | .callAt state path x result body k =>
+      ∃ r, env state = some (.ref r) ∧
+        ExtractionExclusive H (isolateEnv env state path x) body ∧
+        (∀ H' envb vb wsb, runN body (isolateEnv env state path x) H =
+            .done H' envb vb wsb →
+          ExtractionExclusive H' (env.set result (.ref r)) k)
+
+/-- The state-indexed heap premise and the extraction/restoration disposition
+together, derived from the invariant, the agreement and checker acceptance. The
+two are proved in one induction because a recursive call's continuation fact
+needs the body's soundness, which the `TakeOutsOK` half supplies;
+`Ownership.Entry.takeOutsOK_of_inv` states the heap premise alone where the
+entry-side wrapper lives. -/
+theorem checkNF_takeOutsOK_extraction_exclusive {code : NCode} :
+    ∀ {H : Heap} {env : Env} {c : Ctx} {fs : List Frame} {ctx' : Ctx},
+      Inv H env c → Agrees H env code → checkNF c fs code = some ctx' →
+        TakeOutsOK H env code ∧ ExtractionExclusive H env code := by
+  induction code with
+  | base code =>
+      intro H env c fs ctx' hi hagree hc
+      exact ⟨trivial, trivial⟩
+  | ret x =>
+      intro H env c fs ctx' hi hagree hc
+      exact ⟨trivial, trivial⟩
+  | takeOut a i fst snd e k ih =>
+      intro H env c fs ctx' hi hagree hc
+      obtain ⟨r0, o, idx, ha', hi', hcell, hfield, hagree'⟩ := hagree
+      by_cases hx : c.us a = .owned ∧ c.multOf a = 1 ∧ c.us i = .scalar ∧
+          c.mult e = 1 ∧ c.us fst = .dead ∧ c.us snd = .dead ∧ fst ≠ snd
+      · have hxc := hx
+        obtain ⟨ha, hm, hi_us, he, hfst, hsnd, hfs⟩ := hx
+        cases hr : c.refOf a with
+        | none => simp [checkNF, hxc, hr] at hc
+        | some r =>
+            have henv_a : env a = some (.ref r) := (hi.owned a r ha hr).1
+            have hrq : r = r0 := by
+              rw [henv_a] at ha'
+              exact Val.ref.inj (Option.some.inj ha')
+            subst r0
+            by_cases hne : e = r
+            · simp [checkNF, hxc, hr, hne] at hc
+            · by_cases hopen : openRef fs r = true
+              · simp [checkNF, hxc, hr, hne, hopen] at hc
+              · have hopenf : openRef fs r = false := by
+                  cases h : openRef fs r with
+                  | false => rfl
+                  | true => exact absurd h hopen
+                have hc' : checkNF ((c.move a fst).bindOwned snd e)
+                    ({ arr := r, idx := i, elem := e } :: fs) k = some ctx' := by
+                  rw [checkNF_takeOut c fs a i fst snd e k r
+                        ⟨ha, hm, hi_us, he, hfst, hsnd, hfs⟩ hr hne hopenf] at hc
+                  exact hc
+                have hi_move : Inv H (env.set fst (.ref r)) (c.move a fst) :=
+                  Inv.move hi ha hr
+                have hi_bind : Inv H ((env.set fst (.ref r)).set snd (.ref e))
+                    ((c.move a fst).bindOwned snd e) :=
+                  Inv.bindOwned hi_move he
+                have hi_new : Inv (H.set r { o with fields := o.fields.setIfInBounds idx (.scalar 0) })
+                    ((env.set fst (.ref r)).set snd (.ref e))
+                    ((c.move a fst).bindOwned snd e) :=
+                  Inv.setFields hi_bind hcell
+                obtain ⟨hok, hexcl⟩ := ih hi_new hagree' hc'
+                refine ⟨⟨r, o, idx, henv_a, hi', hcell, hfield, hne, hok⟩,
+                  ⟨r, o, idx, henv_a, hi', hcell,
+                    hi.exclusive (by simpa [Ctx.multOf, hr] using hm), hexcl⟩⟩
+      · simp [checkNF, hx] at hc
+  | putBack a e i result k ih =>
+      intro H env c fs ctx' hi hagree hc
+      obtain ⟨r0, re0, o, idx, ha', he', hi', hcell, hagree'⟩ := hagree
+      by_cases hx : c.us a = .owned ∧ c.multOf a = 1 ∧ c.us e = .owned ∧
+          c.multOf e = 1 ∧ c.us i = .scalar ∧ c.us result = .dead ∧
+          e ≠ a ∧ e ≠ result
+      · have hxc := hx
+        obtain ⟨ha, hm, he_us, he_m, hi_us, hres, hne_a, hne_res⟩ := hx
+        cases hr : c.refOf a with
+        | none => simp [checkNF, hxc, hr] at hc
+        | some r =>
+            cases hre : c.refOf e with
+            | none => simp [checkNF, hxc, hr, hre] at hc
+            | some re =>
+                cases fs with
+                | nil => simp [checkNF, hxc, hr, hre] at hc
+                | cons f rest =>
+                    have henv_a : env a = some (.ref r) := (hi.owned a r ha hr).1
+                    have henv_e : env e = some (.ref re) := (hi.owned e re he_us hre).1
+                    have hrq : r = r0 := by
+                      rw [henv_a] at ha'
+                      exact Val.ref.inj (Option.some.inj ha')
+                    have hreq : re = re0 := by
+                      rw [henv_e] at he'
+                      exact Val.ref.inj (Option.some.inj he')
+                    subst r0
+                    subst re0
+                    by_cases hf : f.arr = r ∧ f.idx = i ∧ f.elem = re
+                    · obtain ⟨hf1, hf2, hf3⟩ := hf
+                      have hc' : checkNF ((c.move a result).setUs e .dead) rest k = some ctx' := by
+                        rw [checkNF_putBack c (f :: rest) f rest a e i result k r re
+                              ⟨ha, hm, he_us, he_m, hi_us, hres, hne_a, hne_res⟩ hr hre
+                              ⟨hf1, hf2, hf3⟩] at hc
+                        exact hc
+                      have hi_move : Inv (H.set r { o with fields := o.fields.set! idx (.ref re) })
+                          (env.set result (.ref r)) (c.move a result) :=
+                        Inv.setFields (Inv.move hi ha hr) hcell
+                      have hi_dead : Inv (H.set r { o with fields := o.fields.set! idx (.ref re) })
+                          (env.set result (.ref r)) ((c.move a result).setUs e .dead) :=
+                        Inv.setDead hi_move
+                      obtain ⟨hok, hexcl⟩ := ih hi_dead hagree' hc'
+                      refine ⟨⟨r, re, o, idx, henv_a, henv_e, hi', hcell, hok⟩,
+                        ⟨r, re, o, idx, henv_a, henv_e, hi', hcell,
+                          hi.exclusive (by simpa [Ctx.multOf, hr] using hm), hexcl⟩⟩
+                    · simp [checkNF, hxc, hr, hre, hf] at hc
+      · simp [checkNF, hx] at hc
+  | callAt state path x result body k ihbody ihk =>
+      intro H env c fs ctx' hi hagree hc
+      obtain ⟨r0, henv_s, hagreeb, hagreek⟩ := hagree
+      by_cases hx : c.us state = .owned ∧ c.multOf state = 1 ∧
+          c.us path = .scalar ∧ c.us x = .scalar ∧ c.us result = .dead ∧
+          CountFree body = true
+      · have hxc := hx
+        obtain ⟨hs, hm, hp, hxus, hres, hcf⟩ := hx
+        cases hr : c.refOf state with
+        | none => simp [checkNF, hxc, hr] at hc
+        | some r =>
+            have henv_s' : env state = some (.ref r) := (hi.owned state r hs hr).1
+            have hrq : r = r0 := by
+              rw [henv_s'] at henv_s
+              exact Val.ref.inj (Option.some.inj henv_s)
+            subst r0
+            by_cases hopen : openRef fs r = true
+            · simp [checkNF, hxc, hr, hopen] at hc
+            · have hopenf : openRef fs r = false := by
+                cases h : openRef fs r with
+                | false => rfl
+                | true => exact absurd h hopen
+              obtain ⟨cb, y, hcbody, -, -, -, hc'⟩ :=
+                checkNF_callAt_some (c := c) (fs := fs) (r := r) (k := k) (body := body)
+                  ⟨hs, hm, hp, hxus, hres, hcf⟩ hr hopenf hc
+              have hmul : c.mult r = 1 := by
+                simpa [Ctx.multOf, hr] using hm
+              have hex : H.exclusive? r = true :=
+                (Heap.exclusive?_eq_true).mpr (hi.exclusive hmul)
+              have hi_iso : Inv H (isolateEnv env state path x)
+                  (isolatedCtx c state path x r) :=
+                inv_isolated hi hs hr hp hxus
+              obtain ⟨hokb, hexclb⟩ := ihbody hi_iso hagreeb hcbody
+              have cont : ∀ H' envb vb wsb, runN body (isolateEnv env state path x) H =
+                  .done H' envb vb wsb →
+                  Inv H' (env.set result (.ref r)) (c.move state result) := by
+                intro H' envb vb wsb hrunb
+                obtain ⟨H'', env'', v'', ws'', hrun'', hws'', hinv''⟩ :=
+                  checkN_sound hcbody hi_iso hokb
+                rw [hrunb] at hrun''
+                injection hrun'' with hH henv hv _
+                subst hH
+                have hcbm : ∀ q, cb.mult q = c.mult q :=
+                  countFree_check_mult (ctx := isolatedCtx c state path x r) hcf hcbody
+                have hi_ctx : Inv H' env c :=
+                  inv_of_rc_cells hi (fun q => by rw [hinv''.rc_eq q, hcbm q])
+                    (fun q hq => runN_cells_none hrunb q hq) hinv''.nonPersistent
+                exact Inv.move hi_ctx hs hr
+              refine ⟨⟨r, henv_s', hex, hokb, ?_⟩, ⟨r, henv_s', hexclb, ?_⟩⟩
+              · intro H' envb vb wsb hrunb
+                exact (ihk (cont H' envb vb wsb hrunb) (hagreek H' envb vb wsb hrunb) hc').1
+              · intro H' envb vb wsb hrunb
+                exact (ihk (cont H' envb vb wsb hrunb) (hagreek H' envb vb wsb hrunb) hc').2
+      · simp [checkNF, hx] at hc
+
+/-- Extraction and restoration cell exclusivity from the nested invariant, the
+heap/program agreement and checker acceptance: every take-out and put-back the
+program performs targets an exclusive array cell. Only the array cell is claimed;
+the counted-pair increments and the put-back's copy-or-in-place outcome remain
+outside this model-level fact. -/
+theorem checkNF_extraction_exclusive {code : NCode} :
+    ∀ {H : Heap} {env : Env} {c : Ctx} {fs : List Frame} {ctx' : Ctx},
+      Inv H env c → Agrees H env code → checkNF c fs code = some ctx' →
+        ExtractionExclusive H env code :=
+  fun hi hagree hc => (checkNF_takeOutsOK_extraction_exclusive hi hagree hc).2
+
+/-- The client-facing extraction/restoration exclusivity corollary: the whole
+program is checked from an empty frame stack. -/
+theorem checkN_extraction_exclusive {code : NCode} {c : Ctx} {ctx' : Ctx}
+    {H : Heap} {env : Env}
+    (hi : Inv H env c) (hagree : Agrees H env code)
+    (hc : checkN c code = some ctx') :
+    ExtractionExclusive H env code :=
+  checkNF_extraction_exclusive hi hagree hc
+
 end Nested
 end Ownership

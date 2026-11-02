@@ -132,6 +132,18 @@ are therefore client obligations in the principal theorem, not silently
 available facts. The heap incoming-edge/runtime-count half remains the named
 implementation assumption.
 
+### Implemented extraction/restoration exclusivity
+
+`Ownership/Nested.lean` adds `ExtractionExclusive`, the model-level disposition
+predicate for the nested checker, and `checkN_extraction_exclusive`: from `Inv`,
+`Agrees` and `checkN` acceptance, every take-out and put-back target array cell is
+`Heap.Exclusive` at the step's own state. `Ownership/Entry.lean` exposes the
+`EntryInv` form, `checkN_extraction_exclusive_of_entryInv`, and
+`OwnershipTest/ExtractionExclusive.lean` instantiates it on the depth-two path
+certificate. The scope is the `Ownership.Nested` write: the nested interpreter's
+own extraction/restoration stores and the counted-pair/put-back execution
+composition remain open. Both theorems print only the standard axiom footprint.
+
 ## Other manuscript corrections established by the audit
 
 - `Code` and `NCode` are explicit syntax interpreted by `run`: a deep embedding,
@@ -162,7 +174,7 @@ questions.
 | Principal theorem | addressed | `OwnershipLcnf.principal_write` composes the flat LCNF and runtime-model claims; its full type is in Appendix A.2. |
 | Alias/accounting | addressed with named preconditions | `Ownership.OwnersAccounted`, `CountFidelity`, `alias_not_accounted`, `initCtx_accounted`; Section 3.3; the checker's take-out/`dec` preconditions and arbitrary-entry `CountFidelity` are client/implementation obligations, not hidden. |
 | Recursive scope | addressed | `index_path_simulates_model` displays `PathContract`; `PathRecursion` discharges the finite tail; leaf and N10 are stated. |
-| Extraction/restoration | addressed with a named composition gap | Protocol count table; `pair_accounting`/`putBack_exclusive_of_wellFormed`; `PairProjection` model term. The nested interpreter abstracts the pair traffic and unconditional restoration; its closure does not contain the counted-pair/put-back declarations, so the counted nested execution composition is outstanding. |
+| Extraction/restoration | addressed at the model level, with named composition gaps | Protocol count table; `pair_accounting`/`putBack_exclusive_of_wellFormed`; `PairProjection` model term. `ExtractionExclusive`/`checkN_extraction_exclusive_of_entryInv` prove each accepted take-out and put-back targets an exclusive array cell. The nested interpreter abstracts the pair traffic and unconditional restoration; its closure does not contain the counted-pair/put-back declarations, so the counted nested execution composition, and the LCNF-level extraction/restoration stores, are outstanding. |
 | Recognition/observations | addressed with a trace scope | Accepted grammar and mutation-corpus scope; `PrefixOutcome` preservation paragraph; shared decoder/adequacy boundary. The nested trace records designated scalar writes, not extraction/restoration stores. |
 | Example/evaluation | addressed | Running `Layout5.setAt` source example; flat probe table with checker/runtime/buffer/result/config; nested C/IR gate; cost/allocation qualification. |
 | Reproducibility | addressed with a gate scope | Appendix A.3 commands; test and gate results; `scripts/check_axioms.lean`; pinned sibling `66e64334...`; toolchain. The probe's modes assert their observations and the gate checks the status; the differential mode compares recorded expectations rather than executing the model. |
@@ -176,7 +188,10 @@ Remaining named obligations:
 - the checker's take-out/`dec` accounting preconditions (`hno`/`hother`);
 - `CountFidelity` for arbitrary entry heaps, and the runtime's count fidelity;
 - the counted protocol's integration into the nested execution simulation;
-- extraction/restoration disposition events for a full nested no-copy claim;
+- extraction/restoration disposition events for a full nested no-copy claim: the
+  model-level target-cell exclusivity is proved by
+  `checkN_extraction_exclusive_of_entryInv`, but the LCNF-level stores and their
+  trace event coverage remain open;
 - a model-driven differential and a linked differential for the nested protocol
   (the current flat differential compares recorded expectations; the nested
   evidence is the model/LCNF and the generated-C/IR gate);

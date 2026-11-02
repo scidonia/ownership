@@ -22,3 +22,5 @@ import OwnershipLcnf.Principal
 #print axioms OwnershipLcnf.principal_write
 #print axioms Ownership.initCtx_accounted
 #print axioms Ownership.alias_not_accounted
+#print axioms Ownership.Nested.checkN_extraction_exclusive
+#print axioms Ownership.Entry.checkN_extraction_exclusive_of_entryInv

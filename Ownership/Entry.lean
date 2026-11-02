@@ -639,6 +639,18 @@ theorem checkN_sound_of_entryInv {H : Heap} {env : Env} {c : Ctx} {root : Ref}
       (∀ w ∈ ws, w.2 = true) ∧ Inv H' env' ctx' :=
   checkN_sound hc hEntry.toInv (takeOutsOK_of_entryInv hEntry hagree hc)
 
+/-- Extraction and restoration cell exclusivity from the entry invariant, the
+heap/program agreement premise and checker acceptance: every take-out and
+put-back the program performs targets an exclusive array cell. This is the
+model-level disposition fact; the counted nested composition and the LCNF
+interpreter's own extraction/restoration stores are not part of it. -/
+theorem checkN_extraction_exclusive_of_entryInv {H : Heap} {env : Env} {c : Ctx}
+    {root : Ref} {client : List Ref} {code : NCode} {ctx' : Ctx}
+    (hEntry : EntryInv H env c root client) (hagree : Agrees H env code)
+    (hc : checkN c code = some ctx') :
+    ExtractionExclusive H env code :=
+  checkN_extraction_exclusive hEntry.toInv hagree hc
+
 /-! ## The recursive body touches nothing outside its own subtree -/
 
 /-- The program's extraction annotations name cells in the footprint: each
