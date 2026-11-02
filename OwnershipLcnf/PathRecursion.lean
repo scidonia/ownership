@@ -6,9 +6,16 @@ to the model term `indexModelTerm`, conditional on `ChildContract` — an assume
 contract about the admitted model body the recursive call runs. This module
 removes that hypothesis for a finite level list: the body a level's call runs is
 `Ownership.Path.build` of the remaining levels (`callBody_build`), and the
-contract for it is *derived* by induction on the list's length, so the
-correspondence no longer takes an arbitrary `ChildContract` for the emitted
-callee.
+ordinary `ChildContract` for it is *derived* by induction on the list's length,
+so the correspondence no longer takes an arbitrary `ChildContract` for the
+emitted callee.
+
+The induction derives `ChildContract` only. `Ownership.CountedChildCall` adds the
+counted post-call field `accounted`, the caller's complete accounting at the
+body's return; nothing here constructs it, and every theorem that consumes
+`CountedChildCall` takes that field as an explicit premise. An instance
+discharges it from the caller's accounting at the body's return (`calledAccounted`
+in `OwnershipTest/Principal.lean`).
 
 ## The induction
 

@@ -425,10 +425,12 @@ body is responsible for. Everything else stays derived: the suspended parent's
 cell (`ChildCall.parent`), its count, the child's exclusivity and the result
 binding are consequences.
 
-The added field is the recursion hypothesis: for a finite path it is discharged
-by the same induction that discharges `ChildContract` in
-`OwnershipLcnf/PathRecursion.lean`, and for the emitted recursive callee it is
-not available at all. -/
+The added field is not derived by the finite-path induction: the induction in
+`OwnershipLcnf/PathRecursion.lean` derives ordinary `ChildContract` at every
+level, while `accounted` is an explicit premise of every theorem that consumes
+this structure. At an instance it is discharged by the caller's own accounting
+at the body's return (`calledAccounted` in `OwnershipTest/Principal.lean`); for
+the emitted recursive callee it is not available at all. -/
 structure CountedChildCall (Hin Hout : Heap) (env : Env) (ctx : Ctx)
     (state path x : Var) (body : Nested.NCode) (p c : Ref)
     (support : List Var) : Prop where

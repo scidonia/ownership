@@ -67,7 +67,9 @@ given, and touches no cell outside that reference's mutable footprint (given eve
 extraction annotation names one). The nested finite-path correspondence holds
 under the supplied leaf contract and the admitted-call abstraction — the
 recursive call runs a supplied model body; the emitted callee is not captured —
-with the child contract derived at every level; the pair-arms correspondence is
+with the ordinary child contract derived at every level, and the counted
+post-call accounting supplied as an explicit premise
+(`CountedChildCall.accounted`); the pair-arms correspondence is
 still open, with its reason recorded in `PLAN.md`.
 `OwnershipLcnf.principal_supported_path` composes that nested path with the
 counted extraction/call/restoration protocol and the counted interpreter's

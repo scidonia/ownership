@@ -293,8 +293,12 @@
 - `OwnershipLcnf/PathRecursion.lean` discharges `ChildContract` for a finite
   level list by induction: the tail contract is the hypothesis, the leaf the
   base, and `index_path_simulates_model` takes no arbitrary `ChildContract`. The
-  leaf contract and N10 remain; the module records that the model's flat
-  environment cannot express the emitted per-invocation path re-projection.
+  induction derives `ChildContract` only: `Ownership.CountedChildCall`'s
+  `accounted` field is an explicit premise of every theorem that consumes it,
+  supplied at an instance from the caller's accounting at the body's return
+  (`calledAccounted`). The leaf contract and N10 remain; the module records that
+  the model's flat environment cannot express the emitted per-invocation path
+  re-projection.
 - `OwnershipLcnf/RuntimeModel.lean` is the concrete runtime state for the
   `setAt` write: counts, persistence, fields, the exclusivity predicate, a
   guarded allocator, the check's ok/abort outcomes and both array-set

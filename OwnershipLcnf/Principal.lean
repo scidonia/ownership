@@ -24,12 +24,14 @@ finite supported path. It composes the recognised prefix's model correspondence
 explicitly contractual child call (`CountedChildCall`, N10). Its premises are the
 level list's data (`PathContract`), the layout and the recogniser's verdict at
 this level, the initial machine/model agreement, and the accounted entry; the
-child call is the recursion hypothesis and the emitted callee's body is not
-captured. The conclusion is the reached in-place store: the boundary and final
-accounting, the pair release and cursor, both exclusive targets, the mutate
-disposition, the functional restoration and its restored slot, the model run's
-own completion and its copy-free trace, the counted prefix's boundary, and the
-child frame and restoration locality.
+child call is an explicit premise `CountedChildCall` — the put-back's `ChildCall`
+boundary plus the caller's complete accounting at the body's return, which the
+finite-path induction of `OwnershipLcnf/PathRecursion.lean` does not derive — and
+the emitted callee's body is not captured. The conclusion is the reached
+in-place store: the boundary and final accounting, the pair release and cursor,
+both exclusive targets, the mutate disposition, the functional restoration and
+its restored slot, the model run's own completion and its copy-free trace, the
+counted prefix's boundary, and the child frame and restoration locality.
 
 `Prefix.toModel_supported` places the certified flat model in the counted
 fragment.

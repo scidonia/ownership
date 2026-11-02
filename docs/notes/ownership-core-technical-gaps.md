@@ -375,9 +375,10 @@ What this does not say, and why:
   relation would need a name-renaming bisimulation, which is not claimed.
 * **The child call is contractual and no callee is captured.** `CountedChildCall`
   is a hypothesis about an admitted model body; the emitted `setAt` recursive
-  declaration is still not captured (N10), and its accounting field is the
-  recursion hypothesis that a finite path discharges only by the
-  `PathRecursion` induction.
+  declaration is still not captured (N10). Its accounting field is an explicit
+  premise, not a consequence of the `PathRecursion` induction, which derives the
+  ordinary `ChildContract` only; an instance discharges it by the caller's
+  accounting at the body's return (`calledAccounted`).
 * **The trace-level agreement is not proved.** `OwnershipLcnf/CountedTrace.lean`
   identifies the counted block of the recognised trace, defines the counted
   interpreter, states its boundary (`execCounted_protocol_boundary`: the counted
