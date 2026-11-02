@@ -337,9 +337,54 @@ claiming either implies the other, and both directions are now proved:
 `aliasEntryInv` is `EntryInv` at a state no support accounts, and
 `accountedNotEntryInv` is an accounted state with no `EntryInv`.
 
-Still open: the nested store states — `NCode` pre-states are not `Accounted`
-until Gate C, which will consume `takeOutOfSlot`; the counted pair/restoration
-composition; the LCNF extraction/restoration stores and their trace events;
-invocation-local recursion; and transport at the principal boundary. The heap
-remains a named-cell model: nothing here relates it to physical counted
-references.
+Still open: the trace-level abstraction of the counted interpreter; the LCNF
+extraction and restoration *store events* — the dispositions are theorems now,
+but they are not `Write` records (Gap 4/Stage 4); invocation-local recursion
+(N10); and transport at the principal boundary. The heap remains a named-cell
+model: nothing here relates it to physical counted references.
+
+### Stage 3 status
+
+Stage 3's counted extraction/call/restoration chain landed at the boundary
+formulation. `Ownership/CountedNested.lean` states `HeapCompat` — cells agree
+everywhere and the counted cursor is no lower — and carries `Accounted` across it
+(`Accounted.of_compat`, `HeapCompat.IncomingCount`), so no theorem requires heap
+equality across the pair's allocation. `counted_takeOut` reaches the
+`CountedPair` protocol boundary with the fresh-name side conditions derived;
+`restorationBoundary_of_accounted` derives the restoration boundary's cells,
+counts, persistence and the parent/child distinction from accounting alone;
+`CountedChildCall` adds exactly one field to the child-call contract, the caller's
+`Accounted` at the body's return, and `counted_restore` derives the mutate branch
+from `PutBack` and carries the accounting there. `counted_nested_chain` composes
+the three and relates the counted post-state to the model's own `runN` of the
+take-out/call/restore term by `HeapCompat`.
+
+What this does not say, and why:
+
+* **The pair-live state is not accounted.** While the temporary pair is alive, its
+  two `.ref` fields hold borrowed aliases of the transferred handles, so the count
+  equation fails at the parent, at the extracted child and at the pair cell
+  itself. `OwnershipTest/CountedNested.lean` carries the boundary's heap and
+  count guards (`boundary_cells`) and the counted copy-branch control beside the
+  refusal (`pairPhase_refused`); the boundary formulation is forced by that
+  arithmetic, not chosen for convenience.
+* **The run lemmas are copy-free.** `Ownership.run`'s `setArr` copy branch
+  allocates at the heap's own cursor, so `run_compat`/`runN_compat` take the
+  premise that the run's recorded writes are all `true`. The child call's
+  `writes_exclusive` supplies it, so the chain gains no hypothesis; a general run
+  relation would need a name-renaming bisimulation, which is not claimed.
+* **The child call is contractual and no callee is captured.** `CountedChildCall`
+  is a hypothesis about an admitted model body; the emitted `setAt` recursive
+  declaration is still not captured (N10), and its accounting field is the
+  recursion hypothesis that a finite path discharges only by the
+  `PathRecursion` induction.
+* **The trace-level agreement is not proved.** `OwnershipLcnf/CountedTrace.lean`
+  identifies the counted block of the recognised trace, defines the counted
+  interpreter, states its boundary (`execCounted_protocol_boundary`: the counted
+  block's heap is `CountedPair.protocol`'s, `HeapCompat` to the model's take-out
+  heap, with the non-heap machine fields agreeing), and derives the nested
+  correspondence's two exclusivity premises from accounting. It states no
+  correspondence between `execCounted` and `execNested` over the whole fragment:
+  `HeapCompat` is not an invariant of the counted window between the take-out and
+  the pair release, and the counted composition is the model-level
+  `counted_nested_chain`.

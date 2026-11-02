@@ -10,6 +10,8 @@ import OwnershipLcnf.NoAbort
 import OwnershipLcnf.Principal
 import Ownership.CompleteAccounting
 import Ownership.Preservation
+import Ownership.CountedNested
+import OwnershipLcnf.CountedTrace
 
 #print axioms Ownership.check_sound
 #print axioms Ownership.Entry.checkN_sound_of_entryInv
@@ -133,3 +135,61 @@ import Ownership.Preservation
 #print axioms Ownership.accountedNotEntryInv
 #print axioms OwnershipLcnf.Prefix.toModel_supported
 #print axioms OwnershipLcnf.principal_accounted
+#print axioms Ownership.HeapCompat
+#print axioms Ownership.HeapCompat.refl
+#print axioms Ownership.HeapCompat.trans
+#print axioms Ownership.HeapCompat.rc
+#print axioms Ownership.HeapCompat.isPersistent
+#print axioms Ownership.HeapCompat.exclusive?
+#print axioms Ownership.HeapCompat.inPlace?
+#print axioms Ownership.HeapCompat.disposition?
+#print axioms Ownership.HeapCompat.set
+#print axioms Ownership.HeapCompat.mutate
+#print axioms Ownership.HeapCompat.eq_of_cursor_eq
+#print axioms Ownership.HeapCompat.sum_range_zero_tail
+#print axioms Ownership.HeapCompat.IncomingCount
+#print axioms Ownership.HeapCompat.inc
+#print axioms Ownership.HeapCompat.dec
+#print axioms Ownership.Inv.of_compat
+#print axioms Ownership.Accounted.of_compat
+#print axioms Ownership.exclusive_of_accounted
+#print axioms Ownership.exclusive?_of_accounted
+#print axioms Ownership.setPlaceholder_next
+#print axioms Ownership.allocPair_next
+#print axioms Ownership.takeOut_next
+#print axioms Ownership.pairInc_next
+#print axioms Ownership.pairFree_next
+#print axioms Ownership.protocol_next
+#print axioms Ownership.counted_takeOut
+#print axioms Ownership.restorationBoundary_of_accounted
+#print axioms Ownership.CountedChildCall
+#print axioms Ownership.CountedChildCall.move
+#print axioms Ownership.counted_restore
+#print axioms Ownership.ResCompat
+#print axioms Ownership.ResCompat.addWrite
+#print axioms Ownership.ResCompat.addWrites
+#print axioms Ownership.ResCompat.fault
+#print axioms Ownership.resCompat_fault_iff
+#print axioms Ownership.bool_eq_false_of_ne_true
+#print axioms Ownership.writes_addWrite
+#print axioms Ownership.writes_addWrites
+#print axioms Ownership.noCopy_tail
+#print axioms Ownership.noCopy_append
+#print axioms Ownership.run_compat
+#print axioms Ownership.runN_compat
+#print axioms Ownership.chain
+#print axioms Ownership.disposition?_parent_after_call
+#print axioms Ownership.counted_nested_chain
+#print axioms OwnershipLcnf.countedOp
+#print axioms OwnershipLcnf.countedOf_fragment
+#print axioms OwnershipLcnf.countedPrefix
+#print axioms OwnershipLcnf.execCounted
+#print axioms OwnershipLcnf.childContract_of_accounted
+#print axioms OwnershipLcnf.index_fragment_simulates_model_of_accounted
+#print axioms OwnershipLcnf.index_prefix_simulates_model_of_accounted
+#print axioms OwnershipLcnf.countedPrefix_fragment
+#print axioms OwnershipLcnf.execCounted_protocol_boundary
+
+#print axioms Ownership.counted_nested_chain_extraction
+#print axioms Ownership.counted_nested_chain_restoration
+

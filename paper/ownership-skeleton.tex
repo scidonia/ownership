@@ -1044,7 +1044,9 @@ fragment and proves the connection in Lean.
 The development proves the count-one discipline at the model, the recognised
 LCNF and the runtime model for the flat recognised write, under named contracts,
 and composes that guarantee as \lean{principal\_write}. The nested path is a
-separate finite model; its counted protocol composition remains open. It measures
+separate finite model; its counted extraction, call and restoration compose at
+accounted boundaries, while the counted interpreter's trace-level abstraction and
+the emitted callee remain open. It measures
 the linked primitive on a corpus and gates the pinned evidence. The accounting
 relation is supplied at the model level; the C semantics, the replay/backend
 identity, address identity, free/cascade, the emitted callee and the source
@@ -1079,7 +1081,7 @@ corpus, not a proof.
 \item[\lean{Ownership.OwnersAccounted}, \lean{Ownership.CountFidelity}] \lean{Ownership/Accounting.lean} --- definitions; preservation lemmas for \lean{setUs}, \lean{move}, \lean{inc}, \lean{bindOwned}, \lean{dec} with explicit preconditions; \lean{initCtx\_accounted} for the initializer.
 \item[\lean{Ownership.alias\_not\_accounted}] \lean{Ownership/Accounting.lean} --- kernel countermodel; the raw \lean{Inv} admits two owners at multiplicity one.
 \item[\lean{differential corpus}, \lean{runtime-binding gate}] \lean{runtime-bridge}, \lean{scripts/check\_runtime\_binding.sh} --- measured.
-\item[\lean{Ownership.Entry.checkN\_extraction\_exclusive\_of\_entryInv}] \lean{Ownership/Entry.lean} --- proved; model, \lean{EntryInv} and \lean{Agrees}; extraction/restoration cell exclusivity, not the counted composition.
+\item[\lean{Ownership.Entry.checkN\_extraction\_exclusive\_of\_entryInv}] \lean{Ownership/Entry.lean} --- proved; model, \lean{EntryInv} and \lean{Agrees}; extraction/restoration cell exclusivity, with the counted composition proved separately at the protocol boundaries (\lean{Ownership.counted\_nested\_chain}) and the counted interpreter's trace-level abstraction still open.
 \end{description}
 
 \subsection{Full principal type}

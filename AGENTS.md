@@ -180,9 +180,15 @@
   `checkN_extraction_exclusive`, with the `EntryInv` entry point
   `Ownership.Entry.checkN_extraction_exclusive_of_entryInv`. It covers the
   `Ownership.Nested` write only: `OwnershipLcnf.NestedSemantics.execNested`'s own
-  take-out/`setArray` stores are not claimed, and the counted-pair/put-back
-  composition remains outstanding. `OwnershipTest/ExtractionExclusive.lean`
-  instantiates it on the depth-two path certificate and prints the axioms.
+  take-out/`setArray` stores are not claimed. The counted composition is now
+  proved at its boundaries (`Ownership/CountedNested.lean`: `counted_takeOut`,
+  `counted_restore`, `counted_nested_chain`), with the pair-live state's absence
+  from `Accounted` kernel-checked in `OwnershipTest/CountedNested.lean`. What
+  remains outstanding is the trace-level abstraction of the counted interpreter,
+  the emitted recursive callee (N10), and store-trace coverage of the extraction
+  and restoration dispositions (Gap 4/Stage 4).
+  `OwnershipTest/ExtractionExclusive.lean` instantiates the nested result on the
+  depth-two path certificate and prints the axioms.
 - The heap and the checker are models: `Ownership/Heap.lean` says so
   explicitly. `Ownership/`'s theorems are statements about those models.
   `OwnershipLcnf/Semantics.lean` adds the AST link: `execAST` executes the
@@ -321,6 +327,49 @@
   `OwnershipTest/CompleteAccounting.lean` carries the computable guards, the
   four `Supported` controls (affirmative first) and the axiom prints;
   `scripts/check_axioms.lean` audits every declaration of the new module.
+
+- `Ownership/CountedNested.lean` joins the counted protocol to the complete
+  accounting. `HeapCompat Hc Ha` is the boundary relation: the two heaps agree on
+  every cell and the counted cursor is no lower, with
+  `HeapCompat.eq_of_cursor_eq` as the control that the cursor is the only slack;
+  `Accounted.of_compat` carries the relation across it, using
+  `HeapCompat.IncomingCount` (the extra cursor range holds no cell, by
+  `Accounted.domain`). `counted_takeOut` lands the entry at the protocol boundary
+  with the fresh-name side conditions *derived*, `restorationBoundary_of_accounted`
+  derives the boundary's cells, counts, persistence and the entry's distinctness
+  from accounting, `CountedChildCall` adds exactly one field to the child-call
+  contract (the caller's `Accounted` at the body's return) and `counted_restore`
+  derives the mutate branch and carries the accounting there, and
+  `counted_nested_chain` composes the three with the model's own `runN` of the
+  take-out/call/restore term related by `HeapCompat`. `run_compat`/`runN_compat`
+  relate the model language's runs at two `HeapCompat` heaps **for copy-free
+  runs**: `Code.setArr`'s copy branch allocates at each heap's own cursor, so the
+  lemmas take the premise that every recorded write flag is `true` (which the
+  child call's `writes_exclusive` supplies). The child call stays contractual and
+  the emitted callee is not captured (N10); the mid-pair state is not `Accounted`
+  and its refusal is proved, so the relation is a boundary relation rather than an
+  every-instruction one. `OwnershipTest/CountedNested.lean` carries the boundary
+  guards, the positive restoration and the counted copy-branch control, and prints
+  the axioms.
+
+- `OwnershipLcnf/CountedTrace.lean` reads the recognised trace's counted
+  operations off the recognizer (`countedOp`, `countedOf_fragment`,
+  `countedPrefix_fragment`) and defines the counted interpreter `execCounted`,
+  whose five counted clauses run the captured take-out, the two component
+  increments, the pair's restricted decrement and the derived restoration.
+  `execCounted_protocol_boundary` states the counted block's boundary: through
+  the pair's release the counted heap is `CountedPair.protocol`'s, it is
+  `HeapCompat` to the model's take-out heap (reusing
+  `Ownership.PathConsolidation.protocol_cells`), and every non-heap machine field
+  agrees with `execNested`'s. It also derives the nested correspondence's two
+  exclusivity premises from accounting (`childContract_of_accounted`,
+  `index_fragment_simulates_model_of_accounted`,
+  `index_prefix_simulates_model_of_accounted`), leaving the originals unchanged.
+  The trace-level agreement between `execCounted` and `execNested` over the whole
+  fragment is not proved: `HeapCompat` is not an invariant of the counted window
+  between the take-out and the pair release, the boundary theorem stops at the
+  release, and the counted composition itself is the model-level
+  `Ownership.counted_nested_chain`.
 
 - `Ownership/Preservation.lean` is preservation through accepted execution.
   `Ownership.supported_run` takes a `Supported` program, an `Accounted` state and

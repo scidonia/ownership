@@ -68,7 +68,7 @@ Source paths below are relative to the repository root. “Proved” means the c
 | The initializer satisfies environment owner accounting | `Ownership/Accounting.lean`; `initCtx_accounted` | Existing fixed-initializer fact, not general accepted-execution preservation. |
 | Current count fidelity accounts for every real owner and edge | `CountFidelity` definition | Not established. Arbitrary support lists and cursor-bounded enumeration lack the necessary validity conditions. |
 | Accepted execution preserves complete accounting | Local accounting preservation lemmas | Open. `bindOwned` and `dec` require side conditions not established generally by the checker. |
-| The counted nested protocol implements the recognised nested execution | `CountedPair`, `PutBack`, boundary lemmas, `NestedSemantics` | Open composition. The nested interpreter still erases relevant count traffic and uses an unconditional restoration update. |
+| The counted nested protocol implements the recognised nested execution | `Ownership/CountedNested.lean` (`counted_takeOut`, `counted_restore`, `counted_nested_chain`); `OwnershipLcnf/CountedTrace.lean` | **Conditionally closed at the boundaries.** The extraction, the child call's accounted return and the derived restoration compose and are related to the model's own `runN` by `HeapCompat`, with the copy-free run premise supplied by the child call's exclusive writes. Still open: the trace-level abstraction of the counted interpreter, the emitted recursive callee (N10), and store-trace coverage of the two dispositions. |
 | The principal theorem transports actual ownership accounting into a runtime guarantee | `OwnershipLcnf/Principal.lean`; `principal_write` | Too strong a reading. Its accounting hypotheses are unused; its conclusion combines results over models. |
 | Linked runtime behaviour is proved for all supported inputs | Backend gate and probes | Not established. These are pinned observations and structural checks, not C-semantics verification. |
 
@@ -94,7 +94,7 @@ Stage 1 landed in the accepted revision at `9eb0bf8`. It closes Gate A and the i
 | Accepted execution preserves complete accounting | **Closed for the supported fragment, at intermediate states.** `Ownership.supported_run` (Stage 2) carries `Accounted` through every state a `Supported` run reaches, at the support the step arithmetic determines, proves the run fault-free with every recorded write exclusive, and states the store's own pre- and post-state (`supported_store_exclusive`). Its only non-`Accounted` **state** premise is `StoreSlots`, the scalar-slot fact the checker's `.setArr` rule cannot see, discharged at the initializer (`storeSlots_init`). Nested store states are **not** covered: `Supported` contains no extraction, call or restoration. |
 | The principal theorem transports accounting into a runtime guarantee | **Corrected; still no transport.** `principal_write` no longer carries `hacc`/`vars`/`hcount`; `principal_accounted` consumes `Accounted` at `Runner.initCtx` and derives the three facts. No transport theorem, no physical-ownership conclusion, no runtime claim. |
 | Rejected variants are kernel-checked | **Closed.** `alias_rejected`, `inc_rejected`, `outOfRange_rejected`/`outOfRange_accepted`, `bindAlone_rejected`, `scalarOverwrite_rejected`, `decTwo_rejected`, `dupSupport_witness`, `omittedOwner_witness`, `unboundRoot_witness`; and the two independence theorems `aliasEntryInv` (`EntryInv` with no support accounted) and `accountedNotEntryInv` (accounted with no `EntryInv`). |
-| The counted nested protocol implements the recognised nested execution | **Open**, as before: Stage 3. The deferred credit ledger is its likely prerequisite. |
+| The counted nested protocol implements the recognised nested execution | **Conditionally closed, at the boundaries.** `counted_nested_chain` composes the counted extraction, the child call's accounting and the derived restoration, and relates the counted post-state to the model's `runN` by `HeapCompat`; the pair-live state is provably outside `Accounted`, so the relation is a boundary relation. Open: the counted interpreter's trace-level abstraction, N10, and Gap 4's store events. |
 | Flat checker/prefix and finite-path results | **Existing and unchanged**: checker soundness, the recognised flat prefix, the finite-path correspondence, and the nested extraction/restoration exclusivity result. |
 | Linked runtime behaviour for all supported inputs | **Open and out of scope**: C semantics, replay/backend identity, address identity, free/cascade, differentials and source-to-LCNF. |
 
@@ -171,6 +171,26 @@ Use `CountedPair` and `PutBack` in a checked instruction-step or macro-step simu
 The relation to the abstract heap must tolerate temporary cells and allocator progress; freeing the pair does not necessarily restore the old cursor. Reuse existing boundary lemmas such as `protocol_cells` where applicable rather than requiring literal equality of every intermediate heap.
 
 **Done when:** the main counted execution theorem depends on the protocol/restoration results, or on equivalent proved lemmas, and covers extraction, leaf replacement, and restoration within its stated scope. An unconditional `H.set` cannot serve as evidence that a modeled copy alternative is unreachable.
+
+**Gate C status (2 November 2026).** The counted extraction/call/restoration
+chain is proved at its boundaries. `Ownership/CountedNested.lean` supplies the
+heap relation the gate asks for: `HeapCompat` tolerates the pair allocation
+(cells agree everywhere, the counted cursor is no lower) and `Accounted.of_compat`
+carries the accounting across it, so no theorem requires literal heap equality.
+`counted_takeOut` reaches the protocol boundary with the fresh-name conditions
+derived; `counted_restore` derives the mutate branch from `PutBack` and carries
+the accounting to the post-state; `counted_nested_chain` composes extraction,
+the accounted child-call return and restoration, and relates the counted
+post-state to `Ownership.Nested.runN` of the take-out/call/restore term. The
+copy/mutate alternatives are both present: the restoration's copy branch is
+executed in the fixtures, and no unconditional `H.set` stands in for it. The
+pair-live intermediate state is *not* accounted — its two borrowed aliases are
+counted twice — and that refusal is kernel-checked, which is why the gate's
+relation is stated at boundaries. Three obligations remain inside the gate's
+scope and are not claimed: the counted interpreter's trace-level abstraction
+(`OwnershipLcnf/CountedTrace.lean` defines it and identifies the trace's counted
+block, but states no correspondence with `execNested`), the emitted recursive
+callee (N10), and store-trace coverage of the two dispositions (Gap 4/Stage 4).
 
 ### Gate D — choose and state the call boundary
 

@@ -331,6 +331,99 @@ theorem checkNF_putBack (c : Ctx) (fs : List Frame) (f : Frame) (rest : List Fra
   obtain ⟨hf1, hf2, hf3⟩ := hf
   simp [checkNF, h1, h2, h3, h4, h5, h6, h7, h8, hr, hre, hf1, hf2, hf3]
 
+/-- The checker's take-out conditions, read back from a successful check: the
+converse of `checkNF_takeOut`. Every premise that lemma consumes is recovered,
+including the frame the rule pushes and the continuation's own check. -/
+theorem checkNF_takeOut_some {c : Ctx} {fs : List Frame} {a i fst snd : Var} {e : Ref}
+    {k : NCode} {ctx' : Ctx}
+    (h : checkNF c fs (.takeOut a i fst snd e k) = some ctx') :
+    c.us a = .owned ∧ c.multOf a = 1 ∧ c.us i = .scalar ∧ c.mult e = 1 ∧
+      c.us fst = .dead ∧ c.us snd = .dead ∧ fst ≠ snd ∧
+      ∃ r, c.refOf a = some r ∧ e ≠ r ∧ openRef fs r = false ∧
+        checkNF ((c.move a fst).bindOwned snd e)
+          ({ arr := r, idx := i, elem := e } :: fs) k = some ctx' := by
+  cases hra : c.refOf a with
+  | none =>
+      unfold checkNF at h
+      rw [hra] at h
+      by_cases hg : c.us a = .owned ∧ c.multOf a = 1 ∧ c.us i = .scalar ∧
+          c.mult e = 1 ∧ c.us fst = .dead ∧ c.us snd = .dead ∧ fst ≠ snd
+      · rw [if_pos hg] at h; simp at h
+      · rw [if_neg hg] at h; simp at h
+  | some r =>
+      unfold checkNF at h
+      rw [hra] at h
+      dsimp only at h
+      by_cases hg : c.us a = .owned ∧ c.multOf a = 1 ∧ c.us i = .scalar ∧
+          c.mult e = 1 ∧ c.us fst = .dead ∧ c.us snd = .dead ∧ fst ≠ snd
+      · rw [if_pos hg] at h
+        by_cases hne : e = r
+        · rw [if_pos hne] at h; simp at h
+        · rw [if_neg hne] at h
+          by_cases hopen : openRef fs r = true
+          · rw [if_pos hopen] at h; simp at h
+          · rw [if_neg hopen] at h
+            have hopenF : openRef fs r = false := by
+              cases hb : openRef fs r with
+              | false => rfl
+              | true => exact absurd hb hopen
+            obtain ⟨h1, h2, h3, h4, h5, h6, h7⟩ := hg
+            exact ⟨h1, h2, h3, h4, h5, h6, h7, r, rfl, hne, hopenF, h⟩
+      · rw [if_neg hg] at h; simp at h
+
+/-- The checker's put-back conditions, read back from a successful check: the
+converse of `checkNF_putBack`, including the frame the rule pops and the
+continuation's own check. -/
+theorem checkNF_putBack_some {c : Ctx} {fs : List Frame} {a e i result : Var}
+    {k : NCode} {ctx' : Ctx} (h : checkNF c fs (.putBack a e i result k) = some ctx') :
+    c.us a = .owned ∧ c.multOf a = 1 ∧ c.us e = .owned ∧ c.multOf e = 1 ∧
+      c.us i = .scalar ∧ c.us result = .dead ∧ e ≠ a ∧ e ≠ result ∧
+      ∃ r re f rest, c.refOf a = some r ∧ c.refOf e = some re ∧ fs = f :: rest ∧
+        f.arr = r ∧ f.idx = i ∧ f.elem = re ∧
+        checkNF ((c.move a result).setUs e .dead) rest k = some ctx' := by
+  cases hra : c.refOf a with
+  | none =>
+      unfold checkNF at h
+      rw [hra] at h
+      by_cases hg : c.us a = .owned ∧ c.multOf a = 1 ∧ c.us e = .owned ∧ c.multOf e = 1 ∧
+          c.us i = .scalar ∧ c.us result = .dead ∧ e ≠ a ∧ e ≠ result
+      · rw [if_pos hg] at h; simp at h
+      · rw [if_neg hg] at h; simp at h
+  | some r =>
+      cases hre : c.refOf e with
+      | none =>
+          unfold checkNF at h
+          rw [hra, hre] at h
+          by_cases hg : c.us a = .owned ∧ c.multOf a = 1 ∧ c.us e = .owned ∧
+              c.multOf e = 1 ∧ c.us i = .scalar ∧ c.us result = .dead ∧ e ≠ a ∧ e ≠ result
+          · rw [if_pos hg] at h; simp at h
+          · rw [if_neg hg] at h; simp at h
+      | some re =>
+          cases hfs : fs with
+          | nil =>
+              unfold checkNF at h
+              rw [hra, hre, hfs] at h
+              dsimp only at h
+              by_cases hg : c.us a = .owned ∧ c.multOf a = 1 ∧ c.us e = .owned ∧
+                  c.multOf e = 1 ∧ c.us i = .scalar ∧ c.us result = .dead ∧ e ≠ a ∧ e ≠ result
+              · rw [if_pos hg] at h; simp at h
+              · rw [if_neg hg] at h; simp at h
+          | cons f rest =>
+              unfold checkNF at h
+              rw [hra, hre, hfs] at h
+              dsimp only at h
+              by_cases hg : c.us a = .owned ∧ c.multOf a = 1 ∧ c.us e = .owned ∧
+                  c.multOf e = 1 ∧ c.us i = .scalar ∧ c.us result = .dead ∧ e ≠ a ∧ e ≠ result
+              · rw [if_pos hg] at h
+                by_cases hmatch : f.arr = r ∧ f.idx = i ∧ f.elem = re
+                · rw [if_pos hmatch] at h
+                  obtain ⟨hm1, hm2, hm3⟩ := hmatch
+                  obtain ⟨h1, h2, h3, h4, h5, h6, h7, h8⟩ := hg
+                  exact ⟨h1, h2, h3, h4, h5, h6, h7, h8, r, re, f, rest, rfl, rfl, rfl,
+                    hm1, hm2, hm3, h⟩
+                · rw [if_neg hmatch] at h; simp at h
+              · rw [if_neg hg] at h; simp at h
+
 /-- Extracting the facts a successful recursive call's check carries. -/
 theorem checkNF_callAt_some {c : Ctx} {fs : List Frame} {state path x result : Var}
     {body k : NCode} {ctx' : Ctx} {r : Ref}
@@ -368,6 +461,66 @@ theorem checkNF_callAt_some {c : Ctx} {fs : List Frame} {state path x result : V
               · rw [if_pos hexit] at hc
                 exact ⟨cb, y, rfl, rfl, hexit.1, hexit.2, hc⟩
               · rw [if_neg hexit] at hc; simp at hc
+
+/-- The checker's recursive-call conditions, read back from a successful check:
+the converse of the `.callAt` rule. The rule's guard, the body's isolated check
+and its exit variable, and the continuation's own check are recovered. -/
+theorem checkNF_callAt_facts {c : Ctx} {fs : List Frame} {state path x result : Var}
+    {body k : NCode} {ctx' : Ctx}
+    (h : checkNF c fs (.callAt state path x result body k) = some ctx') :
+    c.us state = .owned ∧ c.multOf state = 1 ∧ c.us path = .scalar ∧
+      c.us x = .scalar ∧ c.us result = .dead ∧ CountFree body = true ∧
+      ∃ r cb y, c.refOf state = some r ∧ openRef fs r = false ∧
+        checkNF (isolatedCtx c state path x r) [] body = some cb ∧ retVar body = some y ∧
+        cb.us y = .owned ∧ cb.refOf y = some r ∧
+        checkNF (c.move state result) fs k = some ctx' := by
+  cases hra : c.refOf state with
+  | none =>
+      unfold checkNF at h
+      rw [hra] at h
+      by_cases hg : c.us state = .owned ∧ c.multOf state = 1 ∧ c.us path = .scalar ∧
+          c.us x = .scalar ∧ c.us result = .dead ∧ CountFree body = true
+      · rw [if_pos hg] at h; simp at h
+      · rw [if_neg hg] at h; simp at h
+  | some r =>
+      unfold checkNF at h
+      rw [hra] at h
+      dsimp only at h
+      by_cases hg : c.us state = .owned ∧ c.multOf state = 1 ∧ c.us path = .scalar ∧
+          c.us x = .scalar ∧ c.us result = .dead ∧ CountFree body = true
+      · rw [if_pos hg] at h
+        by_cases hopen : openRef fs r = true
+        · rw [if_pos hopen] at h; simp at h
+        · rw [if_neg hopen] at h
+          have hopenF : openRef fs r = false := by
+            cases hb : openRef fs r with
+            | false => rfl
+            | true => exact absurd hb hopen
+          by_cases hsome : ∃ cb, checkNF (isolatedCtx c state path x r) [] body = some cb
+          · obtain ⟨cb, hb⟩ := hsome
+            rw [hb] at h
+            dsimp only at h
+            by_cases hret : ∃ y, retVar body = some y
+            · obtain ⟨y, hy⟩ := hret
+              rw [hy] at h
+              dsimp only at h
+              by_cases hexit : cb.us y = .owned ∧ cb.refOf y = some r
+              · rw [if_pos hexit] at h
+                obtain ⟨h1, h2, h3, h4, h5, h6⟩ := hg
+                exact ⟨h1, h2, h3, h4, h5, h6, r, cb, y, rfl, hopenF, hb, hy,
+                  hexit.1, hexit.2, h⟩
+              · rw [if_neg hexit] at h; simp at h
+            · have hnone : retVar body = none := by
+                cases hq : retVar body with
+                | none => rfl
+                | some y => exact absurd ⟨y, hq⟩ hret
+              rw [hnone] at h; simp at h
+          · have hnone : checkNF (isolatedCtx c state path x r) [] body = none := by
+              cases hq : checkNF (isolatedCtx c state path x r) [] body with
+              | none => rfl
+              | some cb => exact absurd ⟨cb, hq⟩ hsome
+            rw [hnone] at h; simp at h
+      · rw [if_neg hg] at h; simp at h
 
 /-! ## Heap facts the recursive call's contract needs -/
 
