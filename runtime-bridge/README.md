@@ -26,15 +26,19 @@ toolchain is the repository flake's Lean 4.35.0-rc3. Run a mode with and without
 | `inline-spare` | pure closed construction, inline, spare slot | copied, exit 0 | — |
 | `inline-io` | IO construction, inline in `main` | in place, exit 0 | exit 0 |
 | `closed-case` | parameterless function with the pure construction | copied, exit 0 | abort, exit 1 |
-| `sealed` | `Structured.runFresh` | writes `(true, true)`, exit 0 | exit 0 |
+| `sealed` | `Structured.runFresh` | writes `(true, true)`, exit 0 | exit 0; a mismatch exits `1`, not `2` |
 | `differential` | the model's predicate corpus: unique, alias (count two), drop-back-to-one, persistent literal, closure-held | all six predictions agree, exit 0 | — (the copy cases would abort under the armed check) |
 
 "In place" means `exclusive_before = true`, the array buffer and the focused
 struct keep their addresses, and `ok = true`. Each mode asserts its observed
 exclusivity, address, functional value and sealed result; an ordinary mismatch
-returns `2`, while the armed check's intended exclusivity abort remains exit
-`1`. The gate's `expect` checks that status and, for the abort controls, the
-abort diagnostic. Usage errors return `64`.
+returns `2` for every observation mode except `sealed`, which returns `1` on a
+mismatch (`runtime-bridge/RuntimeBridge/Probe.lean`, `sealedCase`) and so cannot
+be distinguished from the exclusivity abort by status alone. No configuration of
+the current corpus drives `sealed`'s mismatch path, so no check exercises it. The
+armed check's intended exclusivity abort is exit `1` together with its
+diagnostic, and the gate requires both for the abort controls. Usage errors
+return `64`.
 
 ## Cause
 

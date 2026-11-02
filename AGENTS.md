@@ -285,3 +285,32 @@
   in the fixture. Fidelity to `lean_is_exclusive`/`lean_array_uset` (A6/A8), A10,
   address identity and free/cascade remain the residual trust; no
   linked-executable claim.
+
+- `Ownership/CompleteAccounting.lean` is the complete ownership and
+  reference-count accounting relation: `Accounted support H env c` conjoins
+  `Inv`, a duplicate-free, sound, complete and reference-bound enumeration of the
+  owning variables, the live-cell domain, and the count equation
+  `H.rc r = IncomingCount H r + EnvOwnerCount c support r`. The initializer
+  establishes it (`Accounted.initCtx`); the retained predicates are corollaries
+  (`Accounted.ownersAccounted`, `Accounted.countFidelity`); and the count-one
+  fact is derived rather than read off the integer
+  (`Accounted.count_one_dichotomy`, `Accounted.at_most_one_owner`,
+  `Accounted.incoming_le_one`). The context effects preserve it with named
+  premises (`Accounted.setDead`, `Accounted.setScalar`, `Accounted.move`,
+  `Accounted.decOne`), as do the take-out, the put-back and the in-place scalar
+  store at the interpreter's own post-states (`Accounted.takeOut`,
+  `Accounted.putBack`, `Accounted.setFieldsScalar`, `Accounted.setArrInPlace`),
+  on the edge-count lemmas `IncomingCount_set_*`. Each refused configuration is
+  paired with a proved `Inv` at the same state (`alias_rejected`,
+  `inc_rejected`, `bindAlone_rejected`, `outOfRange_rejected`,
+  `scalarOverwrite_rejected`), and `decTwo_rejected` is a schema over accounted
+  pre-states. `Ownership.Supported` is the context-indexed counted fragment:
+  every continuation is indexed at the context the checker's matching rule
+  threads, and the accounting side conditions the checker does not supply are
+  premises. It excludes `.inc` entirely (`inc_rejected`) and every `.dec x n`
+  with `n ≠ 1` (`decTwo_rejected`), and it is not a certification route:
+  `OwnershipLcnf.Prefix.toModel_supported` places the certified flat model in
+  it, and a preservation theorem over it is the next stage.
+  `OwnershipTest/CompleteAccounting.lean` carries the computable guards, the
+  four `Supported` controls (affirmative first) and the axiom prints;
+  `scripts/check_axioms.lean` audits every declaration of the new module.

@@ -263,3 +263,45 @@ Do not weaken existing results or introduce new axioms to make the completion cr
 - [Runtime-model correspondence](https://github.com/scidonia/ownership/blob/73c5775802358cb7b5e2a7e796aa447d4ba172c4/OwnershipLcnf/RuntimeModel.lean#L472)
 - [Probe mismatch result](https://github.com/scidonia/ownership/blob/73c5775802358cb7b5e2a7e796aa447d4ba172c4/runtime-bridge/RuntimeBridge/Probe.lean#L166)
 - [Expected-abort gate](https://github.com/scidonia/ownership/blob/73c5775802358cb7b5e2a7e796aa447d4ba172c4/scripts/check_runtime_binding.sh#L38)
+
+## Stage 1 status (2 November 2026)
+
+The counting layer Gap 1 asked for exists. `Ownership/CompleteAccounting.lean`
+defines `Accounted support H env c` — the checker invariant, a duplicate-free,
+sound, complete and reference-bound enumeration of the owning variables, the
+live-cell domain, and the count equation over the two independently computed
+counts — proves it at the initializer (`Accounted.initCtx`), derives the
+count-one dichotomy and the retained predicates, preserves it through the context
+operations and through the take-out, put-back and in-place store at the
+interpreter's own post-states, and refutes the configurations the older
+predicates admitted. The `inc` question is settled by narrowing the counted
+fragment: `Ownership.Supported` admits no increment and exactly one decrement of
+an owned handle, and carries the side conditions the checker does not supply. It
+is the interface the preservation theorem will quantify over, not a checker.
+
+Superseded here (both kept as the record at the stated baseline):
+
+- The `principal_write` paragraph at line 78: the `hacc` and `hcount` premises
+  are no longer in the theorem's signature, and `OwnershipLcnf.principal_accounted`
+  consumes `Accounted` at the initializer, concluding what the removed premises
+  asserted. The per-operation obligations are still not carried through arbitrary
+  nested execution.
+- The Gap 6 paragraph at line 195: the unused accounting premises are gone. Its
+  second half stands — both heaps in the conclusion remain formally defined
+  models, and no transport theorem is added.
+
+Superseded in the dated audit `docs/notes/ownership-paper-contract-audit.md`
+(kept as the record at its own revision): the sentence at line 180 that an
+ordinary observation mismatch returns 2. This is false for the `sealed` mode,
+whose mismatch returns 1 (`runtime-bridge/RuntimeBridge/Probe.lean`); the living
+surfaces state the exception, and correcting the code is a separate change.
+
+Still open: execution preservation over the accepted checker, with the facts it
+does not supply named where they are consumed — the alias target's and the
+scalar-`.let` target's freshness, `dec`'s single handle, and the extracted
+child's no-second-edge premise (`Accounted.noOwnerOfSingleEdge` consumes it
+without deriving it from the footprint); the counted pair/restoration
+composition; the LCNF extraction/restoration stores and their trace events;
+invocation-local recursion; and transport at the principal boundary. The heap
+remains a named-cell model: nothing here relates it to physical counted
+references.

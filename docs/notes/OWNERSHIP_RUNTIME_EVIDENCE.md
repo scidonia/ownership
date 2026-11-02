@@ -85,10 +85,11 @@ the C's check/recursive/put-back calls and the runtime header's
 the certified shapes (in place) and the closed-pure-array controls (copy, abort
 when armed).
 
-The probe's `differential` mode checks the model's predicates against the
-runtime on a corpus: unique, a live alias (count two), the alias released before
-the write (count back to one), a persistent literal and a closure-held array.
-All predictions agree; the copy cases would abort under the armed check and are
+The probe's `differential` mode compares recorded expectations against the
+runtime's observations on a corpus: unique, a live alias (count two), the alias
+released before the write (count back to one), a persistent literal and a
+closure-held array. It does not execute the `Ownership` model. All recorded
+expectations agree; the copy cases would abort under the armed check and are
 covered by the other modes. The corpus is finite, so this is validation, not an
 exhaustive equivalence.
 
@@ -153,6 +154,10 @@ use of the original. Results (check off; check on in parentheses):
 | `inline-io` | IO construction, inline in `main` | in place (exit 0) |
 | `closed-case` | parameterless function with the pure construction | copied (abort, exit 1) |
 | `sealed` | `Structured.runFresh` | writes `(true, true)` (exit 0) |
+
+`sealed`'s mismatch path returns exit `1`, not the `2` the other observation
+modes return, so it cannot be distinguished from the exclusivity abort by status
+alone; no configuration of the current corpus drives that path.
 
 The emitted C explains it: the inline and parameterless pure constructions are
 lifted into `___closed` initializers called through `lean_obj_once` (excerpt in
