@@ -68,7 +68,7 @@
 \newtheorem{example}{Example}
 \newtheorem{nonclaim}{Non-claim}
 
-\title{Static Count-One Ownership for In-Place Array Updates in Lean~4}
+\title{Mechanising Count-One Ownership for Array Updates in Lean~4}
 \author{Gavin Mendel-Gleason\\
 Scidonia Limited\\
 \texttt{gavin@scidonia.ai}}
@@ -100,14 +100,16 @@ put-back's exclusive branch, build a concrete runtime model in which the
 exclusivity check cannot abort under the correspondence, and bind the result to
 the pinned toolchain with an artifact/IR/C gate whose differential mode compares
 recorded expectations. The composed guarantee is the flat recognised write; the
-extraction/restoration accounting is a model-level result, and the counted nested
-execution composition is outstanding. The accounting layer is a proved relation
-over the model heap, which implies the environment owner count and the
+extraction/restoration accounting is a model-level result. The recursive call is
+a contract on an admitted model body, with the child contract derived at every
+level for a finite level path and the emitted callee is not captured. The counted
+protocol composes at its accounted boundaries. The accounting layer is a proved
+relation over the model heap, which implies the environment owner count and the
 heap/runtime count fidelity, and a kernel countermodel shows that the raw
 invariant does not imply them. The boundary is explicit: the C runtime's
 semantics, replay-to-backend identity, the emitted recursive callee, the counted
-protocol's nested execution composition, the extraction/restoration event
-coverage and the source correspondence remain assumptions or open obligations.
+interpreter's trace-level abstraction, the extraction/restoration event coverage
+and the source correspondence remain assumptions or open obligations.
 \end{abstract}
 
 \section{Introduction}
@@ -124,8 +126,9 @@ Lean~4 has no linear, affine or uniqueness types, and this development does not
 add them. The distinction is not the absence of a kernel change but what is
 composed and proved: a count-one checker, the recognised emitted prefix and a
 runtime model, joined at the boundary the paper names, together with the
-model-level extraction/restoration accounting. The counted nested execution
-composition is outstanding. Linearity is a checked property of a recognised
+model-level extraction/restoration accounting. The counted protocol composes
+at its accounted boundaries; beyond that boundary the trace-level agreement is
+not claimed. Linearity is a checked property of a recognised
 fragment under named contracts, not a typing judgement for every program.
 \subsection{The chain to an in-place write}\label{sec:chain}
 The result is a chain of eight conditional steps. Read in order, they say why an
@@ -149,8 +152,9 @@ the recognised prefix. Control: the token-preserving near misses in the mutation
 \lean{recognized\_write\_in\_place} and
 \lean{index\_path\_simulates\_model}
 identify the emitted outcome with the model's \lean{inPlaceOutcome}. Premise:
-the layout, agreement and entry facts, the finite-path \lean{PathContract}, and
-the contracts A1--A12/N1--N12.
+the layout, agreement and entry facts, the finite-path \lean{PathContract}---one
+leaf computation, with the child contract derived at every level---and the
+contracts A1--A12/N1--N12.
 \item \textbf{Temporary handles.} \lean{pair\_accounting} shows the extraction
 pair returns the parent and child counts to their entry values; the no-free and
 retained-alias controls leave a count of two.
@@ -172,7 +176,8 @@ whose implications are the environment-side \lean{OwnersAccounted} and the
 heap-side \lean{CountFidelity}; \lean{alias\_not\_accounted} shows why the raw
 invariant does not imply the first. The extraction/restoration steps are
 the nested counted protocol; the flat \lean{principal\_write} is the composed
-flat result, and the nested counted execution composition is outstanding. The
+flat result, and the counted protocol composes at its accounted boundaries;
+beyond that boundary the trace-level agreement is not claimed. The
 chain is conditional: the C
 semantics of the primitives, replay-to-backend identity, address identity, free
 and cascade, the emitted callee, the runtime reading of the accounting
@@ -191,8 +196,9 @@ nonlinear use. Translation validation \cite{translationvalidation} checks a
 particular compiler run; this paper does not validate arbitrary transformations.
 The advance here is the composition of the count-one checker with the
 recognised emitted prefix and a runtime model at the flat write, and the
-model-level extraction/restoration accounting; the counted nested execution
-composition is outstanding. It is not a claim to the first static uniqueness
+model-level extraction/restoration accounting; the counted protocol composes at
+its accounted boundaries, and beyond that boundary the trace-level agreement is
+not claimed. It is not a claim to the first static uniqueness
 analysis for Lean.
 
 The paper makes six contributions. (i) A model heap and a decidable checker
@@ -201,7 +207,9 @@ supplies the heap facts the checker cannot see (\Cref{thm:entry-inv}).
 (ii) Strict recognisers for the emitted array-write prefixes, with structural
 rejection of token-preserving near misses. (iii) A correspondence from the
 recognised LCNF to the model (\Cref{thm:prefix-sound} and \Cref{thm:path-sound}), including
-the finite nested path. (iv) A counted extraction/call/restoration argument
+the finite nested path, whose child contract is derived at every level from the
+level list and one supplied leaf computation. (iv) A counted
+extraction/call/restoration argument composed at its accounted boundaries
 (\Cref{thm:pair} and \Cref{thm:putback}). (v) A concrete runtime model and an
 abort-impossibility theorem (\Cref{thm:no-abort}), bound to the pinned toolchain
 by a gate and a differential corpus. (vi) The complete accounting relation \lean{Accounted}, which implies the
@@ -334,9 +342,20 @@ compiler computes the LCNF and the C; \lean{projectNested} computes the prefix;
 \lean{checkN} computes the checker result. The client supplies the source
 declaration, the \lean{Path} and the take-out name, and the proofs of
 \lean{Agrees}, \lean{LevelMatch}, \lean{PathContract} and \lean{EntryInv} (the
-path/slot and entry facts the checker cannot see). The finite-path induction
-discharges the tail contract; the leaf contract and the emitted call's meaning
-(N10) remain. A nearby rejected variant is the flat \lean{aliasSet} example
+path/slot and entry facts the checker cannot see). The recursive call is a
+contract on an admitted model body: the child contract is derived at every level
+by the finite-path derivation, with one leaf computation supplied. The depth-two
+witness instance in \lean{OwnershipTest/PathRecursion.lean} takes model index 1
+at both levels, with the second level's index variable the call's path scalar 5,
+and leaf \lean{.base (.setArr 9 5 2 (.ret 9))}; its tip slot 1 goes from scalar 6
+to scalar 1, the root and child slot 1 are restored to references 1 and 3, and
+the root's sibling slot 0 keeps scalar 5. A deeper level that takes its index by
+re-projecting the continuation is outside the model, because the flat
+environment cannot express the emitted per-invocation index; the emitted call's
+meaning (N10) is not captured. \lean{OwnershipTest/PathConsolidation.lean}
+supplies a depth-three leaf in \lean{takeOut}/\lean{putBack} form as a
+supplied-leaf witness, not an instance of the correspondence. A nearby rejected
+variant is the flat \lean{aliasSet} example
 below, refused because the array's multiplicity is two.
 
 \section{The ownership discipline}
@@ -739,6 +758,28 @@ theorem callBody_build (path value : Var) (body : NCode) (l : Level)
       some (build path value body rest)
 \end{minted}
 
+\paragraph{The call boundary.}
+The recursive call is a contract on an admitted model body, not a verified
+callee. At the call the extracted child is exclusive; the body runs fault-free
+on the caller's heap, returns the handle it was handed, writes only exclusively,
+and leaves every cell outside that child's mutable footprint unchanged. The
+suspended parent's exclusivity is not a premise of that contract: it is derived
+from the caller's separation fact and the frame theorem
+\lean{callAt\_frame\_confined}.
+
+For a finite level path the contract is derived at every level rather than
+assumed: \lean{childContracts\_of\_path} takes the level list's own data and one
+leaf computation and yields the child contract at each level, whose body is the
+remaining levels' \lean{build}. The leaf computation---agreement, checker
+acceptance, exit variable, count-freedom and annotation for the innermost
+body---is the one function-level fact supplied, and it is not derived from the
+level list. The claim is the finite path's own syntax, not data-dependent
+recursion. The emitted recursive callee is not captured: \lean{execNested}'s
+call rule runs the admitted model body on the environment that exposes only the
+call's own state, path and value (N10), and the model's flat environment cannot
+express the emitted per-invocation index re-projection, so a deeper level that
+takes its index by re-projecting the continuation is outside the model.
+
 \section{Counted extraction, call, and restoration}
 The emitted take-out creates a pair whose fields are the parent and the
 extracted child. The constructor moves the handles into the pair; the
@@ -791,16 +832,37 @@ which reads the model term off the operands. The execution correspondence betwee
 the recognised pair and \lean{Ownership.Pair.runP} is a named next step; the
 counted protocol above is the accounting model, not that correspondence.
 
+The counted protocol composes at its accounted boundaries. \lean{counted\_takeOut}
+consumes the heap facts the checker cannot see---the array's cell, the selected
+slot's content---and the context facts the chain derives from \lean{checkNF}; it
+derives the boundary accounting, \lean{HeapCompat} to the abstract take-out heap,
+the pair cell's freshness and the cursor advance. \lean{CountedChildCall} adds
+the caller's \lean{Accounted} at the child's return, \lean{counted\_restore}
+derives the mutate branch, and \lean{counted\_nested\_chain} relates the counted
+post-state to the model's own \lean{runN} by \lean{HeapCompat}; its remaining
+supplied premises are the checker's acceptance, the array handle's reference, the
+array's cell, the selected slot and the index variable's value. The pair-live
+state is provably outside \lean{Accounted}, which is why the relation is a
+boundary relation rather than an every-instruction one. The counted interpreter
+\lean{execCounted} executes five heap-touching operations---the take-out, the two
+projection increments, the pair's release and the restoration;
+\lean{countedPrefix} restricts the boundary statement to the first nineteen
+operations, through the pair's release, and
+\lean{execCounted\_protocol\_boundary} states that block's boundary: its heap is
+the protocol boundary heap, \lean{HeapCompat} to the abstract take-out heap, with
+the non-heap machine fields---including the write trace---agreeing with
+\lean{execNested}'s. Beyond that boundary no trace-level agreement between
+\lean{execCounted} and \lean{execNested} is claimed: \lean{HeapCompat} is not an
+invariant of the counted window between the take-out and the pair's release, and
+the restoration lies outside \lean{countedPrefix}. The extraction and restoration
+field stores are not trace events; their dispositions are the model-level facts
+\lean{checkN\_extraction\_exclusive} proves.
+
 The nested interpreter abstracts the pair increments and the pair release, and it
-performs the put-back unconditionally. The dependency closure of
-\lean{index\_path\_simulates\_model} does not contain \lean{pair\_accounting}
-or \lean{putBack\_exclusive\_of\_wellFormed}; the counted protocol is not yet
-integrated into an execution simulation. The nested trace also records the
-designated scalar writes, not the extraction and restoration field stores, so the
-all-recorded-writes predicate is not a claim about those stores; the model-level
-disposition of each such store is proved separately below. The flat
-\lean{principal\_write} is the composed result; the counted nested composition is
-outstanding.
+performs the put-back unconditionally. The nested trace records the designated
+scalar writes, so the all-recorded-writes predicate is a claim about those stores
+only; the model-level disposition of each extraction and restoration store is
+proved separately below. The flat \lean{principal\_write} is the composed result.
 
 Separately, \lean{checkN\_extraction\_exclusive\_of\_entryInv} proves that every
 take-out and put-back of an accepted nested program targets an exclusive array
@@ -906,8 +968,10 @@ dichotomy; \lean{principal\_accounted} consumes it at the initializer.
 \lean{alias\_not\_accounted} shows why the environment side cannot be omitted.
 Nothing here makes the model's count one a physical count one: both heaps in the
 conclusion are models. The theorem is flat: the nested path is the separate
-\lean{index\_path\_simulates\_model}, whose \lean{PathContract} is discharged for
-a finite level list by \lean{PathRecursion} and leaves the leaf contract and N10.
+\lean{index\_path\_simulates\_model}, whose call is a contract on an admitted
+model body. \lean{PathContract} is supplied level data and
+\lean{childContracts\_of\_path} derives the child contract at every level; the
+supplied leaf computation and N10 remain.
 
 \begin{table}[h]
 \centering
@@ -919,10 +983,10 @@ Contract & Proposition & Provider & Status or remaining obligation \\
 \lean{EntryInv} & unique tree, client separation, root completeness & client entry & \lean{initEntryInv} for fresh arrays; arbitrary heap is a client obligation \\
 \lean{Agrees} & heap/environment/code agreement and annotations & client & supplied per declaration \\
 A1--A12 & primitive, layout and call signatures & implementation assumption & documented; not proved of the C runtime \\
-N1--N12 & nested path and call contracts & implementation/leaf & N10 and the leaf body remain \\
+N1--N12 & nested path and call contracts & implementation/leaf & N10 and the supplied leaf body remain; the emitted recursive callee is not captured \\
 \lean{OwnersAccounted} & environment owner count at zero and one & model-layer predicate & implied by \lean{Accounted}; checker take-out/\lean{dec} premises for arbitrary contexts remain stage 2 \\
 \lean{CountFidelity} & heap count = incoming edges + owning variables & model-layer predicate & implied by \lean{Accounted} at its support; the residual runtime fidelity is not proved \\
-\lean{PathContract} & finite-path child contract & client & tail discharged by induction; leaf remains \\
+\lean{PathContract} & finite-path level data & client & supplies the leaf; the child contract at every level is derived by \lean{childContracts\_of\_path} \\
 \lean{Corr} & runtime model correspondence & proved relation & between two models; binds no physical C object or address; C semantics and address identity remain assumptions \\
 linked runtime & \lean{lean\_is\_exclusive}, \lean{lean\_array\_uset} & empirical & gate and differential corpus, not a proof \\
 source correspondence & Lean source to emitted LCNF & assumption & not attempted \\
@@ -1008,9 +1072,13 @@ the heap side (\lean{CountFidelity}) is an implementation assumption about the
 runtime's count. The recognition claim is scoped to the accepted grammar and the
 mutation corpus, not a universal rejection theorem for every token-preserving
 near miss. The nested linked runtime is not measured; only the flat probe is. The
-nested interpreter abstracts the pair traffic and unconditional restoration, so
-the counted protocol's execution composition is outstanding; the nested trace
-still does not include extraction/restoration stores, but each such step's target
+nested interpreter abstracts the pair traffic and unconditional restoration. The
+recursive call is a contract on an admitted model body and the emitted callee is
+not captured; the claim is the finite path's own syntax, not data-dependent
+recursion. The counted protocol composes at its accounted boundaries; beyond the
+counted prefix's boundary no trace-level agreement between the counted and
+nested interpreters is claimed. The nested trace still does not include
+extraction/restoration stores, but each such step's target
 array cell is proved exclusive by \lean{checkN\_extraction\_exclusive\_of\_entryInv},
 so the store's disposition is a separate proved fact rather than a silent absence.
 The probe returns two for an ordinary observation mismatch, except in
@@ -1052,9 +1120,9 @@ relation is supplied at the model level; the C semantics, the replay/backend
 identity, address identity, free/cascade, the emitted callee and the source
 correspondence remain the boundary. The next work is fidelity at that named
 boundary---the C semantics of the primitives, replay-to-backend identity, address
-identity, free/cascade---and composition at the chosen call boundary; the
-development proves soundness for the accepted fragment, not completeness of the
-analysis.
+identity, free/cascade---and capturing and interpreting the emitted recursive
+callee; the development proves soundness for the accepted fragment, not
+completeness of the analysis.
 
 \appendix
 \section{Theorem map and artifacts}\label{sec:theorems}
@@ -1069,7 +1137,12 @@ corpus, not a proof.
 \item[\lean{Ownership.Entry.checkN\_sound\_of\_entryInv}] \lean{Ownership/Entry.lean} --- proved; model, \lean{EntryInv} and \lean{Agrees}.
 \item[\lean{OwnershipLcnf.project\_sound}] \lean{OwnershipLcnf/Semantics.lean} --- proved under the primitive contracts.
 \item[\lean{OwnershipLcnf.recognized\_write\_in\_place}] \lean{OwnershipLcnf/Semantics.lean} --- proved under the primitive contracts.
-\item[\lean{OwnershipLcnf.index\_path\_simulates\_model}] \lean{OwnershipLcnf/PathRecursion.lean} --- proved with \lean{PathContract}; the finite tail is discharged; leaf and N10 remain.
+\item[\lean{OwnershipLcnf.index\_path\_simulates\_model}] \lean{OwnershipLcnf/PathRecursion.lean} --- proved with \lean{PathContract}; the recursive call is a contract on an admitted model body, the child contract is derived at every level, and the finite tail is discharged; the supplied leaf and N10 remain, and the emitted callee is not captured.
+\item[\lean{OwnershipLcnf.childContracts\_of\_path}, \lean{OwnershipLcnf.childContract\_of\_path}] \lean{OwnershipLcnf/PathRecursion.lean} --- proved; derives the child contract at every level from the level list and one supplied leaf computation.
+\item[\lean{Ownership.counted\_takeOut}, \lean{Ownership.counted\_restore}, \lean{Ownership.CountedChildCall}, \lean{Ownership.counted\_nested\_chain}] \lean{Ownership/CountedNested.lean} --- proved; the counted protocol composes at its accounted boundaries and relates the counted post-state to \lean{runN} by \lean{HeapCompat}.
+\item[\lean{OwnershipLcnf.execCounted\_protocol\_boundary}] \lean{OwnershipLcnf/CountedTrace.lean} --- proved; the counted prefix's boundary, including the write trace, with no trace-level agreement claimed beyond it.
+\item[\lean{OwnershipTest/PathRecursion.lean}] --- kernel-checked depth-two witness of the correspondence theorem.
+\item[\lean{OwnershipTest/PathConsolidation.lean}] --- kernel-checked depth-three supplied-leaf witness, not an instance of the correspondence.
 \item[\lean{Ownership.CountedPair.pair\_accounting}] \lean{Ownership/CountedPair.lean} --- proved; restricted free.
 \item[\lean{Ownership.PutBack.putBack\_exclusive\_of\_wellFormed}] \lean{Ownership/PutBack.lean} --- proved; returned-handle accounting remains.
 \item[\lean{OwnershipLcnf.Runtime.checkExclusive\_no\_abort}] \lean{OwnershipLcnf/RuntimeModel.lean} --- proved in the runtime model, a second operational model rather than physical memory.

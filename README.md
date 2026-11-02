@@ -64,8 +64,11 @@ the checker's acceptance and an explicit heap/program agreement premise, with
 `Entry.callAt_frame_confined` states the recursive call's whole contract: an
 admitted body is fault-free, writes only exclusively, returns the reference it was
 given, and touches no cell outside that reference's mutable footprint (given every
-extraction annotation names one). The nested/pair LCNF correspondence remains
-open, with its reason recorded in `PLAN.md`.
+extraction annotation names one). The nested finite-path correspondence holds
+under the supplied leaf contract and the admitted-call abstraction — the
+recursive call runs a supplied model body; the emitted callee is not captured —
+with the child contract derived at every level; the pair-arms correspondence is
+still open, with its reason recorded in `PLAN.md`.
 
 ## Building
 

@@ -11,7 +11,7 @@ Audience: Gavin and the implementation/proof/writing agent
 
 Prepare a regular ITP paper about a mechanised ownership discipline for a precisely delimited array-update fragment. The preferred technical contribution is a sound count-accounting invariant composed with the counted extraction/call/restoration protocol and its recognised compiler fragment. The paper should teach that proof construction, rather than present a catalogue of separately proved components.
 
-This is a preparation target, not a readiness verdict or a prediction of acceptance. The current repository has substantial proved components, but the counted nested composition remains open. A verified C runtime and arbitrary Lean-source verification are outside the proposed scope.
+This is a preparation target, not a readiness verdict or a prediction of acceptance. The current repository has substantial proved components, but the counted nested protocol composes only at its accounted boundaries: the counted interpreter's trace-level abstraction and the emitted callee remain open. A verified C runtime and arbitrary Lean-source verification are outside the proposed scope.
 
 Working title, appropriate to the current boundary:
 
@@ -19,7 +19,7 @@ Working title, appropriate to the current boundary:
 
 A stronger title about certifying counted nested updates should wait for the corresponding theorem.
 
-The existing Markdown gap programme remains a useful technical specification. This handoff turns it into a submission plan and updates its status: the model-level extraction/restoration exclusivity gap has now been addressed; the counted emitted-execution connection has not.
+The existing Markdown gap programme remains a useful technical specification. This handoff turns it into a submission plan and updates its status: the model-level extraction/restoration exclusivity gap has now been addressed; the counted emitted-execution connection is now present at its boundaries — the protocol boundary, the accounted child-call return and the derived restoration — while the counted interpreter's trace-level abstraction and the emitted callee remain open.
 
 ## 2. Venue facts and provisional requirements
 
@@ -49,7 +49,7 @@ Until then, describe checker soundness, flat correspondence, finite nested corre
 
 This draft describes existing components and the remaining boundary. It is a starting point for author revision, not a submission-ready abstract:
 
-> Reference-counted array updates can mutate their input when it is exclusive and otherwise require copying. We present a Lean formalisation of a static count-one ownership discipline for a restricted array-update language. The development proves checker soundness, recognises selected emitted LCNF fragments, and relates their interpreted outcomes to ownership models under explicit contracts. It also formalises the reference-count traffic of a temporary extraction pair and derives an exclusive restoration result from counted and child-call boundary conditions. A separate theorem establishes exclusivity of extraction and restoration targets in the abstract nested model. These results expose two distinct obligations: accounting for all counted ownership, and connecting that accounting to execution of the recognised fragment. The flat write has a composed model-level guarantee; composition of the counted nested protocol remains open. We delimit this boundary explicitly and provide structural rejection controls and pinned runtime evidence as supporting validation.
+> Reference-counted array updates can mutate their input when it is exclusive and otherwise require copying. We present a Lean formalisation of a static count-one ownership discipline for a restricted array-update language. The development proves checker soundness, recognises selected emitted LCNF fragments, and relates their interpreted outcomes to ownership models under explicit contracts. It also formalises the reference-count traffic of a temporary extraction pair and derives an exclusive restoration result from counted and child-call boundary conditions. A separate theorem establishes exclusivity of extraction and restoration targets in the abstract nested model. These results expose two distinct obligations: accounting for all counted ownership, and connecting that accounting to execution of the recognised fragment. The flat write has a composed model-level guarantee, and the counted nested protocol composes at its accounted boundaries; the counted interpreter's trace-level abstraction and the emitted recursive callee remain open. We delimit this boundary explicitly and provide structural rejection controls and pinned runtime evidence as supporting validation.
 
 Once the preferred theorem is complete, rewrite the last four sentences around that theorem and its proof mechanism. Do not merely remove the sentence naming the open obligation.
 
@@ -74,7 +74,7 @@ Source paths below are relative to the repository root. “Proved” means the c
 
 ### Immediate manuscript corrections
 
-- Qualify the introduction's “verified composition” wording: the counted nested composition is explicitly open elsewhere in the same manuscript.
+- Qualify the introduction's “verified composition” wording (applied): the manuscript's counted nested statements now describe composition at the accounted boundaries and name the trace-level and callee limits.
 - Present `principal_write` as the conjunction it currently proves. Remove unused accounting premises from the mathematical statement, or replace it with a result that actually consumes the strengthened relation. Adding premises does not extend the guarantee.
 - Explain that `RuntimeModel` is another operational model. Its state correspondence does not itself bind physical C objects or addresses.
 - Preserve the recent `ExtractionExclusive` progress. Do not continue reporting the old model-store coverage gap as wholly unresolved.
@@ -136,7 +136,7 @@ M1–M6 and the claims half of M7 are applied: the introduction's “verified co
 
 ### Next
 
-Gate B's flat half is closed (Stage 2). The next proof milestone is Gate C, whose first obligation is accounting the nested pre-states so `Accounted.takeOutOfSlot` can be consumed. Gates D–E, the artifact and the paper rewrite follow in that order unless the 2027 CFP changes the constraints.
+Gate B's flat half is closed (Stage 2) and Gate C's counted block is closed at its accounted boundaries (Stage 3), with the trace-level abstraction and the emitted callee remaining open. Gate D's obligation — one explicit call boundary, stated on every claim surface — is applied in the paper revision the reproduction section records, and its status is in §5. Gate E, the artifact and the paper rewrite follow in that order unless the 2027 CFP changes the constraints.
 
 ## 5. Proof work required for the preferred paper
 
@@ -204,6 +204,8 @@ Choose one explicit boundary:
 Choose the contractual boundary for the first submission unless the second is already tractable. The call contract must not assume exclusivity of the suspended parent if the paper claims to derive that preservation by confinement.
 
 **Done when:** the title, abstract, example, theorem, artifact, and limits describe the same call boundary, with at least one nontrivial instantiation.
+
+**Gate D status.** The contractual boundary is the submission's call boundary. The recursive call is a contract on an admitted model body; for a finite level path `OwnershipLcnf.childContracts_of_path` derives that contract at every level from the level list and one supplied leaf computation, and the emitted `setAt` callee is not captured (N10). The counted protocol composes at its accounted boundaries (`Ownership.counted_nested_chain`), and `OwnershipLcnf.execCounted_protocol_boundary` states the counted prefix's boundary — including the write trace — while beyond that boundary no trace-level counted agreement is claimed. The paper states this boundary in its title, abstract, running example, nested theorem, appendix and limits, and names two kernel-checked witnesses: the depth-two correspondence instance (`OwnershipTest/PathRecursion.lean`) and the depth-three supplied-leaf witness (`OwnershipTest/PathConsolidation.lean`). The observed revision and commands are in the paper's reproduction section.
 
 ### Gate E — expose one principal theorem
 

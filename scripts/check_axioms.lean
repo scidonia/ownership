@@ -189,6 +189,9 @@ import OwnershipLcnf.CountedTrace
 #print axioms OwnershipLcnf.index_prefix_simulates_model_of_accounted
 #print axioms OwnershipLcnf.countedPrefix_fragment
 #print axioms OwnershipLcnf.execCounted_protocol_boundary
+#print axioms OwnershipLcnf.childContracts_of_path
+#print axioms OwnershipLcnf.childContract_of_path
+#print axioms OwnershipLcnf.index_path_fragment_simulates_model
 
 #print axioms Ownership.counted_nested_chain_extraction
 #print axioms Ownership.counted_nested_chain_restoration
