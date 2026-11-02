@@ -61,9 +61,12 @@ theorem principal_write
     (root := root) (client := client) (i := i) (vn := v) (o := o) (o' := o')
     hEntry hc hcell ho' hin
 
-/-- The certified flat model is in the counted fragment: the recognised
-prefix's projected model binds the exclusivity check's result, writes through it
-and returns it, which `Supported` admits from the initializer's own slots. -/
+/-- The certified flat model is in the counted fragment: the recognised prefix's
+projected model binds the exclusivity check's result to the check slot, writes
+through it and returns it. Its premises are read off the layout — the alias
+source is the count-one owned handle at the array slot, and the store's four
+premises hold at the moved context, where the check result carries that handle
+and the index and replacement slots are scalars. -/
 theorem Prefix.toModel_supported {root : Ownership.Ref}
     (assign : Lean.FVarId → Ownership.Var) (p : Prefix) (hl : Layout assign p) :
     Supported (Runner.initCtx root) (p.toModel assign) := by
@@ -74,18 +77,28 @@ theorem Prefix.toModel_supported {root : Ownership.Ref}
   refine Supported.bindAlias (c := Runner.initCtx root) (x := assign p.array)
     (y := assign p.checkResult)
     (k := .setArr (assign p.checkResult) (assign p.index) (assign p.value)
-      (.ret (assign p.checkResult))) ?_ ?_ ?_
+      (.ret (assign p.checkResult))) ?_ ?_ ?_ ?_
   · rw [hl.array]
     exact Runner.initCtx_us_zero root
+  · rw [hl.array]
+    exact Runner.initCtx_multOf_zero root
   · rw [hl.check]
     simp [Runner.initCtx]
   · refine Supported.setArr
       ((Runner.initCtx root).move (assign p.array) (assign p.checkResult))
       (assign p.checkResult) (assign p.index) (assign p.value)
-      (.ret (assign p.checkResult)) ?_
-    refine Supported.ret _ (assign p.checkResult) ?_
-    rw [Ctx.move_us_y, hl.array]
-    exact Or.inl (Runner.initCtx_us_zero root)
+      (.ret (assign p.checkResult)) ?_ ?_ ?_ ?_ ?_
+    · rw [hl.check, Ctx.move_us_y, hl.array]
+      exact Runner.initCtx_us_zero root
+    · rw [hl.check, Ctx.multOf, Ctx.move_refOf_y, hl.array]
+      exact Runner.initCtx_multOf_zero root
+    · rw [hl.index, hl.check, hl.array]
+      simp [Ctx.move, Runner.initCtx]
+    · rw [hl.value, hl.check, hl.array]
+      simp [Ctx.move, Runner.initCtx]
+    · refine Supported.ret _ (assign p.checkResult) ?_
+      rw [Ctx.move_us_y, hl.array]
+      exact Or.inl (Runner.initCtx_us_zero root)
 
 /-- The accounting relation is consumed rather than assumed: at the initializer
 it yields the environment-side predicate, the count-fidelity equation at the

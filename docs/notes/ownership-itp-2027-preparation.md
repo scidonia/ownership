@@ -91,9 +91,9 @@ Stage 1 landed in the accepted revision at `9eb0bf8`. It closes Gate A and the i
 | --- | --- |
 | Initializer satisfies complete accounting | **Closed.** `Ownership.Accounted.initCtx` establishes `Accounted` for the initializer's heap, environment and context. |
 | Count fidelity accounts for every real owner and edge | **Closed for the supported fragment.** `Accounted` carries a duplicate-free, complete and bounded support, the live-heap domain, and the count equation; `Accounted.mult_eq` relates the context multiplicity to `IncomingCount` and `EnvOwnerCount`. `CountFidelity` itself is retained unchanged. |
-| Accepted execution preserves complete accounting | **Partial.** The context and atomic-step lemmas (`setDead`, `setScalar`, `move`, `decOne`, `takeOut`, `putBack`, `setFieldsScalar`, `setArrInPlace`) are proved; general accepted-execution preservation remains Gate B / Stage 2, including the four client facts below. |
+| Accepted execution preserves complete accounting | **Closed for the supported fragment, at intermediate states.** `Ownership.supported_run` (Stage 2) carries `Accounted` through every state a `Supported` run reaches, at the support the step arithmetic determines, proves the run fault-free with every recorded write exclusive, and states the store's own pre- and post-state (`supported_store_exclusive`). Its only non-`Accounted` **state** premise is `StoreSlots`, the scalar-slot fact the checker's `.setArr` rule cannot see, discharged at the initializer (`storeSlots_init`). Nested store states are **not** covered: `Supported` contains no extraction, call or restoration. |
 | The principal theorem transports accounting into a runtime guarantee | **Corrected; still no transport.** `principal_write` no longer carries `hacc`/`vars`/`hcount`; `principal_accounted` consumes `Accounted` at `Runner.initCtx` and derives the three facts. No transport theorem, no physical-ownership conclusion, no runtime claim. |
-| Rejected variants are kernel-checked | **Closed.** `alias_rejected`, `inc_rejected`, `outOfRange_rejected`/`outOfRange_accepted`, `bindAlone_rejected`, `scalarOverwrite_rejected`, `decTwo_rejected`, `dupSupport_witness`, `omittedOwner_witness`, `unboundRoot_witness`. |
+| Rejected variants are kernel-checked | **Closed.** `alias_rejected`, `inc_rejected`, `outOfRange_rejected`/`outOfRange_accepted`, `bindAlone_rejected`, `scalarOverwrite_rejected`, `decTwo_rejected`, `dupSupport_witness`, `omittedOwner_witness`, `unboundRoot_witness`; and the two independence theorems `aliasEntryInv` (`EntryInv` with no support accounted) and `accountedNotEntryInv` (accounted with no `EntryInv`). |
 | The counted nested protocol implements the recognised nested execution | **Open**, as before: Stage 3. The deferred credit ledger is its likely prerequisite. |
 | Flat checker/prefix and finite-path results | **Existing and unchanged**: checker soundness, the recognised flat prefix, the finite-path correspondence, and the nested extraction/restoration exclusivity result. |
 | Linked runtime behaviour for all supported inputs | **Open and out of scope**: C semantics, replay/backend identity, address identity, free/cascade, differentials and source-to-LCNF. |
@@ -115,14 +115,16 @@ Use the **contractual boundary** for the first submission. The main theorem stat
 
 `IncomingCount` counts live in-range owning edges; `EnvOwnerCount` counts the owning roots in `support`; `RefCount` and `EdgeAt` expose the two components.
 
-**Operations.** `Ownership.Supported : Ctx → Code → Prop` has eight constructors (`ret`, `bindLit`, `bindSize`, `bindShared`, `bindAlias`, `check`, `setArr`, `decOne`), each indexed at the checker's post-state. `decOne` admits `.dec x 1` at `((c.dec r 1).setUs x .dead)`; `.inc` and `.dec x n` with `n ≠ 1` are excluded. `inc x n` raises `rc` and `mult` without introducing a destination or edge, so no accounting state exists after it (`inc_rejected`); a multi-handle `dec` would discharge credits that no named owner carries (`decTwo_rejected`), and is deferred to the credit-ledger work of Stage 3. There is no `.borrow`-producing constructor.
+**Operations.** `Ownership.Supported : Ctx → Code → Prop` has eight constructors (`ret`, `bindLit`, `bindSize`, `bindShared`, `bindAlias`, `check`, `setArr`, `decOne`), each indexed at the checker's post-state. Since Stage 2 every constructor also carries the checker's own rule there, with the certificates listed below beside it: `Inv.isRef` supplies the environment binding the `.size`/`.isShared` source needs, `Inv.cell_of_ref` the cell `.size` reads (`.isShared` reads no cell), and the store's rule carries the count-one handle. Apart from those certificates, the fragment's two restrictions on the checker's accepted set are that `.inc` does not occur and that every `.dec` is `.dec x 1` (`decOne`'s `1 < c.mult r` is then the checker's own condition). So the fragment is check acceptance restricted to the counted constructors, and the implication is proved (`Ownership.supported_check`). `decOne` admits `.dec x 1` at `((c.dec r 1).setUs x .dead)`; `.inc` and `.dec x n` with `n ≠ 1` are excluded. `inc x n` raises `rc` and `mult` without introducing a destination or edge, so no accounting state exists after it (`inc_rejected`); a multi-handle `dec` would discharge credits that no named owner carries (`decTwo_rejected`), and is deferred to the credit-ledger work of Stage 3. There is no `.borrow`-producing constructor.
 
-**Client facts the checker does not supply.** Gate B / Stage 2 must derive, strengthen or certificate each:
+**Client facts the checker does not supply (and the one restriction it does).** Stage 2 disposed of each:
 
-1. the `checkAlias` target's freshness;
-2. the scalar `.let` target's freshness;
-3. `dec`'s single handle;
-4. the extracted child's no-second-edge condition (undetermined, not merely missing).
+1. the `checkAlias` target's freshness is a named certificate carried by `Supported`, shown load-bearing (`staleAlias_destroys`: `check` accepts the alias at an accounted state and the post-state admits no support);
+2. the scalar `.let` target's freshness is a named certificate carried by `Supported` (`scalarOverwrite_rejected` is the `Inv`-preserving, unaccounted witness);
+3. `dec`'s `n = 1` is a **fragment restriction**, not a checker-invisible certificate: `decOne`'s `1 < c.mult r` is exactly the checker's own condition at `n = 1`, and the restriction is load-bearing (`decTwo_rejected`). Single ownership at count one is a consequence of the relation (`Accounted.at_most_one_owner`, `Accounted.count_one_dichotomy`), not a premise of the fragment;
+4. the extracted child's no-second-edge condition is **derived**, not supplied: `Ownership.Accounted.incoming_eq_one_of_slot` obtains `IncomingCount H e = 1` from the relation, the array's slot and the checker's `c.mult e = 1`, and `Ownership.Accounted.takeOutOfSlot` states the take-out without it. The Stage 1 note's "undetermined" reading is corrected; the nested consumption of that step belongs to Gate C.
+
+One further fact has no checker or `Inv` supplier and is exposed as a premise: the store's selected slot holds a scalar (`StoreSlots`), discharged at the initializer and refuted when absent (`nonScalarStore_rejected`).
 
 **Principal shape.** `OwnershipLcnf.principal_write` is the flat recognised-write result with the primitive contracts; `OwnershipLcnf.principal_accounted` supplies `OwnersAccounted`, `CountFidelity` and `count_one_dichotomy` from `Accounted` at `Runner.initCtx`. The relation is load-bearing for that consuming result, not a hypothesis of the principal theorem, and it does not transport to a runtime guarantee.
 
@@ -134,7 +136,7 @@ M1–M6 and the claims half of M7 are applied: the introduction's “verified co
 
 ### Next
 
-Gate B / Stage 2 is the next proof milestone: preservation through accepted execution and the four client facts, with `EntryInv` packaging. Gates C–E, the artifact and the paper rewrite follow in that order unless the 2027 CFP changes the constraints.
+Gate B's flat half is closed (Stage 2). The next proof milestone is Gate C, whose first obligation is accounting the nested pre-states so `Accounted.takeOutOfSlot` can be consumed. Gates D–E, the artifact and the paper rewrite follow in that order unless the 2027 CFP changes the constraints.
 
 ## 5. Proof work required for the preferred paper
 

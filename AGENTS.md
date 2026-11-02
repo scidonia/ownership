@@ -306,11 +306,37 @@
   `scalarOverwrite_rejected`), and `decTwo_rejected` is a schema over accounted
   pre-states. `Ownership.Supported` is the context-indexed counted fragment:
   every continuation is indexed at the context the checker's matching rule
-  threads, and the accounting side conditions the checker does not supply are
-  premises. It excludes `.inc` entirely (`inc_rejected`) and every `.dec x n`
-  with `n ≠ 1` (`decTwo_rejected`), and it is not a certification route:
+  threads, every constructor carries the checker's own rule there, and the
+  accounting certificates the checker cannot see (a fresh alias target, a fresh
+  scalar-`.let` target) are further premises. Apart from those certificates, the
+  fragment's two restrictions on the checker's accepted set are that `.inc` does
+  not occur (`inc_rejected`) and that every `.dec` is `.dec x 1`
+  (`decTwo_rejected`), so the fragment is check acceptance restricted to the
+  counted constructors:
   `OwnershipLcnf.Prefix.toModel_supported` places the certified flat model in
-  it, and a preservation theorem over it is the next stage.
+  it. The take-out's no-second-edge premise is no longer
+  client-supplied: `Accounted.incoming_eq_one_of_slot` derives it from the
+  relation, the array's slot and the checker's count-one condition, and
+  `Accounted.takeOutOfSlot` states that step without it.
   `OwnershipTest/CompleteAccounting.lean` carries the computable guards, the
   four `Supported` controls (affirmative first) and the axiom prints;
   `scripts/check_axioms.lean` audits every declaration of the new module.
+
+- `Ownership/Preservation.lean` is preservation through accepted execution.
+  `Ownership.supported_run` takes a `Supported` program, an `Accounted` state and
+  the supplied store-slot premise `StoreSlots`, and concludes checker acceptance
+  (`supported_check`), the fault-free run, exclusively flagged writes, the
+  relation at the interpreter's final state at the support the step arithmetic
+  determines (`resultSupport`), and `AccountedAlong` — the relation at every
+  state the run reaches, with each array store reached at an exclusive target
+  (`supported_store_exclusive`). `StoreSlots` is the one fact neither a checker
+  rule nor any component of `Inv` can see, since no context records what a cell's
+  slot holds; it is discharged at the initializer (`storeSlots_init`) and its
+  absence is refuted (`nonScalarStore_rejected`). `AccountedEntry` packages
+  `Accounted` with `EntryInv` for the initializer (`Entry.initAccounted`) without
+  claiming either implies the other: `aliasEntryInv` is an `EntryInv` state no
+  support accounts and `accountedNotEntryInv` an accounted state with no
+  `EntryInv`. `Runner.store_exclusive` instantiates the measured write.
+  `OwnershipTest/Preservation.lean` carries the affirmative-then-negative
+  computable guards, both refusal theorems with their positive controls, and the
+  axiom prints.

@@ -31,16 +31,25 @@ namespace OwnershipTest.CompleteAccounting
 
 /-! ## The four `Supported` controls -/
 
-/-- The certified flat model is supported from the initializer. -/
+/-- The certified flat model is supported from the initializer. The alias source
+is the count-one owned handle at slot 0; the write's four premises hold at the
+moved context, where slot 3 carries that handle and slots 1 and 2 are the
+scalar index and replacement. -/
 theorem supported_execSet : Supported (Runner.initCtx 0) (Runner.execSet 0 3 1 2) := by
   unfold Runner.execSet
   refine Supported.bindAlias (c := Runner.initCtx 0) (x := 0) (y := 3)
-    (k := .setArr 3 1 2 (.ret 3)) ?_ ?_ ?_
+    (k := .setArr 3 1 2 (.ret 3)) ?_ ?_ ?_ ?_
   · exact Runner.initCtx_us_zero 0
+  · exact Runner.initCtx_multOf_zero 0
   · simp [Runner.initCtx]
-  · refine Supported.setArr ((Runner.initCtx 0).move 0 3) 3 1 2 (.ret 3) ?_
-    refine Supported.ret _ _ ?_
-    simp [Ctx.move_us_y, Runner.initCtx]
+  · refine Supported.setArr ((Runner.initCtx 0).move 0 3) 3 1 2 (.ret 3)
+      ?_ ?_ ?_ ?_ ?_
+    · simp [Ctx.move_us_y, Runner.initCtx]
+    · simp [Ctx.multOf, Ctx.move_refOf_y, Runner.initCtx]
+    · simp [Ctx.move_us_other, Runner.initCtx]
+    · simp [Ctx.move_us_other, Runner.initCtx]
+    · refine Supported.ret _ _ ?_
+      simp [Ctx.move_us_y, Runner.initCtx]
 
 /-- A second handle to the same array (count two) makes the write
 non-exclusive, so the program is outside the fragment. -/

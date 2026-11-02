@@ -276,8 +276,9 @@ operations and through the take-out, put-back and in-place store at the
 interpreter's own post-states, and refutes the configurations the older
 predicates admitted. The `inc` question is settled by narrowing the counted
 fragment: `Ownership.Supported` admits no increment and exactly one decrement of
-an owned handle, and carries the side conditions the checker does not supply. It
-is the interface the preservation theorem will quantify over, not a checker.
+an owned handle, and carries the side conditions the checker does not supply. Its
+last clause is superseded by Stage 2 below: the preservation theorem now
+quantifies over it, and it implies checker acceptance (`Ownership.supported_check`).
 
 Superseded here (both kept as the record at the stated baseline):
 
@@ -296,11 +297,48 @@ ordinary observation mismatch returns 2. This is false for the `sealed` mode,
 whose mismatch returns 1 (`runtime-bridge/RuntimeBridge/Probe.lean`); the living
 surfaces state the exception, and correcting the code is a separate change.
 
-Still open: execution preservation over the accepted checker, with the facts it
-does not supply named where they are consumed — the alias target's and the
-scalar-`.let` target's freshness, `dec`'s single handle, and the extracted
-child's no-second-edge premise (`Accounted.noOwnerOfSingleEdge` consumes it
-without deriving it from the footprint); the counted pair/restoration
+## Stage 2 status (2 November 2026)
+
+Flat execution preservation is closed for the supported fragment.
+`Ownership/Preservation.lean` proves `Ownership.supported_run`: a `Supported`
+program from an `Accounted` state, with the supplied store-slot premise
+`StoreSlots`, runs without a fault, records only exclusive writes, satisfies
+`AccountedAlong` at every state the run reaches — at each array store with an
+exclusive target, stated separately as `supported_store_exclusive` — and
+satisfies the relation at the final state at the support the step arithmetic
+determines. `Supported` now carries the checker's rule at each constructor
+together with the accounting certificates, so checker acceptance is recovered
+(`supported_check`) rather than assumed.
+
+The facts the checker does not supply are each disposed of:
+
+- the alias target's and the scalar-`.let` target's freshness are named
+  certificates carried by `Supported`, each shown load-bearing by a
+  kernel-checked refusal (`staleAlias_destroys`, `scalarOverwrite_rejected`);
+- `dec`'s `n = 1` is a fragment restriction rather than a certificate: `decOne`'s
+  `1 < c.mult r` is the checker's own condition at `n = 1`, and the restriction
+  is load-bearing (`decTwo_rejected`). Single ownership at count one follows
+  from the relation (`Accounted.at_most_one_owner`,
+  `Accounted.count_one_dichotomy`), not from a premise;
+- the extracted child's no-second-edge premise is no longer client-supplied:
+  `Accounted.incoming_eq_one_of_slot` derives it from the relation, the array's
+  slot and the checker's count-one condition, and `Accounted.takeOutOfSlot`
+  states the take-out without it. The earlier "undetermined" reading was wrong;
+  `outOfRange_rejected` shows the live-cell domain is what makes the derivation
+  possible;
+- the store's slot holding a scalar is `StoreSlots`: a supplied premise with an
+  initializer discharge (`storeSlots_init`) and a refusal when absent
+  (`nonScalarStore_rejected`). The in-place branch never inspects the slot, so
+  the `o.fields[idx]? = some (.scalar old)` conjunct is also what keeps
+  out-of-bounds stores outside the fragment's claim.
+
+`AccountedEntry` packages `Accounted` with `EntryInv` at the initializer without
+claiming either implies the other, and both directions are now proved:
+`aliasEntryInv` is `EntryInv` at a state no support accounts, and
+`accountedNotEntryInv` is an accounted state with no `EntryInv`.
+
+Still open: the nested store states — `NCode` pre-states are not `Accounted`
+until Gate C, which will consume `takeOutOfSlot`; the counted pair/restoration
 composition; the LCNF extraction/restoration stores and their trace events;
 invocation-local recursion; and transport at the principal boundary. The heap
 remains a named-cell model: nothing here relates it to physical counted

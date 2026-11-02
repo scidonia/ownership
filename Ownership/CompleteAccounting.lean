@@ -30,12 +30,23 @@ credits are the alternative and are not part of this relation. There is no
 `dead` only.
 
 What remains a client obligation. The count equation is not derivable from
-`Inv` (`alias_rejected`), the take-out's extracted element needs a
-no-second-edge premise that no checker rule supplies (`noOwnerOfSingleEdge`
-consumes it), and the checker does not require the alias target, the
-scalar-`.let` target or `dec`'s single handle to be fresh (`Supported` carries
-each). `Supported` is the interface a preservation theorem quantifies over; it
-is not a second checker and does not imply checker acceptance.
+`Inv` (`alias_rejected`), and the checker does not require the alias target or
+the scalar-`.let` target to be fresh, nor the store's selected slot to hold a
+scalar: `Supported` carries the first two as certificates and `StoreSlots` the
+last. The take-out's extracted element is *not* one of them: its no-second-edge
+premise follows from the relation, the array's slot and the checker's count-one
+condition (`Accounted.incoming_eq_one_of_slot`), so `Accounted.takeOutOfSlot`
+states that step without a client-supplied edge count.
+
+What it covers of execution. Each `Supported` constructor carries the checker's
+own rule at that constructor, with the certificates above beside it — `bindLit`
+has no checker premise at all, so its freshness premise is certificate alone.
+Apart from those certificates, the fragment's only departure from the checker's
+rules is `n = 1` at `.dec`.
+So the fragment is check acceptance restricted to the counted constructors, and
+`Ownership.Preservation` proves that reading: `Ownership.supported_check` gives
+the checker's acceptance, and `supported_run` follows the resulting fault-free
+run with `Accounted` at every state it reaches.
 
 This is not a statement about physical memory. The heap here is the fragment's
 named-cell model; nothing in this module says a compiled program mutates memory,
@@ -638,6 +649,28 @@ theorem length_eq_of_nodup_mem_iff {l₁ : List Var} :
     rw [List.length_cons, ih', List.length_erase_of_mem ha]
     omega
 
+/-- A sum of naturals is at least any of its entries. -/
+theorem le_sum_of_mem {l : List Nat} {a : Nat} (h : a ∈ l) : a ≤ l.sum := by
+  induction l with
+  | nil => simp at h
+  | cons b t ih =>
+    rw [List.sum_cons]
+    rcases List.mem_cons.mp h with rfl | ht
+    · omega
+    · have := ih ht
+      omega
+
+/-- A field array holding `.ref e` at one index contributes at least one edge. -/
+theorem RefCount_pos_of_slot {fields : Array Val} {i : Nat} {e : Ref}
+    (h : fields[i]? = some (.ref e)) : 1 ≤ RefCount fields e := by
+  unfold RefCount
+  rw [← Array.getElem?_toList] at h
+  have hmem : Val.ref e ∈ fields.toList := List.mem_of_getElem? h
+  have hf : Val.ref e ∈ fields.toList.filter (fun v => v = Val.ref e) := by
+    rw [List.mem_filter]
+    exact ⟨hmem, by simp⟩
+  exact List.length_pos_iff_exists_mem.mpr ⟨_, hf⟩
+
 /-! ## The complete relation -/
 
 /-- The complete accounting relation: the checker invariant, a duplicate-free,
@@ -759,6 +792,31 @@ theorem noOwnerOfSingleEdge {support : List Var} {H : Heap} {env : Env} {c : Ctx
     unfold EnvOwnerCount
     exact List.length_pos_iff_exists_mem.mpr ⟨y, hfy⟩
   omega
+
+/-- A live cell whose slot holds `.ref e` gives at least one incoming edge to
+`e`. The live-cell domain is what makes the enumeration see the slot: this is
+the fact `outOfRange_rejected` shows is not free. -/
+theorem IncomingCount_pos_of_slot {support : List Var} {H : Heap} {env : Env} {c : Ctx}
+    (h : Accounted support H env c) {r : Ref} {o : Obj} {idx : Nat} {e : Ref}
+    (hcell : H.cells r = some o) (hslot : o.fields[idx]? = some (.ref e)) :
+    1 ≤ IncomingCount H e := by
+  have hnext : r < H.next := h.domain r o hcell
+  rw [IncomingCount_eq_edges]
+  have hmem : EdgeAt H r e ∈ (List.range H.next).map (fun q => EdgeAt H q e) :=
+    List.mem_map.mpr ⟨r, List.mem_range.mpr hnext, rfl⟩
+  have hpos : 1 ≤ EdgeAt H r e := by
+    rw [show EdgeAt H r e = RefCount o.fields e from by simp [EdgeAt, hcell]]
+    exact RefCount_pos_of_slot hslot
+  exact Nat.le_trans hpos (le_sum_of_mem hmem)
+
+/-- At count one the slot's edge is the child's only one: the relation bounds
+the incoming count by one, and the slot supplies one. This is the supplier of
+the take-out's no-second-edge premise that the checker does not see. -/
+theorem incoming_eq_one_of_slot {support : List Var} {H : Heap} {env : Env}
+    {c : Ctx} (h : Accounted support H env c) {r : Ref} {o : Obj} {idx : Nat} {e : Ref}
+    (he : c.mult e = 1) (hcell : H.cells r = some o)
+    (hslot : o.fields[idx]? = some (.ref e)) : IncomingCount H e = 1 :=
+  Nat.le_antisymm (h.incoming_le_one he) (IncomingCount_pos_of_slot h hcell hslot)
 
 /-! ## The initializer -/
 
@@ -1192,6 +1250,23 @@ theorem takeOut {support : List Var} {H : Heap} {env : Env} {c : Ctx}
       rw [hI, hif]
       omega
 
+/-- The take-out with no client-supplied edge count: at a count-one child whose
+slot is filled, `IncomingCount H e = 1` follows from the relation, the slot and
+the checker's count-one condition (`Accounted.incoming_eq_one_of_slot`). What
+remains is the checker's own take-out rule — fresh target variables, a distinct
+extracted element, the count-one array handle — rather than a client-supplied
+edge count. -/
+theorem takeOutOfSlot {support : List Var} {H : Heap} {env : Env} {c : Ctx}
+    (h : Accounted support H env c) {a fst snd e : Var} {r : Ref} {o : Obj} {idx : Nat}
+    (ha : c.us a = .owned) (hma : c.multOf a = 1) (hr : c.refOf a = some r)
+    (he : c.mult e = 1) (hfst : c.us fst ≠ .owned) (hsnd : c.us snd ≠ .owned)
+    (hfs : fst ≠ snd) (her : e ≠ r) (hcell : H.cells r = some o)
+    (hslot : o.fields[idx]? = some (.ref e)) :
+    Accounted (snd :: replaceVar support a fst)
+      (H.set r { o with fields := o.fields.setIfInBounds idx (.scalar 0) })
+      ((env.set fst (.ref r)).set snd (.ref e)) ((c.move a fst).bindOwned snd e) :=
+  takeOut h ha hma hr he hfst hsnd hfs her hcell hslot
+    (incoming_eq_one_of_slot h he hcell hslot)
 
 /-- The put-back's atomic step: the array's handle moves to `result`, the
 returned element's handle is deadened, and its edge is filled into the slot the
@@ -1823,27 +1898,41 @@ theorem scalarOverwrite_rejected (n : Nat) :
 
 /-- The counted supported fragment of the model, indexed by the context each
 continuation is checked at. Every constructor's continuation is indexed at the
-context the checker's matching rule threads, and the accounting side conditions
-the checker does not supply are premises. `.inc` and any `.dec x n` with `n ≠ 1`
-are excluded: no accounting state exists after an increment (`inc_rejected`) and
-a multi-handle decrement releases counts no obligation carried
-(`decTwo_rejected`). This is the interface a preservation theorem quantifies
-over; it is not a second checker and does not imply `check` acceptance. -/
+context the checker's matching rule threads, each constructor carries the
+checker's own rule at that constructor, and the accounting certificates the
+checker cannot see are further premises: a fresh alias target and a fresh
+scalar-`.let` target. Apart from those certificates, the only departure from the
+checker's rules is `n = 1` at `.dec`, where `decOne`'s `1 < c.mult r` is exactly
+the checker's `n < c.mult r` at `n = 1`. `.inc` and any `.dec x n` with `n ≠ 1` are excluded: no accounting
+state exists after an increment (`inc_rejected`) and a multi-handle decrement
+releases counts no obligation carried (`decTwo_rejected`).
+
+So the fragment is check acceptance restricted to the counted constructors: from
+`Supported c s` the checker accepts the program
+(`Ownership.supported_check`), which is what lets a preservation
+theorem follow the fault-free run. The store's slot fact is deliberately absent:
+no context records which value a cell's selected slot holds, so it is the
+`StoreSlots` premise of `Ownership.supported_run` rather than a constructor
+premise. -/
 inductive Supported : Ctx → Code → Prop where
   | ret (c : Ctx) (x : Var) :
       (c.us x = .owned ∨ c.us x = .scalar) → Supported c (.ret x)
   | bindLit (c : Ctx) (x : Var) (n : Nat) (k : Code) (hx : c.us x ≠ .owned) :
       Supported (c.setUs x .scalar) k → Supported c (.let x (.lit n) k)
-  | bindSize (c : Ctx) (x a : Var) (k : Code) (hx : c.us x ≠ .owned) :
+  | bindSize (c : Ctx) (x a : Var) (r : Ref) (k : Code) (hx : c.us x ≠ .owned)
+      (ha : c.us a = .owned ∨ c.us a = .borrow) (hr : c.refOf a = some r) :
       Supported (c.setUs x .scalar) k → Supported c (.let x (.size a) k)
-  | bindShared (c : Ctx) (x y : Var) (k : Code) (hx : c.us x ≠ .owned) :
+  | bindShared (c : Ctx) (x y : Var) (r : Ref) (k : Code) (hx : c.us x ≠ .owned)
+      (hy : c.us y = .owned ∨ c.us y = .borrow) (hr : c.refOf y = some r) :
       Supported (c.setUs x .scalar) k → Supported c (.let x (.isShared y) k)
   | bindAlias (c : Ctx) (x y : Var) (k : Code) (hx : c.us x = .owned)
-      (hy : c.us y ≠ .owned) :
+      (hm : c.multOf x = 1) (hy : c.us y ≠ .owned) :
       Supported (c.move x y) k → Supported c (.let y (.checkAlias x) k)
-  | check (c : Ctx) (x : Var) (k : Code) :
+  | check (c : Ctx) (x : Var) (k : Code) (hx : c.us x = .owned)
+      (hm : c.multOf x = 1) :
       Supported c k → Supported c (.check x k)
-  | setArr (c : Ctx) (x i v : Var) (k : Code) :
+  | setArr (c : Ctx) (x i v : Var) (k : Code) (hx : c.us x = .owned)
+      (hm : c.multOf x = 1) (hi : c.us i = .scalar) (hv : c.us v = .scalar) :
       Supported c k → Supported c (.setArr x i v k)
   | decOne (c : Ctx) (x : Var) (r : Ref) (k : Code) (hx : c.us x = .owned)
       (hr : c.refOf x = some r) (hlt : 1 < c.mult r) :

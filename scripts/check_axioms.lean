@@ -9,6 +9,7 @@ import OwnershipLcnf.RuntimeModel
 import OwnershipLcnf.NoAbort
 import OwnershipLcnf.Principal
 import Ownership.CompleteAccounting
+import Ownership.Preservation
 
 #print axioms Ownership.check_sound
 #print axioms Ownership.Entry.checkN_sound_of_entryInv
@@ -112,5 +113,23 @@ import Ownership.CompleteAccounting
 #print axioms Ownership.bindAlone_rejected
 #print axioms Ownership.scalarOverwrite_rejected
 #print axioms Ownership.Supported
+#print axioms Ownership.le_sum_of_mem
+#print axioms Ownership.RefCount_pos_of_slot
+#print axioms Ownership.Accounted.IncomingCount_pos_of_slot
+#print axioms Ownership.Accounted.incoming_eq_one_of_slot
+#print axioms Ownership.Accounted.takeOutOfSlot
+#print axioms Ownership.StoreSlots
+#print axioms Ownership.resultSupport
+#print axioms Ownership.AccountedAlong
+#print axioms Ownership.supported_check
+#print axioms Ownership.supported_run
+#print axioms Ownership.supported_store_exclusive
+#print axioms Ownership.AccountedEntry
+#print axioms Ownership.Entry.initAccounted
+#print axioms Ownership.storeSlots_init
+#print axioms Ownership.storeSupport_eq
+#print axioms Ownership.Runner.store_exclusive
+#print axioms Ownership.aliasEntryInv
+#print axioms Ownership.accountedNotEntryInv
 #print axioms OwnershipLcnf.Prefix.toModel_supported
 #print axioms OwnershipLcnf.principal_accounted
