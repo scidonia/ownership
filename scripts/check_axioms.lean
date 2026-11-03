@@ -193,6 +193,10 @@ import OwnershipTest.CountedFamily
 #print axioms Ownership.chain
 #print axioms Ownership.disposition?_parent_after_call
 #print axioms Ownership.counted_nested_chain
+#print axioms Ownership.HeapCompat.IncomingCount_of_dom
+#print axioms Ownership.counted_nested_chain_edges
+#print axioms Ownership.counted_nested_chain_two_levels_call
+#print axioms Ownership.counted_nested_chain_two_levels
 #print axioms OwnershipLcnf.countedOp
 #print axioms OwnershipLcnf.countedOf_fragment
 #print axioms OwnershipLcnf.countedPrefix
@@ -231,6 +235,8 @@ import OwnershipTest.CountedFamily
 #print axioms OwnershipTest.CountedFamily.famChecked
 #print axioms OwnershipTest.CountedFamily.family_chain
 #print axioms OwnershipTest.CountedFamily.family_chain_two
+#print axioms OwnershipTest.CountedFamily.family_chain_edges
+#print axioms OwnershipTest.CountedFamily.IncomingCount_fam_final_one
 #print axioms OwnershipTest.CountedFamily.family_pair_cell_absent
 #print axioms OwnershipTest.CountedFamily.family_cursor
 #print axioms OwnershipTest.CountedFamily.family_extraction_exclusive

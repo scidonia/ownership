@@ -70,7 +70,14 @@ recursive call runs a supplied model body; the emitted callee is not captured â€
 with the ordinary child contract derived at every level, and the counted child
 call's edge effect supplied as an explicit premise (`CountedChildCall.edges`),
 from which the caller's post-call accounting is derived
-(`CountedChildCall.accounted_of`); the pair-arms correspondence is
+(`CountedChildCall.accounted_of`). The chain itself is not edge-preserving step by
+step, but its net run is: `counted_nested_chain_edges` derives
+`EdgePreserved` between the entry and the chain's restored counted heap, and the
+two-level composition `counted_nested_chain_two_levels` spends it as the
+enclosing call's `edges` (the inner chain is the outer call's body). What remains
+supplied at the second level is the outer *model* boundary `PutBack.ChildCall`
+for the compound body; the finite-path induction derives that contract for a
+recursive body, not yet for a `chain` term. The pair-arms correspondence is
 still open, with its reason recorded in `PLAN.md`.
 `OwnershipLcnf.principal_supported_path` composes that nested path with the
 counted extraction/call/restoration protocol and the counted interpreter's

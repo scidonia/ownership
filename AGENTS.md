@@ -335,12 +335,15 @@
   base, and `index_path_simulates_model` takes no arbitrary `ChildContract`. The
   induction derives `ChildContract` only: `Ownership.CountedChildCall`'s `edges`
   field (the call's `EdgePreserved` effect on the caller's heap) is an explicit
-  premise of every theorem that consumes it, and the caller's accounting at the
-  body's return is *derived* from that effect and the caller's accounting at the
-  call (`CountedChildCall.accounted_of`); the instance supplies the effect from
-  the leaf rewrite (`B_edges`). The leaf contract and N10 remain; the module
-  records that the model's flat environment cannot express the emitted
-  per-invocation path re-projection.
+  premise of every theorem that consumes it at a leaf body, and the caller's
+  accounting at the body's return is *derived* from that effect and the caller's
+  accounting at the call (`CountedChildCall.accounted_of`); the instance supplies
+  the effect from the leaf rewrite (`B_edges`). A body that is itself the counted
+  chain is the exception: `Ownership.counted_nested_chain_edges` derives its net
+  effect, so `counted_nested_chain_two_levels` constructs the enclosing
+  `CountedChildCall` rather than assuming its `edges`. The leaf contract and N10
+  remain; the module records that the model's flat environment cannot express the
+  emitted per-invocation path re-projection.
 - `OwnershipLcnf/RuntimeModel.lean` is the concrete runtime state for the
   `setAt` write: counts, persistence, fields, the exclusivity predicate, a
   guarded allocator, the check's ok/abort outcomes and both array-set
@@ -411,11 +414,24 @@
   relate the model language's runs at two `HeapCompat` heaps **for copy-free
   runs**: `Code.setArr`'s copy branch allocates at each heap's own cursor, so the
   lemmas take the premise that every recorded write flag is `true` (which the
-  child call's `writes_exclusive` supplies). The chain does not conclude an
-  entry-to-output edge effect: the take-out lowers the extracted child's incoming
-  count by one and the restoration raises it by one, so `EdgePreserved` holds only
-  of the net run and composing a nested level's `edges` would need that net
-  statement, not the final-state `HeapCompat`. The child call stays contractual and
+  child call's `writes_exclusive` supplies). The chain is not edge-preserving
+  step by step — the take-out lowers the extracted child's incoming count by one
+  and the restoration raises it by one — but its **net** run is:
+  `counted_nested_chain_edges` concludes `EdgePreserved H Hf` between the entry
+  and `counted_nested_chain`'s restored counted heap (entry → boundary by
+  `counted_takeOut` and `HeapCompat.IncomingCount_of_dom`, boundary → call
+  output by the child's `edges`, call output → final by the restoration's slot
+  fill), and `OwnershipTest/CountedFamily.lean` instantiates it as
+  `family_chain_edges` with `IncomingCount_fam_final_one` reading the identity
+  off at the extracted child. That net effect is what an enclosing call needs,
+  so `counted_nested_chain_two_levels_call` constructs the outer
+  `CountedChildCall` with the inner chain as its body and the inner net effect as
+  its `edges`, and `counted_nested_chain_two_levels` applies the chain theorem at
+  the outer level. The outer *model* boundary of the compound body stays a
+  hypothesis: the finite-path induction derives `PutBack.ChildCall` for a
+  recursive body, not yet for a `chain` term, so the two-level statement is
+  composed from that boundary and the inner level's accounting rather than from a
+  `Path` instantiation. The child call stays contractual and
   the emitted callee is not captured (N10); the mid-pair state is not `Accounted`
   and its refusal is proved, so the relation is a boundary relation rather than an
   every-instruction one. `OwnershipTest/CountedNested.lean` carries the boundary

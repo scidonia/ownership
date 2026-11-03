@@ -137,6 +137,8 @@ DECLARATIONS = {
     "countedPrefix": ("OwnershipLcnf.countedPrefix", "OwnershipLcnf/CountedTrace.lean"),
     "countedSuffix": ("OwnershipLcnf.countedSuffix", "OwnershipLcnf/CountedTrace.lean"),
     "counted_nested_chain": ("Ownership.counted_nested_chain", "Ownership/CountedNested.lean"),
+    "counted_nested_chain_edges": ("Ownership.counted_nested_chain_edges", "Ownership/CountedNested.lean"),
+    "counted_nested_chain_two_levels": ("Ownership.counted_nested_chain_two_levels", "Ownership/CountedNested.lean"),
     "counted_restore": ("Ownership.counted_restore", "Ownership/CountedNested.lean"),
     "counted_takeOut": ("Ownership.counted_takeOut", "Ownership/CountedNested.lean"),
     "counted_nested_chain_restoration": ("Ownership.counted_nested_chain_restoration", "Ownership/CountedNested.lean"),

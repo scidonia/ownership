@@ -152,6 +152,14 @@ boundary. The child call is a contract, and its counted version must also state
 the call's effect on the caller's incoming edges; from that effect and the
 caller's accounting at the call, the accounting at the body's return is derived.
 The finite-path induction over model paths does not construct that edge effect.
+For a body that is itself the take-out/call/restoration chain it is no longer a
+premise: the chain is not edge-preserving step by step, because the take-out
+removes one edge and the restoration adds one back, but its net run is, and
+\lean{counted\_nested\_chain\_edges} proves that the entry and the restored
+counted heap have the same incoming-edge count at every name.
+\lean{counted\_nested\_chain\_two\_levels} spends that net effect as the
+enclosing call's \lean{EdgePreserved} field, with the inner chain as the outer
+call's body; the outer model boundary for the compound body remains supplied.
 
 We prove, for one level of a finite supported path under that contract, that the
 counted interpreter's run over the whole recognised fragment---extraction, child
@@ -176,9 +184,9 @@ a live-cell domain and the roots-plus-edges equation yield the count-one
 dichotomy, reject the two-owner countermodel, and make preservation provable:
 \lean{supported\_run} takes an accounted state and one supplied slot fact and
 concludes a fault-free run of the supported fragment with exclusively flagged
-writes and accounting at every state reached. The proof says why: a move
-transfers an owner rather than adding one, a single decrement removes one root
-together with one count, and a scalar-for-scalar store adds and removes no edge.
+writes and accounting at every state reached: a move transfers an owner, a single
+decrement removes a root with its count, and a scalar store adds and removes no
+edge.
 \item \textbf{A counted protocol at its accounted boundaries.} The pair's traffic
 is neutral at release, the negative controls leave counts elevated, and
 restoration's mutate branch is derived rather than assumed; \lean{counted\_nested\_chain}
@@ -242,7 +250,7 @@ the cells again.
 \begin{figure}[t]
 \centering
 \footnotesize
-\begin{tikzpicture}[
+\begin{tikzpicture}[scale=0.85, transform shape,
   cell/.style={draw, rounded corners=1pt, inner sep=1.5pt,
     minimum height=6.5mm, minimum width=13mm, align=center,
     font=\scriptsize},
@@ -329,15 +337,14 @@ semantics. They are neither Lean source nor LCNF: the recogniser walks the LCNF
 value, the mapping reads a program off the recognised operands, and the executor
 runs the recognised trace.
 
-The two languages play different roles and must not be conflated. \lean{Code}
-and \lean{NCode} are the checker's \emph{general} language: it contains
-increments, multi-count decrements and arbitrary nesting, and the checker accepts
-programs that carry no accounting. The theorem-bearing fragment is
-\lean{Supported} (\Cref{sec:supported}), an inductively defined subset of
-\lean{Code} with extra certificates. Checker acceptance, supported certification,
-state validity and the child-call specification are four separate notions;
-accounting is proved for the fragment that carries its certificates, rather than
-for checker acceptance alone.
+The two languages play different roles. \lean{Code} and \lean{NCode} are the
+checker's \emph{general} language: it contains increments, multi-count decrements
+and arbitrary nesting, and the checker accepts programs that carry no accounting.
+The theorem-bearing fragment is \lean{Supported} (\Cref{sec:supported}), an
+inductively defined subset of \lean{Code} with extra certificates. Checker
+acceptance, supported certification, state validity and the child-call
+specification are separate notions; accounting is proved for the fragment that
+carries its certificates, not for checker acceptance alone.
 
 \section{Complete ownership accounting}\label{sec:accounting}
 
@@ -530,17 +537,6 @@ such that every write in $ws$ is flagged exclusive,
 \lean{Accounted (resultSupport s support) H' env' c'}, and
 \lean{AccountedAlong H env c support s}.
 \end{theorem}
-\begin{lstlisting}
-theorem supported_run {c : Ctx} {s : Code} (hs : Supported c s)
-    {support : List Var} {H : Heap} {env : Env}
-    (hacc : Accounted support H env c) (hslots : StoreSlots H env s) :
-    ∃ c' H' env' v ws,
-      check c s = some c' ∧
-      run s env H = .done H' env' v ws ∧
-      (∀ w ∈ ws, w.2 = true) ∧
-      Accounted (resultSupport s support) H' env' c' ∧
-      AccountedAlong H env c support s
-\end{lstlisting}
 The slot fact concerns the store's old selected slot as well as the scalar written,
 so reference-valued array updates lie outside this preservation theorem.
 \lean{AccountedAlong} is a conclusion, never a hypothesis: at each instruction the
@@ -676,7 +672,15 @@ From an accounted caller entry, take-out, an admitted \lean{CountedChildCall} an
 restoration compose into one chain: \lean{counted\_nested\_chain} concludes the
 final counted state, its accounting, the restoration's \lean{.mutate} disposition,
 and \lean{HeapCompat} to \lean{runN}'s state; the restored slot's own equation is
-\lean{counted\_nested\_chain\_restoration}.
+\lean{counted\_nested\_chain\_restoration}. The chain is not edge-preserving
+step by step, but its net run is: \lean{counted\_nested\_chain\_edges} concludes
+\lean{EdgePreserved} between the entry and the restored counted heap, which is the
+entry-to-output effect that \lean{counted\_nested\_chain}'s final-state
+\lean{HeapCompat} does not give. An enclosing call therefore takes the inner chain
+as its body with that net effect as its \lean{edges} field
+(\lean{counted\_nested\_chain\_two\_levels}); its own model boundary for the
+compound body is still supplied, since the finite-path induction derives the
+child-call contract for a recursive body, not for a chain term.
 \end{theorem}
 
 \subsection{Compatibility and the boundary argument}
@@ -808,32 +812,26 @@ entry invariant and the runtime-model correspondence and concludes no accounting
 while the accounting results take \lean{Accounted}. They are adjacent theorems,
 not one preservation result for every recognised prefix.
 
-Read without the formal apparatus, the correspondence says this. If the caller's
-state is accounted, the recogniser accepts the emitted declaration, and the child
-call is covered by its contract, then running the counted interpreter over the
-whole recognised fragment returns the caller's array handle with no fault, writes
-only to exclusive targets, and leaves a heap that agrees with the model's run of
-the same nested update cell for cell, apart from the one allocation the temporary
-pair takes.
+\begin{claim}[in words]\label{claim:inwords}
+Let the caller's state be accounted, let the recogniser accept the emitted
+declaration, and let the child call satisfy its contract with its edge effect.
+Then the counted interpreter's run of the recognised fragment returns the caller's
+array handle with no fault, writes only to exclusive targets, and leaves a heap
+that agrees with the model's run of the same nested update cell for cell; the
+allocator cursor is the only component that differs.
+\end{claim}
 
-\begin{table}[t]
-\centering
-\small
-\begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}p{3.0cm}X@{}}
-\toprule
-Layer & What is established there, and what stands in for the compiler \\
-\midrule
-structural recognition & the recogniser walks the compiled declaration and pins operation order, arities, operand identities and branch constructors \\
-decoding consistency & the recognised trace decodes to the expected prefix, so the recogniser's verdict is spent by the execution theorem rather than assumed by it \\
-interpreter correspondence & the counted interpreter's run of that trace is related to the model's run of the built path: same cells, result, fault and trace \\
-supplied meanings & the take-out helper's store, the child body and the emitted recursive callee enter as contracts; the runtime's C primitives are observed, not proved \\
-\bottomrule
-\end{tabularx}
-\caption{What the correspondence covers. The first three rows are proved; the last
-names the modelling boundary, so recognition is not mistaken for execution
-adequacy of the emitted LCNF or C.}
-\label{tab:layers}
-\end{table}
+The connection has four layers, and they are separate claims. Structural
+recognition walks the compiled declaration and pins operation order, arities,
+operand identities and branch constructors. Decoding consistency makes the
+recognised trace decode to the expected prefix, so the recogniser's verdict is
+spent by the execution theorem rather than assumed by it. Interpreter
+correspondence relates the counted run of that trace to the model's run of the
+built path: same cells, result, fault and trace. Supplied meanings name the
+modelling boundary --- the take-out helper's store, the child body and the emitted
+recursive callee enter as contracts, and the runtime's C primitives are observed,
+not proved --- so recognition is not mistaken for execution adequacy of the emitted
+LCNF or C.
 
 \begin{theorem}[Counted fragment correspondence]\label{thm:principal-fragment}
 Let the recogniser accept the declared shape (\lean{projectNested} yielding $p$),
@@ -879,7 +877,7 @@ in \lean{OwnershipLcnf/Principal.lean}.}
 \begin{figure}[t]
 \centering
 \footnotesize
-\begin{tikzpicture}[
+\begin{tikzpicture}[scale=0.85, transform shape,
   st/.style={draw, rounded corners=1.5pt, inner sep=2.5pt, minimum height=7mm,
     minimum width=17mm, align=center, font=\scriptsize},
   rowlbl/.style={font=\scriptsize\itshape, anchor=east, inner sep=2pt},
@@ -972,44 +970,27 @@ axiom footprint is the trusted one. The counted instance discharges the child-ca
 contract's accounting field from the caller's own accounting at the body's return,
 so the contract is met at the instance rather than assumed by it.
 
-\begin{table}[t]
-\centering
-\small
-\setlength{\tabcolsep}{3pt}
-\begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}p{3.2cm}>{\raggedright\arraybackslash}p{5.3cm}X@{}}
-\toprule
-Variation & What is observed & Which mechanism answers it \\
-\midrule
-retained parent (count two) & the restoration copies and the mutate branch is not taken & the model's copy branch; the relation exposes the extra allocation through the cursor \\
-pair not released & both counts elevated, no exclusivity & refused by the relation \\
-pair-live state & no accounting at the take-out context & refused by the relation \\
-duplicated, omitted or unbound owner entry & each field is load-bearing: a duplicate double-counts a root, an omitted owner still satisfies the equation, an unbound entry counts nothing & refused by the relation \\
-persistent parent & the check aborts and no write is reported & rejected by the checker; outside the certified fragment \\
-\bottomrule
-\end{tabularx}
-\caption{Controls. The mechanisms are not interchangeable: a row refused by the
-relation is not a checker rejection, and a copy branch in the model is not an
-allocation claim about the executable. Each row's witness is named in the artifact
-documentation.}
-\label{tab:controls}
-\end{table}
+Five controls probe distinct mechanisms, and they are not interchangeable. A
+retained parent of count two makes the restoration copy rather than mutate, the
+relation exposing the extra allocation through the cursor; an omitted pair release
+leaves both component counts elevated with no exclusivity; the pair-live state has
+no accounting at the take-out context. In those three the relation refuses. A
+duplicated, omitted or unbound owner entry shows another face --- a duplicate
+double-counts a root, an omitted owner still satisfies the equation, an unbound
+entry counts nothing --- so each support field is load-bearing. A persistent parent
+is refused by the checker instead: the check aborts and no write is reported, which
+is a different mechanism from a refusal by the relation, and a copy branch in the
+model is not an allocation claim about the executable. Each witness is named in the
+artifact documentation.
 
-\subsection{What the mechanisation taught}
-The reusable insight is that count-one reasoning is a boundary discipline. A count
-of one is not one owner: equating the stored count with the context's multiplicity
-leaves two owning variables satisfying it, so the accounting adds a support of
-owning variables and a live-cell domain. And a correct temporary-alias protocol
-cannot be an invariant at all: the pair duplicates a reference before any count is
-incremented, so the pair-live window is covered by count identities and by an
-explicit cursor slack between the runs, with accounting asserted at the entry, the
-release and the restoration.
+
 
 \subsection{Evidence and artifact}\label{sec:map}
 The proof checks are kernel builds of \lean{Ownership}, \lean{OwnershipTest} and
 \lean{OwnershipLcnf}, an axiom audit over the headline theorems, and the artifact
 gate that binds the pinned LCNF, C and header. They are separate categories from
 the structural recogniser controls (the near-miss counts and the control fixtures
-of \Cref{tab:controls}) and from the linked runtime observations. A compiled probe
+described above) and from the linked runtime observations. A compiled probe
 compares the model's predicates with \lean{lean\_is\_exclusive} and address
 identity on a corpus including a unique array, a live alias, the alias dropped
 back to one, a persistent literal and a closure-held array; its differential mode
@@ -1025,32 +1006,24 @@ roles and the paper-to-code entry points, are listed in the supplementary docume
 \texttt{docs/notes/ownership-theorem-map.md}, which is artifact documentation and
 not part of the argument.
 
-\begin{table}[t]
-\centering
-\small
-\begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}p{3.4cm}X@{}}
-\toprule
-Evidence & Scope established \\
-\midrule
-parameterised family & one model extraction/call/restoration level, for arbitrary length, valid outer and leaf slots, and replacement value \\
-closed instance & the whole counted-fragment theorem at the captured declaration, with a supplied model child body \\
-structural controls & rejection of the specified malformed traces; not a theorem that every malformed trace is rejected \\
-linked probes & observed exclusivity, address and result behaviour on the recorded corpus \\
-artifact gate & the pinned sibling revision, its cleanliness, and byte-identical regenerated captures \\
-\bottomrule
-\end{tabularx}
-\caption{The evidence layers answer different questions; no row establishes more
-than its scope.}
-\label{tab:evidence}
-\end{table}
+The evidence answers different questions and no item establishes more than its
+scope. The parameterised family covers one model extraction/call/restoration level
+for arbitrary length, valid outer and leaf slots and any value; the closed instance
+covers the whole counted-fragment theorem at the captured declaration with a
+supplied model child body; the structural controls reject the specified malformed
+traces without claiming that every malformed trace is rejected; the linked probes
+observe exclusivity, address and result behaviour on the recorded corpus; and the
+artifact gate checks the pinned sibling, its cleanliness and byte-identical
+regenerated captures.
 
 Applying the development to a changed source update is four steps. Pin the sibling
 and recapture, which fails visibly if the recogniser's prefix changes; run
 \lean{projectNested} on the new declaration; supply the client facts — the entry
 accounting, the layout, agreement and level data, the path contract, and the child
-call with its accounting at the body's return; then check the certificate with the
-axiom audit and the claim census. The manual work is the third step: recognition,
-the model correspondence and the boundary accounting are automatic.
+call with its edge effect; then check the certificate with the axiom audit and the
+claim census. The manual work is the third step; recognition, the model
+correspondence, the boundary accounting and the post-call accounting are
+automatic.
 
 \section{Related work}\label{sec:related}
 
@@ -1068,58 +1041,52 @@ flat write, and the extraction protocol is isolated at proved accounted
 boundaries. This is not a claim to the first static uniqueness analysis for Lean.
 
 Perceus \cite{perceus} and Counting Immutable Beans \cite{countingbeans} transform
-programs by inserting counts and reuse tokens, and prove the transformation
-preserves semantics and allocation behaviour; neither asks when a count of one is
-justified at a write in code that already exists. \lean{Accounted} is a
-specification of that justification, proved here for a restricted fragment rather
-than as a transformation. Linear Haskell \cite{linearhaskell} makes linearity a
-source-level type property through linear arrows and multiplicities, and Clean's
-uniqueness typing \cite{uniqueness} is uniqueness rather than linearity; neither
-is a checker over an existing compiler IR, and neither is connected to emitted
+programs by inserting counts and reuse tokens and prove the transformation
+preserves semantics; neither asks when a count of one is justified at a write in
+existing code, which is what \lean{Accounted} specifies and what this paper proves
+for a fragment. Linear Haskell \cite{linearhaskell} makes linearity a source-level
+type property and Clean's uniqueness typing \cite{uniqueness} is uniqueness rather
+than linearity; neither checks an existing compiler IR or connects to emitted
 code. Lean's \lean{Array.markLinear} \cite{marklinear} is dynamic: it can copy an
 array to establish uniqueness and, with \lean{LEAN\_ABORT\_ON\_NONLINEAR}, abort
 on a later nonlinear use. Translation validation \cite{translationvalidation}
-checks one compiler run rather than a static discipline, and verified compilation
-\cite{compcert,cakeml} proves a compiler correct for its source language; both are
-different in kind from a checker over a fragment of an existing backend's input.
+checks one compiler run, and verified compilation \cite{compcert,cakeml} proves a
+compiler correct for its source language; both differ in kind from a checker over
+a fragment of an existing backend's input. The reusable insight is that count-one
+reasoning is a boundary discipline: a count of one is not one owner, so the
+accounting needs a support of owning variables and a live-cell domain, and a
+correct temporary-alias protocol is not an invariant, so the pair-live window is
+covered by count identities with accounting asserted at its boundaries.
 
 \section{Scope, conclusion and disclosure}\label{sec:limits}
 
-\begin{table}[t]
-\centering
-\small
-\setlength{\tabcolsep}{3pt}
-\begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}p{3.4cm}>{\raggedright\arraybackslash}p{4.4cm}X@{}}
-\toprule
-Category & What it covers & Status \\
-\midrule
-checked syntax & the recogniser's accepted grammar; the two model languages & checked by elaborating \lean{\#guard} tests and by the recogniser itself \\
-proved model facts & accounting and preservation; protocol boundaries; counted fragment run; the runtime model's in-place statements & theorems in \lean{Ownership} and \lean{OwnershipLcnf}, no axioms beyond Lean's \\
-supplied client and call facts & entry invariant, agreement, layout and path contract, the leaf computation, and \lean{CountedChildCall}'s \lean{edges} effect (the post-call accounting is derived from it) & hypotheses of \lean{principal\_supported\_path} and \lean{principal\_counted\_fragment}; discharged at the closed instance \\
-implementation assumptions & primitive fidelity, replay-to-backend identity, reference identity & fixed by the runtime contract and observed by the linked gate \\
-\bottomrule
-\end{tabularx}
-\caption{The trust boundary, by category.}
-\label{tab:trust}
-\end{table}
+What is checked, proved, supplied and assumed is kept separate. Checked syntax ---
+the recogniser's grammar and the two model languages --- is established by
+elaborating \lean{\#guard} tests and by the recogniser itself. Model facts ---
+accounting and preservation, the protocol boundaries, the counted fragment run and
+the runtime model's in-place statements --- are theorems in \lean{Ownership} and
+\lean{OwnershipLcnf} with no axioms beyond Lean's. Client and call facts --- the
+entry invariant, agreement, layout and path contract, the leaf computation, and
+\lean{CountedChildCall}'s \lean{edges} effect, from which the post-call accounting
+is derived --- are hypotheses of the two principal theorems, discharged at the
+closed instance. Implementation assumptions --- primitive fidelity,
+replay-to-backend identity and reference identity --- are fixed by the runtime
+contract and observed by the linked gate.
 
 \paragraph*{Conclusion.}
 A count-one discipline can be recovered for an existing compiler IR without
-changing the language, provided the accounting is complete rather than local, and
-provided the emitted protocol is treated as a boundary phenomenon rather than an
-invariant. That is what this paper establishes: a proved relation between owning
-roots and incoming edges with the uniqueness consequence that makes a stored count
-one meaningful; preservation for a restricted flat fragment, with the slot fact
-isolated as the one premise the checker cannot see; a counted extraction, call and
-restoration protocol proved at its accounted boundaries, with the in-place
-restoration branch derived at the call's output state; and, for the full counted
-fragment at one level of a finite supported path, a checked correspondence to the
-model's run---heap-compatible, with the same result, fault and write trace---under
-an explicit counted child-call contract that the closed instance discharges. The
-result buys a checked count one for that fragment, at the level of the model heap
-and the recognised trace; on the certified shapes the linked probe observes the
-emitted C deciding as the discipline predicts. Next come the C semantics, replay
-and address identity, free and cascade, and the emitted callee.
+changing the language, provided the accounting is complete rather than local and
+the emitted protocol is treated as a boundary phenomenon rather than an invariant.
+That is what this paper establishes: a proved relation between owning roots and
+incoming edges whose count-one consequence makes a stored count one meaningful,
+preservation for a restricted flat fragment, a counted extraction, call and
+restoration protocol proved at its accounted boundaries, and --- for the full
+counted fragment at one level of a finite supported path --- a checked
+correspondence to the model's run under an explicit child-call contract that the
+closed instance discharges. The result buys a checked count one at the level of the
+model heap and the recognised trace; on the certified shapes the linked probe
+observes the emitted C deciding as predicted. Next come the C semantics, replay and
+address identity, free and cascade, and the emitted callee.
 
 \section*{Acknowledgements}
 \paragraph*{AI assistance.}

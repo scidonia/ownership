@@ -40,13 +40,20 @@ refusal beside the boundary's positive accounting.
   else — the suspended parent's cell, the child's exclusivity, the result
   binding — is derived from `PutBack.ChildCall` and from `Accounted`.
 
-The chain does not conclude an edge effect between its entry and its output. Its
-take-out lowers the extracted child's incoming-edge count by one and the
-restoration raises it by one, so `EdgePreserved` holds only of the net run, while
-`counted_nested_chain`'s `HeapCompat` relates the chain's final counted heap to
-the model's final heap rather than the call's entry to its output. Composing a
-nested level's `edges` from that relation would need the net statement; the
-edge effect is not transitive through the pair's traffic.
+The chain is not edge-preserving step by step: its take-out lowers the extracted
+child's incoming-edge count by one and the restoration raises it by one.
+`counted_nested_chain_edges` proves the **net** statement — the chain's entry and
+its restored counted heap have the same incoming-edge count at every name, the
+cursor does not go backwards and no cell appears — and that is what an enclosing
+call consumes as its `edges` field. `counted_nested_chain_two_levels_call`
+constructs the outer `CountedChildCall` from the inner chain's net effect, with
+the inner chain itself as the body, and `counted_nested_chain_two_levels` applies
+the chain theorem at the outer level, so the two-level term's model run and final
+accounting are derived from the same composition. The outer *model* boundary of
+the compound body stays a hypothesis: `PutBack.ChildCall` is stated for the
+admitted model body, and the finite-path induction derives it for a recursive
+body, not yet for a `chain` term. `counted_nested_chain`'s `HeapCompat` is still
+the final-state relation; the net statement is the entry-to-output one beside it.
 
 Nothing here is a runtime, transport or address-identity claim: the heap is the
 fragment's named-cell model, the child call is contractual and the emitted
@@ -156,10 +163,13 @@ theorem sum_range_zero_tail {f : Nat → Nat} {n m : Nat} (hnm : n ≤ m)
       · have hkn : k + 1 = n := Nat.le_antisymm hge hnm
         rw [hkn]
 
-/-- The incoming-edge count is a function of the cells and the cursor: the extra
-range the counted cursor covers holds no cell. -/
-theorem IncomingCount {support : List Var} {Hc Ha : Heap} {env : Env} {c : Ctx}
-    (h : HeapCompat Hc Ha) (hacc : Accounted support Ha env c) (r : Ref) :
+/-- The incoming-edge count is a function of the cells and the cursor, provided
+the abstract heap's live cells lie inside its own cursor range: the extra range
+the counted cursor covers then holds no cell. The domain condition is exactly
+`Accounted.domain`, but it is stated on its own so the chain can spend it at the
+model take-out heap, whose accounting is not carried. -/
+theorem IncomingCount_of_dom {Hc Ha : Heap} (h : HeapCompat Hc Ha)
+    (hdom : ∀ q o, Ha.cells q = some o → q < Ha.next) (r : Ref) :
     IncomingCount Hc r = IncomingCount Ha r := by
   rw [IncomingCount_eq_edges, IncomingCount_eq_edges]
   have htail : ∀ q, Ha.next ≤ q → q < Hc.next → EdgeAt Hc q r = 0 := by
@@ -167,10 +177,17 @@ theorem IncomingCount {support : List Var} {Hc Ha : Heap} {env : Env} {c : Ctx}
     have hnone : Ha.cells q = none := by
       cases hqcell : Ha.cells q with
       | none => rfl
-      | some o => exact absurd (hacc.domain q o hqcell) (Nat.not_lt.mpr hq)
+      | some o => exact absurd (hdom q o hqcell) (Nat.not_lt.mpr hq)
     simp [EdgeAt, h.cells q, hnone]
   rw [sum_range_zero_tail h.cursor htail]
   exact sum_range_congr (fun q _ => by simp [EdgeAt, h.cells q])
+
+/-- The incoming-edge count is a function of the cells and the cursor: the extra
+range the counted cursor covers holds no cell. -/
+theorem IncomingCount {support : List Var} {Hc Ha : Heap} {env : Env} {c : Ctx}
+    (h : HeapCompat Hc Ha) (hacc : Accounted support Ha env c) (r : Ref) :
+    IncomingCount Hc r = IncomingCount Ha r :=
+  IncomingCount_of_dom h hacc.domain r
 
 end HeapCompat
 
@@ -1279,6 +1296,262 @@ theorem counted_nested_chain {support : List Var} {H : Heap} {env : Env} {c : Ct
         rw [hcont]
         simp [Nested.addWrites, List.append_nil]
       exact htake.trans (hcallStep.trans hdone)
+
+/-! ## The chain's net edge effect
+
+The chain is not edge-preserving step by step: the take-out lowers the extracted
+child's incoming-edge count by one and the restoration raises it by one. The
+*net* run is edge-preserving, and that is what an enclosing call needs for its
+`edges` field. The decomposition is entry → boundary (`counted_takeOut`, whose
+model take-out heap differs from the entry at exactly the selected slot), boundary
+→ call output (the child call's own `edges`), and call output → final (the
+restoration's slot fill).
+
+The cursor and carrier fields are direct: the sole allocation is the temporary
+pair, which the release erases and whose absence the boundary records
+(`B.2.cells H.next = none`, `B.2.next = H.next + 1`); the child call's `edges`
+supplies its own `carrier` and `cursor`; and the restoration rewrites a cell the
+call's output already holds, so it adds none. -/
+
+/-- The chain's net effect on the counted heap: the entry and the restored
+counted heap have the same incoming-edge count at every name, the cursor does not
+go backwards, and no cell appears that the entry lacked. The restored heap is the
+one `counted_nested_chain` names, so this is exactly the edge effect an enclosing
+call's `edges` field needs when the chain is its body.
+
+The entry's index binding `env i = some (.scalar idx)` is carried for uniformity
+with `counted_nested_chain`, whose premises this matches; the net effect reads
+neither it nor the environment. -/
+theorem counted_nested_chain_edges {support : List Var} {H : Heap} {env : Env} {c : Ctx}
+    (hacc : Accounted support H env c)
+    {a i fst snd path x result restored : Var} {r eR : Ref} {o : Obj} {idx : Nat}
+    {body : Nested.NCode} {Hout : Heap} {ctx' : Ctx}
+    (hchk : Nested.checkN c (chain a i fst snd eR path x result restored body) = some ctx')
+    (hr : c.refOf a = some r)
+    (hcell : H.cells r = some o) (hslot : o.fields[idx]? = some (.ref eR))
+    (_hidx : env i = some (.scalar idx))
+    (hcall : CountedChildCall (CountedPair.protocol H r eR idx).2 Hout
+      ((env.set fst (.ref r)).set snd (.ref eR)) ((c.move a fst).bindOwned snd eR)
+      snd path x body r eR (snd :: replaceVar support a fst)) :
+    EdgePreserved H (PutBack.mutate Hout r (PutBack.parentAfter o idx) idx eR) := by
+  -- the checker's take-out conditions at the entry
+  obtain ⟨ha, hma, -, he, hfstDead, hsndDead, hfs, rchk, hrchk, -, -, -⟩ :=
+    Nested.checkNF_takeOut_some (ctx' := ctx')
+      (show Nested.checkNF c [] (Nested.NCode.takeOut a i fst snd eR
+        (.callAt snd path x result body (.putBack fst result i restored (.ret restored)))) =
+        some ctx' from hchk)
+  have hrr : rchk = r := Option.some.inj (hrchk.symm.trans hr)
+  subst rchk
+  have hfst : c.us fst ≠ .owned := by rw [hfstDead]; decide
+  have hsnd : c.us snd ≠ .owned := by rw [hsndDead]; decide
+  -- the entry's parent cell is inside the cursor range
+  have hrn : r < H.next := hacc.domain r o hcell
+  -- the restoration boundary, which supplies the entry's distinctness
+  obtain ⟨oc, hb⟩ := restorationBoundary_of_accounted hacc ha hma hr he hcell hslot
+  -- the boundary's cells and the relation to the model's take-out heap
+  obtain ⟨-, hcompatB, -, hnext, -⟩ :=
+    counted_takeOut hacc ha hma hr he hfst hsnd hfs hb.distinct.symm hcell hslot
+  -- the model take-out heap and its live-cell domain
+  have hdomH' : ∀ q oq, (H.set r { o with fields := o.fields.setIfInBounds idx (.scalar 0) }).cells q
+      = some oq → q < (H.set r { o with fields := o.fields.setIfInBounds idx (.scalar 0) }).next := by
+    intro q oq hq
+    by_cases hqr : q = r
+    · rw [hqr]
+      exact hacc.domain r o hcell
+    · have hq' : H.cells q = some oq := by
+        rw [Heap.set_other _ _ _ _ hqr] at hq
+        exact hq
+      exact hacc.domain q oq hq'
+  -- entry → boundary: only the selected slot's edge moves, and it is `eR`'s
+  have hboundaryE :
+      IncomingCount (CountedPair.protocol H r eR idx).2 eR + 1 = IncomingCount H eR := by
+    have hset := IncomingCount_set_of_ref (H := H) (r := r) (e := eR) (o := o)
+      (idx := idx) (w := 0) hcell hrn hslot
+    rw [← HeapCompat.IncomingCount_of_dom hcompatB hdomH' eR] at hset
+    exact hset.symm
+  have hboundaryNe : ∀ q, q ≠ eR →
+      IncomingCount (CountedPair.protocol H r eR idx).2 q = IncomingCount H q := by
+    intro q hq
+    rw [HeapCompat.IncomingCount_of_dom hcompatB hdomH' q]
+    exact IncomingCount_set_of_ref_ne hcell hrn hslot hq
+  -- the call's output holds the parent cell the take-out left, inside its cursor
+  have houtCell : Hout.cells r = some (PutBack.parentAfter o idx) := by
+    rw [hcall.call.parent, hcompatB.cells r]
+    simp [PutBack.parentAfter, Heap.set_self]
+  have hrHout : r < Hout.next := by
+    have h1 : r < (CountedPair.protocol H r eR idx).2.next := by
+      rw [hnext]; exact Nat.lt_succ_of_lt hrn
+    exact Nat.lt_of_lt_of_le h1 hcall.edges.cursor
+  have hparentSlot : (PutBack.parentAfter o idx).fields[idx]? = some (.scalar 0) := by
+    simpa [PutBack.parentAfter] using
+      (Array.getElem?_setIfInBounds_self_of_lt (xs := o.fields) (i := idx)
+        (a := Val.scalar 0) (Array.getElem?_eq_some_iff.mp hslot).1)
+  -- call output → final: the restoration fills the selected slot with `eR`
+  have hfinalE :
+      IncomingCount (PutBack.mutate Hout r (PutBack.parentAfter o idx) idx eR) eR
+        = IncomingCount Hout eR + 1 := by
+    have h := IncomingCount_set_fill (H := Hout) (r := r) (re := eR)
+      (o := PutBack.parentAfter o idx) (idx := idx) (old := 0) houtCell hrHout hparentSlot
+    simpa [PutBack.mutate, Array.set!_eq_setIfInBounds] using h
+  have hfinalNe : ∀ q, q ≠ eR →
+      IncomingCount (PutBack.mutate Hout r (PutBack.parentAfter o idx) idx eR) q
+        = IncomingCount Hout q := by
+    intro q hq
+    have h := IncomingCount_set_fill_ne (H := Hout) (r := r) (re := eR)
+      (o := PutBack.parentAfter o idx) (idx := idx) (old := 0) houtCell hrHout hparentSlot hq
+    simpa [PutBack.mutate, Array.set!_eq_setIfInBounds] using h
+  refine ⟨?_, ?_, ?_⟩
+  · intro q
+    by_cases hq : q = eR
+    · rw [hq, hfinalE, hcall.edges.incoming eR, hboundaryE]
+    · rw [hfinalNe q hq, hcall.edges.incoming q, hboundaryNe q hq]
+  · have h1 : H.next ≤ (CountedPair.protocol H r eR idx).2.next := by
+      rw [hnext]; exact Nat.le_succ H.next
+    exact Nat.le_trans h1 hcall.edges.cursor
+  · intro q oq hq
+    by_cases hqr : q = r
+    · rw [hqr]
+      exact ⟨o, hcell⟩
+    · have hq' : Hout.cells q = some oq := by
+        simpa [PutBack.mutate, Heap.set_other Hout r q _ hqr] using hq
+      obtain ⟨oq', hoq'⟩ := hcall.edges.carrier q oq hq'
+      refine ⟨oq', ?_⟩
+      rw [hcompatB.cells q] at hoq'
+      rw [Heap.set_other _ _ _ _ hqr] at hoq'
+      exact hoq'
+
+/-! ## The two-level chain
+
+The enclosing call's `edges` field is exactly the net effect above: when the
+outer level's body is the inner chain, the outer `CountedChildCall` is
+`⟨the outer boundary, the inner chain's net effect⟩`. The outer chain theorem
+then applies unchanged, so the two-level chain's model run, trace, `HeapCompat`
+and final accounting follow from the same composition, and its own net effect is
+`counted_nested_chain_edges` again one level up.
+
+The inner level's entry is the outer boundary's *isolated* state: the outer call
+hands its extracted child (`snd`) as the inner parent, so `rIn` is the outer
+`eR`, and the outer `ChildCall`'s body is the inner chain term itself. The model
+boundary of the outer call stays a hypothesis — it is the admitted-body contract
+`PutBack.ChildCall`, which the finite-path induction derives for a recursive body
+but which is stated here for the *compound* body `chain …`; what the theorem adds
+is the previously missing half, that the compound body's edge effect is derived
+rather than assumed. -/
+
+/-- The outer counted child call at a two-level chain: the body is the inner
+chain term and the `edges` field is the inner chain's net effect
+(`counted_nested_chain_edges`), so the structure is constructed rather than
+assumed at this level. -/
+theorem counted_nested_chain_two_levels_call {support : List Var} {H : Heap} {env : Env}
+    {c : Ctx}
+    {a fst snd path x : Var} {r eR : Ref} {idx : Nat}
+    {aIn iIn fstIn sndIn pathIn xIn resultIn restoredIn : Var}
+    {rIn eRIn : Ref} {oIn : Obj} {idxIn : Nat} {body : Nested.NCode}
+    {suppIn : List Var} {HoutIn : Heap} {ctxIn' : Ctx}
+    (haccIn : Accounted suppIn (CountedPair.protocol H r eR idx).2
+      (Nested.isolateEnv ((env.set fst (.ref r)).set snd (.ref eR)) snd path x)
+      (Nested.isolatedCtx ((c.move a fst).bindOwned snd eR) snd path x eR))
+    (hchkIn : Nested.checkN
+      (Nested.isolatedCtx ((c.move a fst).bindOwned snd eR) snd path x eR)
+      (chain aIn iIn fstIn sndIn eRIn pathIn xIn resultIn restoredIn body) = some ctxIn')
+    (hrIn : (Nested.isolatedCtx ((c.move a fst).bindOwned snd eR) snd path x eR).refOf aIn
+      = some rIn)
+    (hcellIn : (CountedPair.protocol H r eR idx).2.cells rIn = some oIn)
+    (hslotIn : oIn.fields[idxIn]? = some (.ref eRIn))
+    (hidxIn : Nested.isolateEnv ((env.set fst (.ref r)).set snd (.ref eR)) snd path x iIn
+      = some (.scalar idxIn))
+    (hcallIn : CountedChildCall
+      (CountedPair.protocol (CountedPair.protocol H r eR idx).2 rIn eRIn idxIn).2 HoutIn
+      (((Nested.isolateEnv ((env.set fst (.ref r)).set snd (.ref eR)) snd path x).set fstIn
+        (.ref rIn)).set sndIn (.ref eRIn))
+      (((Nested.isolatedCtx ((c.move a fst).bindOwned snd eR) snd path x eR).move aIn
+        fstIn).bindOwned sndIn eRIn)
+      sndIn pathIn xIn body rIn eRIn (sndIn :: replaceVar suppIn aIn fstIn))
+    (hcallOut : PutBack.ChildCall (CountedPair.protocol H r eR idx).2
+      (PutBack.mutate HoutIn rIn (PutBack.parentAfter oIn idxIn) idxIn eRIn)
+      ((env.set fst (.ref r)).set snd (.ref eR)) ((c.move a fst).bindOwned snd eR)
+      snd path x (chain aIn iIn fstIn sndIn eRIn pathIn xIn resultIn restoredIn body) r eR) :
+    CountedChildCall (CountedPair.protocol H r eR idx).2
+      (PutBack.mutate HoutIn rIn (PutBack.parentAfter oIn idxIn) idxIn eRIn)
+      ((env.set fst (.ref r)).set snd (.ref eR)) ((c.move a fst).bindOwned snd eR)
+      snd path x (chain aIn iIn fstIn sndIn eRIn pathIn xIn resultIn restoredIn body)
+      r eR (snd :: replaceVar support a fst) :=
+  ⟨hcallOut, counted_nested_chain_edges haccIn hchkIn hrIn hcellIn hslotIn hidxIn hcallIn⟩
+
+/-- The two-level chain: the outer level's child body is the inner chain, whose
+net edge effect is the outer call's `edges`. The chain theorem applies at the
+outer level with the constructed counted call, so the two-level term's model run,
+its all-exclusive trace and `HeapCompat` to the final counted heap are derived;
+the inner chain's net effect and the whole two-level run's net effect are the two
+`EdgePreserved` conjuncts. -/
+theorem counted_nested_chain_two_levels {support : List Var} {H : Heap} {env : Env} {c : Ctx}
+    {a i fst snd path x result restored : Var} {r eR : Ref} {o : Obj} {idx : Nat}
+    {ctx' : Ctx}
+    {aIn iIn fstIn sndIn pathIn xIn resultIn restoredIn : Var}
+    {rIn eRIn : Ref} {oIn : Obj} {idxIn : Nat} {body : Nested.NCode}
+    {suppIn : List Var} {HoutIn : Heap} {ctxIn' : Ctx}
+    (hacc : Accounted support H env c)
+    (hchk : Nested.checkN c (chain a i fst snd eR path x result restored
+      (chain aIn iIn fstIn sndIn eRIn pathIn xIn resultIn restoredIn body)) = some ctx')
+    (hr : c.refOf a = some r)
+    (hcell : H.cells r = some o) (hslot : o.fields[idx]? = some (.ref eR))
+    (hidx : env i = some (.scalar idx))
+    (haccIn : Accounted suppIn (CountedPair.protocol H r eR idx).2
+      (Nested.isolateEnv ((env.set fst (.ref r)).set snd (.ref eR)) snd path x)
+      (Nested.isolatedCtx ((c.move a fst).bindOwned snd eR) snd path x eR))
+    (hchkIn : Nested.checkN
+      (Nested.isolatedCtx ((c.move a fst).bindOwned snd eR) snd path x eR)
+      (chain aIn iIn fstIn sndIn eRIn pathIn xIn resultIn restoredIn body) = some ctxIn')
+    (hrIn : (Nested.isolatedCtx ((c.move a fst).bindOwned snd eR) snd path x eR).refOf aIn
+      = some rIn)
+    (hcellIn : (CountedPair.protocol H r eR idx).2.cells rIn = some oIn)
+    (hslotIn : oIn.fields[idxIn]? = some (.ref eRIn))
+    (hidxIn : Nested.isolateEnv ((env.set fst (.ref r)).set snd (.ref eR)) snd path x iIn
+      = some (.scalar idxIn))
+    (hcallIn : CountedChildCall
+      (CountedPair.protocol (CountedPair.protocol H r eR idx).2 rIn eRIn idxIn).2 HoutIn
+      (((Nested.isolateEnv ((env.set fst (.ref r)).set snd (.ref eR)) snd path x).set fstIn
+        (.ref rIn)).set sndIn (.ref eRIn))
+      (((Nested.isolatedCtx ((c.move a fst).bindOwned snd eR) snd path x eR).move aIn
+        fstIn).bindOwned sndIn eRIn)
+      sndIn pathIn xIn body rIn eRIn (sndIn :: replaceVar suppIn aIn fstIn))
+    (hcallOut : PutBack.ChildCall (CountedPair.protocol H r eR idx).2
+      (PutBack.mutate HoutIn rIn (PutBack.parentAfter oIn idxIn) idxIn eRIn)
+      ((env.set fst (.ref r)).set snd (.ref eR)) ((c.move a fst).bindOwned snd eR)
+      snd path x (chain aIn iIn fstIn sndIn eRIn pathIn xIn resultIn restoredIn body) r eR) :
+    EdgePreserved H
+        (PutBack.mutate
+          (PutBack.mutate HoutIn rIn (PutBack.parentAfter oIn idxIn) idxIn eRIn)
+          r (PutBack.parentAfter o idx) idx eR)
+      ∧ Accounted
+          (List.erase
+            (replaceVar (replaceVar (snd :: replaceVar support a fst) snd result) fst restored)
+            result)
+          (PutBack.mutate
+            (PutBack.mutate HoutIn rIn (PutBack.parentAfter oIn idxIn) idxIn eRIn)
+            r (PutBack.parentAfter o idx) idx eR)
+          ((((env.set fst (.ref r)).set snd (.ref eR)).set result (.ref eR)).set restored
+            (.ref r))
+          (((((c.move a fst).bindOwned snd eR).move snd result).move fst restored).setUs
+            result .dead)
+      ∧ (∃ Hm envm ws,
+          Nested.runN (chain a i fst snd eR path x result restored
+            (chain aIn iIn fstIn sndIn eRIn pathIn xIn resultIn restoredIn body)) env H
+              = .done Hm envm (.ref r) ws
+            ∧ (∀ w ∈ ws, w.2 = true)
+            ∧ HeapCompat
+                (PutBack.mutate
+                  (PutBack.mutate HoutIn rIn (PutBack.parentAfter oIn idxIn) idxIn eRIn)
+                  r (PutBack.parentAfter o idx) idx eR) Hm) := by
+  have hcall := counted_nested_chain_two_levels_call (support := support)
+    haccIn hchkIn hrIn hcellIn hslotIn hidxIn hcallIn hcallOut
+  have hedges := counted_nested_chain_edges (support := support)
+    (body := chain aIn iIn fstIn sndIn eRIn pathIn xIn resultIn restoredIn body)
+    hacc hchk hr hcell hslot hidx hcall
+  obtain ⟨Hf, Hm, envm, ws, -, -, -, -, -, -, -, -, hHf, haccF, hrun, -, hws, hcompF⟩ :=
+    counted_nested_chain hacc hchk hr hcell hslot hidx hcall
+  rw [hHf] at haccF hcompF
+  exact ⟨hedges, haccF, Hm, envm, ws, hrun, hws, hcompF⟩
 
 /-! ## The chain's two store dispositions, named -/
 

@@ -22,7 +22,11 @@ What is proved, for every outer slot `i` with `i < n`, leaf slot `j` with
 * the whole counted chain, `Ownership.counted_nested_chain`, at the family's
   data (`family_chain`), with five of its conjuncts also named by their own
   projection theorems, and the statement formed from the chain's conclusion
-  conjunct for conjunct.
+  conjunct for conjunct;
+* the chain's net entry-to-output edge effect,
+  `Ownership.counted_nested_chain_edges`, at the same data (`family_chain_edges`),
+  with `IncomingCount_fam_final_one` reading the identity off at the extracted
+  child. This is the `edges` field an enclosing call would consume.
 
 `family_chain` is the length-`n` version and `family_chain_two` its `n := 2`
 application: the parent's and the child's field arrays then both have length two,
@@ -708,6 +712,25 @@ theorem family_chain_two (i j w : Nat) (hi : i < 2) (hj : j < 2) :
       HeapCompat Hf Hm :=
   family_chain 2 i j w hi hj
 
+/-- The family's chain has a net entry-to-output edge effect, not merely the
+final-state `HeapCompat` that `family_chain` carries: the whole
+take-out/call/restore run at the family's data leaves every name's incoming-edge
+count where the entry had it. This is the instance of
+`Ownership.counted_nested_chain_edges` that an enclosing call consumes as its
+`edges` field. -/
+theorem family_chain_edges (n i j w : Nat) (hi : i < n) (hj : j < n) :
+    EdgePreserved (famHeap n i)
+      (PutBack.mutate (Hc n i j w) 0 (PutBack.parentAfter (parentObj n i) i) i 1) :=
+  counted_nested_chain_edges (support := [parentVar]) (H := famHeap n i) (env := famEnv i j w)
+    (c := famCtx n i) (a := parentVar) (i := idxVar) (fst := fstVar) (snd := childVar)
+    (path := leafIdxVar) (x := valueVar) (result := resultVar) (restored := restoredVar)
+    (r := 0) (eR := 1) (o := parentObj n i) (idx := i) (body := body)
+    (Hout := Hc n i j w) (ctx' := famFinalCtx n i)
+    (entryAccounted n i j w hi) (famChecked n i)
+    (by simp [famCtx, parentVar]) (fam_cells_zero n i) (parentSlot n i hi)
+    (by show (famEnv i j w) idxVar = some (.scalar i); simp [famEnv, parentVar, idxVar])
+    (countedBoundaryCall n i j w hi hj)
+
 /-! ## The chain's parts, named -/
 
 theorem family_pair_cell_absent (n i j w : Nat) (hi : i < n) (hj : j < n) :
@@ -760,6 +783,16 @@ theorem family_child_after (n i j w : Nat) (hj : j < n) :
 #print axioms countedBoundaryCall_accounted
 #print axioms famChecked
 #print axioms family_chain
+/-- The countable content of `family_chain_edges` at the family's data: the net
+run's final heap has the same incoming-edge count at the extracted child that the
+entry has. The take-out removes the parent's slot edge and the restoration puts it
+back, so this is the identity the net statement records, read off at a name. -/
+theorem IncomingCount_fam_final_one (n i j w : Nat) (hi : i < n) (hj : j < n) :
+    IncomingCount
+      (PutBack.mutate (Hc n i j w) 0 (PutBack.parentAfter (parentObj n i) i) i 1) 1 = 1 := by
+  have h := (family_chain_edges n i j w hi hj).incoming 1
+  rw [h, IncomingCount_fam_one n i hi]
+
 #print axioms family_chain_two
 #print axioms family_pair_cell_absent
 #print axioms family_cursor
@@ -767,5 +800,7 @@ theorem family_child_after (n i j w : Nat) (hj : j < n) :
 #print axioms family_child_exclusive
 #print axioms family_restoration_mutate
 #print axioms family_child_after
+#print axioms family_chain_edges
+#print axioms IncomingCount_fam_final_one
 
 end OwnershipTest.CountedFamily

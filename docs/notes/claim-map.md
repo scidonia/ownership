@@ -42,7 +42,7 @@ allowlisted in the script and must carry the reason the last column records.
 | `CountFidelity` | declaration | `Ownership.CountFidelity` | `Ownership/Accounting.lean` | Complete ownership accounting; Recognition, and the flat guarantee | — |
 | `CountFree b` | expression | `Ownership.Nested.CountFree` | `Ownership/Nested.lean` | The judgement. | applied form of the body predicate used as a checker premise. |
 | `CountedChildCall` | declaration | `Ownership.CountedChildCall` | `Ownership/CountedNested.lean` | The pair and its boundary; The counted call and restoration; Scope, conclusion and disclosure | — |
-| `EdgePreserved` | declaration | `Ownership.EdgePreserved` | `Ownership/CountedNested.lean` | The finite path and the counted fragment | the call-effect relation; `Ownership.HeapCompat` is the boundary relation |
+| `EdgePreserved` | declaration | `Ownership.EdgePreserved` | `Ownership/CountedNested.lean` | Introduction; The counted call and restoration; The finite path and the counted fragment | the call-effect relation; `Ownership.HeapCompat` is the boundary relation |
 | `EntryInv H env (Runner.initCtx root) root client` | expression | `Ownership.Entry.EntryInv` | `Ownership/Entry.lean` | Recognition, and the flat guarantee | applied form of the entry invariant at the initializer's context. |
 | `EnvOwnerCount` | declaration | `Ownership.EnvOwnerCount` | `Ownership/Accounting.lean` | Proof sketch.; The pair and its boundary | — |
 | `Exclusive H r` | expression | `Ownership.Heap.Exclusive` | `Ownership/Heap.lean` | Complete ownership accounting | applied form; `Ownership.Heap.Exclusive` is the predicate it spells. |
@@ -113,7 +113,9 @@ allowlisted in the script and must carry the reason the last column records.
 | `countedPrefix` | declaration | `OwnershipLcnf.countedPrefix` | `OwnershipLcnf/CountedTrace.lean` | Proof sketch. | — |
 | `countedSuffix` | declaration | `OwnershipLcnf.countedSuffix` | `OwnershipLcnf/CountedTrace.lean` | Proof sketch. | — |
 | `counted_nested_chain` | declaration | `Ownership.counted_nested_chain` | `Ownership/CountedNested.lean` | Three contributions.; The counted call and restoration; Proof sketch. | — |
+| `counted_nested_chain_edges` | declaration | `Ownership.counted_nested_chain_edges` | `Ownership/CountedNested.lean` | Introduction; The counted call and restoration | — |
 | `counted_nested_chain_restoration` | declaration | `Ownership.counted_nested_chain_restoration` | `Ownership/CountedNested.lean` | The counted call and restoration | — |
+| `counted_nested_chain_two_levels` | declaration | `Ownership.counted_nested_chain_two_levels` | `Ownership/CountedNested.lean` | Introduction; The counted call and restoration | — |
 | `counted_restore` | declaration | `Ownership.counted_restore` | `Ownership/CountedNested.lean` | The counted call and restoration | — |
 | `counted_takeOut` | declaration | `Ownership.counted_takeOut` | `Ownership/CountedNested.lean` | The counted call and restoration | — |
 | `dec` | declaration | `Ownership.Ctx.dec` | `Ownership/Code.lean` | The judgement. | the context update; `Ownership.Code.dec` is the constructor of the same name |
@@ -156,8 +158,8 @@ allowlisted in the script and must carry the reason the last column records.
 | `pair_traffic_neutral` | declaration | `Ownership.CountedPair.pair_traffic_neutral` | `Ownership/CountedPair.lean` | The pair and its boundary; Compatibility and the boundary argument | — |
 | `path` | expression | `Ownership.Nested.NCode.callAt` | `Ownership/Nested.lean` | The judgement. | program variable: the path argument of the call rule; a binder, not a declaration. |
 | `principal_accounted` | declaration | `OwnershipLcnf.principal_accounted` | `OwnershipLcnf/Principal.lean` | Recognition, and the flat guarantee | — |
-| `principal_counted_fragment` | declaration | `OwnershipLcnf.principal_counted_fragment` | `OwnershipLcnf/Principal.lean` | Introduction; The finite path and the counted fragment; Scope, conclusion and disclosure | — |
-| `principal_supported_path` | declaration | `OwnershipLcnf.principal_supported_path` | `OwnershipLcnf/Principal.lean` | Introduction; Scope, conclusion and disclosure | — |
+| `principal_counted_fragment` | declaration | `OwnershipLcnf.principal_counted_fragment` | `OwnershipLcnf/Principal.lean` | Introduction; The finite path and the counted fragment | — |
+| `principal_supported_path` | declaration | `OwnershipLcnf.principal_supported_path` | `OwnershipLcnf/Principal.lean` | Introduction | — |
 | `projectNested` | declaration | `OwnershipLcnf.projectNested` | `OwnershipLcnf/NestedProjection.lean` | Recognition, and the flat guarantee; The finite path and the counted fragment; Evidence and artifact | — |
 | `projectPair` | declaration | `OwnershipLcnf.projectPair` | `OwnershipLcnf/PairProjection.lean` | Recognition, and the flat guarantee | — |
 | `projectPrefix` | declaration | `OwnershipLcnf.projectPrefix` | `OwnershipLcnf/Projection.lean` | Recognition, and the flat guarantee | — |
