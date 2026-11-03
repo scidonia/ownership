@@ -75,8 +75,15 @@ still open, with its reason recorded in `PLAN.md`.
 counted extraction/call/restoration protocol and the counted interpreter's
 recognised-prefix boundary at one arbitrary level, conditional on the child call
 (`CountedChildCall`), and `OwnershipTest/Principal.lean` is its closed,
-kernel-checked instance at the recogniser's own layout; the emitted callee and
-trace-level agreement beyond the counted prefix are still not claimed.
+kernel-checked instance at the recogniser's own layout.
+`OwnershipLcnf.principal_counted_fragment` runs the counted interpreter over the
+whole recognised fragment and relates its outcome to the model's run of the same
+term by `NestedOutcome.Compat` (the same cell at every name with the model cursor
+no higher, and the same result, fault and write trace), with
+`OwnershipTest.counted_fragment_instance`
+(`OwnershipTest/PrincipalCounted.lean`) as its closed instance. The emitted
+callee and a step-by-step agreement inside the pair-live window are still not
+claimed.
 
 ## Building
 

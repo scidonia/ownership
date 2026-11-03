@@ -12,6 +12,7 @@ import Ownership.CompleteAccounting
 import Ownership.Preservation
 import Ownership.CountedNested
 import OwnershipLcnf.CountedTrace
+import OwnershipTest.PrincipalCounted
 
 #print axioms Ownership.check_sound
 #print axioms Ownership.Entry.checkN_sound_of_entryInv
@@ -192,6 +193,21 @@ import OwnershipLcnf.CountedTrace
 #print axioms OwnershipLcnf.childContracts_of_path
 #print axioms OwnershipLcnf.childContract_of_path
 #print axioms OwnershipLcnf.index_path_fragment_simulates_model
+#print axioms OwnershipLcnf.countedSuffix
+#print axioms OwnershipLcnf.fragment_decomp
+#print axioms OwnershipLcnf.countedSuffix_fragment
+#print axioms OwnershipLcnf.countedPrefix_noRet
+#print axioms OwnershipLcnf.NestedOp.returns
+#print axioms OwnershipLcnf.execCounted_append
+#print axioms OwnershipLcnf.execCounted_append_of_done
+#print axioms OwnershipLcnf.execCountedAST
+#print axioms OwnershipLcnf.execCountedAST_recognized
+#print axioms OwnershipLcnf.execCounted_boundary_env
+#print axioms OwnershipLcnf.execCounted_suffix
+#print axioms OwnershipLcnf.execCounted_full_fragment
+#print axioms OwnershipLcnf.principal_counted_fragment
+#print axioms OwnershipLcnf.NestedOutcome.Compat
+#print axioms OwnershipTest.counted_fragment_instance
 
 #print axioms Ownership.counted_nested_chain_extraction
 #print axioms Ownership.counted_nested_chain_restoration

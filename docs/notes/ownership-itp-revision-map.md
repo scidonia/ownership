@@ -55,7 +55,7 @@ If T1 cannot be completed in the available cycle, stop promising a whole counted
 
 ## 4. Technical revision T1: make the counted execution the central connection
 
-### Current state
+### Current state (before unit 3; T1 is delivered by `principal_counted_fragment` and its closed `counted_fragment_instance`)
 
 `OwnershipLcnf/Principal.lean` composes useful results at the same entry:
 
@@ -63,7 +63,7 @@ If T1 cannot be completed in the available cycle, stop promising a whole counted
 - `counted_nested_chain`, connecting counted extraction/call/restoration boundaries and final accounting to the abstract run.
 - `execCounted_protocol_boundary`, connecting the counted interpreter to the recognised prefix through pair release.
 
-The last result covers the first nineteen operations. It does not prove execution correspondence for the whole `p.fragment`, including restoration and return. The paper explicitly acknowledges this. Completing it would turn the central account into a theorem about one counted execution rather than an assembly of related views.
+The last result covers the first nineteen operations. It does not prove execution correspondence for the whole `p.fragment`, including restoration and return. The paper acknowledged this before unit 3. Completing it would turn the central account into a theorem about one counted execution rather than an assembly of related views.
 
 ### Requested implementation
 

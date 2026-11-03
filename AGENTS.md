@@ -183,10 +183,12 @@
   take-out/`setArray` stores are not claimed. The counted composition is now
   proved at its boundaries (`Ownership/CountedNested.lean`: `counted_takeOut`,
   `counted_restore`, `counted_nested_chain`), with the pair-live state's absence
-  from `Accounted` kernel-checked in `OwnershipTest/CountedNested.lean`. What
-  remains outstanding is the trace-level abstraction of the counted interpreter,
-  the emitted recursive callee (N10), and store-trace coverage of the extraction
-  and restoration dispositions (Gap 4/Stage 4).
+  from `Accounted` kernel-checked in `OwnershipTest/CountedNested.lean`. The counted interpreter's whole trace is now related to the
+  model's run by `NestedOutcome.Compat`
+  (`OwnershipLcnf.execCounted_full_fragment`), so what remains outstanding is the
+  emitted recursive callee (N10), a step-by-step agreement inside the pair-live
+  window (`HeapCompat` is not an invariant there), and store-trace coverage of the
+  extraction and restoration dispositions (Gap 4/Stage 4).
   `OwnershipTest/ExtractionExclusive.lean` instantiates the nested result on the
   depth-two path certificate and prints the axioms.
 - `OwnershipLcnf.principal_supported_path` (`OwnershipLcnf/Principal.lean`) is
@@ -197,7 +199,20 @@
   every premise at the recogniser's own layout on a reified transcription of the
   captured declaration, so `OwnershipTest.principal_instance` has no
   hypotheses and each conjunct is type-ascribed; the retained-parent copy is its
-  explanatory negative control. `OwnershipLcnf.NestedLayout` constrains
+  explanatory negative control. `OwnershipLcnf.principal_counted_fragment` is the
+  whole-fragment companion at the same level: `execCounted` runs the whole
+  `p.fragment` from the entry machine through the counted block, the child call
+  and the restoration, the counted child call is consumed where the interpreter
+  reaches it, the restoration's `mutate` branch is derived at the call's output
+  heap, and the counted outcome is `NestedOutcome.Compat` to the model's run of
+  `Path.build` (`HeapCompat` on the heaps, literal equality on the result, the
+  fault and the write trace). `OwnershipTest.counted_fragment_instance` is its
+  closed instance (`OwnershipTest/PrincipalCounted.lean`), with its type inferred
+  from the theorem. The boundary fixtures carry the retained-parent controls; a
+  T1-specific `HeapCompat` non-vacuity control is not a declaration in this
+  revision. The two fixtures are separate modules because one module elaborating
+  both together exhausted memory.
+  `OwnershipLcnf.NestedLayout` constrains
   eighteen read binders (slots `0`–`17`): the emitted index decrement acts on
   the index binder itself, the recognizer reads `p.indexDec = p.index`, and the
   layout constrains no separate slot for it — so a fixture's `assign` value for
@@ -382,11 +397,21 @@
   exclusivity premises from accounting (`childContract_of_accounted`,
   `index_fragment_simulates_model_of_accounted`,
   `index_prefix_simulates_model_of_accounted`), leaving the originals unchanged.
-  The trace-level agreement between `execCounted` and `execNested` over the whole
-  fragment is not proved: `HeapCompat` is not an invariant of the counted window
-  between the take-out and the pair release, the boundary theorem stops at the
-  release, and the counted composition itself is the model-level
-  `Ownership.counted_nested_chain`.
+  The counted interpreter's whole trace is proved
+  (`execCounted_full_fragment`): the fragment splits at the pair's release
+  (`countedPrefix` is the release-terminated span, `countedSuffix` the rest, and
+  `fragment_decomp` the split, so the split is the recognised shape's and not a
+  numeric cutoff), the counted block reaches `execCounted_protocol_boundary`'s
+  state, and the post-release span runs the child assertion, the call at that
+  state, the restoration at the call's output heap and the return
+  (`execCounted_suffix`). The entry point is `execCountedAST`, so the recogniser's
+  verdict is spent by the theorem, and the counted outcome is
+  `NestedOutcome.Compat` to the model's run: `HeapCompat` on the heaps and literal
+  equality on the result, the fault and the write trace. No step-by-step agreement
+  between `execCounted` and `execNested` inside the pair-live window is claimed
+  (`HeapCompat` is not an invariant there, and between the take-out and the
+  release the counted heap carries the pair), and the counted composition's own
+  model-level statement is `Ownership.counted_nested_chain`.
 
 - `Ownership/Preservation.lean` is preservation through accepted execution.
   `Ownership.supported_run` takes a `Supported` program, an `Accounted` state and

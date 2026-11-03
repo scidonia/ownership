@@ -931,7 +931,10 @@ caller's accounted boundary state, whose result binding is derived
 mutate branch and carries the accounting. The model's own `runN` of the chain
 term is related to the counted heap by `HeapCompat` throughout, so the conclusion
 names both the extracted store's disposition and the restored one, and relates
-the counted post-state to the abstract run's own final heap.
+the counted post-state to the abstract run's own final heap. The call's own run at
+the boundary heap is named as well, at the same write trace the model's run
+carries: that trace is what a counted reading of the fragment records, and naming
+it here is what lets the two traces be related rather than each derived on its own.
 
 The caller's heap and index facts (`hcell`, `hslot`, `hidx`) are premises the
 checker cannot see, and they replace `Nested.TakeOutsOK`/`Nested.Agrees` here
@@ -951,7 +954,7 @@ theorem counted_nested_chain {support : List Var} {H : Heap} {env : Env} {c : Ct
     (hcall : CountedChildCall (CountedPair.protocol H r eR idx).2 Hout
       ((env.set fst (.ref r)).set snd (.ref eR)) ((c.move a fst).bindOwned snd eR)
       snd path x body r eR (snd :: replaceVar support a fst)) :
-    ∃ Hf Hm envm vm ws,
+    ∃ Hf Hm envm ws,
       Accounted (snd :: replaceVar support a fst) (CountedPair.protocol H r eR idx).2
         ((env.set fst (.ref r)).set snd (.ref eR)) ((c.move a fst).bindOwned snd eR)
       ∧ HeapCompat (CountedPair.protocol H r eR idx).2
@@ -971,7 +974,10 @@ theorem counted_nested_chain {support : List Var} {H : Heap} {env : Env} {c : Ct
           (((((c.move a fst).bindOwned snd eR).move snd result).move fst restored).setUs
             result .dead)
       ∧ Nested.runN (chain a i fst snd eR path x result restored body) env H =
-          .done Hm envm vm ws
+          .done Hm envm (.ref r) ws
+      ∧ (∃ envb,
+          Nested.runN body (Nested.isolateEnv ((env.set fst (.ref r)).set snd (.ref eR)) snd path x)
+            (CountedPair.protocol H r eR idx).2 = .done Hout envb (.ref eR) ws)
       ∧ (∀ w ∈ ws, w.2 = true)
       ∧ HeapCompat Hf Hm := by
   -- the checker's take-out conditions at the entry
@@ -1099,8 +1105,8 @@ theorem counted_nested_chain {support : List Var} {H : Heap} {env : Env} {c : Ct
       refine ⟨PutBack.mutate Hout r (PutBack.parentAfter o idx) idx eR,
         PutBack.mutate Hb r (PutBack.parentAfter o idx) idx eR,
         ((((env.set fst (.ref r)).set snd (.ref eR)).set result (.ref eR)).set restored
-          (.ref r)), .ref r, ws, haccB, hcompatB, hpairNone, hnext, hexclP, hexclC,
-        hdisp, hpb, rfl, haccF, ?_, hnoCopy,
+          (.ref r)), ws, haccB, hcompatB, hpairNone, hnext, hexclP, hexclC,
+        hdisp, hpb, rfl, haccF, ?_, ⟨envb, hrunBodyC⟩, hnoCopy,
         hcompHb.mutate r (PutBack.parentAfter o idx) idx eR⟩
       have htake : Nested.runN (chain a i fst snd eR path x result restored body) env H =
           Nested.runN
@@ -1143,7 +1149,7 @@ theorem counted_nested_chain_extraction {support : List Var} {H : Heap} {env : E
       ((env.set fst (.ref r)).set snd (.ref eR)) ((c.move a fst).bindOwned snd eR)
       snd path x body r eR (snd :: replaceVar support a fst)) :
     Heap.Exclusive (CountedPair.protocol H r eR idx).2 r := by
-  obtain ⟨-, -, -, -, -, -, -, -, -, hexclP, -, -, -, -, -, -, -, -⟩ :=
+  obtain ⟨-, -, -, -, -, -, -, -, hexclP, -, -, -, -, -, -, -, -⟩ :=
     counted_nested_chain hacc hchk hr hcell hslot hidx hcall
   exact hexclP
 
@@ -1163,7 +1169,7 @@ theorem counted_nested_chain_restoration {support : List Var} {H : Heap} {env : 
     PutBack.disposition? Hout r idx = some .mutate ∧
       ((PutBack.parentAfter o idx).fields.setIfInBounds idx (.ref eR))[idx]? =
         some (.ref eR) := by
-  obtain ⟨-, -, -, -, -, -, -, -, -, -, -, hdisp, -, -, -, -, -, -⟩ :=
+  obtain ⟨-, -, -, -, -, -, -, -, -, -, hdisp, -, -, -, -, -, -⟩ :=
     counted_nested_chain hacc hchk hr hcell hslot hidx hcall
   refine ⟨hdisp, ?_⟩
   have hlt : idx < (PutBack.parentAfter o idx).fields.size := by

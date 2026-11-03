@@ -33,6 +33,19 @@ both exclusive targets, the mutate disposition, the functional restoration and
 its restored slot, the model run's own completion and its copy-free trace, the
 counted prefix's boundary, and the child frame and restoration locality.
 
+`principal_counted_fragment` is the whole-fragment companion at the same level:
+`execCounted` runs the whole recognised fragment — the counted block, then the
+child assertion, the call at the boundary state, the restoration at the call's
+output heap and the return — so the trace-level reading is the counted
+interpreter's own run, not the block's boundary. The counted outcome is related to
+the model's run of `Path.build` by `NestedOutcome.Compat`: the heaps are
+`HeapCompat` (the same cell at every name, with the model cursor no higher) and
+the result, the fault and the write trace are literally equal. The counted call is
+consumed where the interpreter reaches it, and the restoration's `mutate` branch
+is derived at the call's output heap from `counted_restore`. Both nested theorems
+share one trust boundary: the emitted callee's body is not captured (N10), and
+whole-path non-growth outside the root's footprint is not concluded.
+
 `Prefix.toModel_supported` places the certified flat model in the counted
 fragment.
 -/
@@ -318,8 +331,8 @@ theorem principal_supported_path
     rw [hchainBuild, Ownership.Nested.checkN]
     exact hbuild
   -- Group 2: the counted chain
-  obtain ⟨Hf, Hm₂, envm₂, vm, ws₂, hcAccB, hcCompatB, hcPair, hcCursor, hcExP,
-    hcExC, hcDisp, hcPb, hcRestored, hcAccF, hcRun, hcCopyFree, hcCompatF⟩ :=
+  obtain ⟨Hf, Hm₂, envm₂, ws₂, hcAccB, hcCompatB, hcPair, hcCursor, hcExP,
+    hcExC, hcDisp, hcPb, hcRestored, hcAccF, hcRun, -, hcCopyFree, hcCompatF⟩ :=
     counted_nested_chain (a := l.arrayVar) (i := l.indexVar) (fst := l.parentVar)
       (snd := l.childVar) (eR := childRef) (path := path) (x := value)
       (result := l.resultVar) (restored := l.restoredVar) (r := rA) (o := o)
@@ -351,18 +364,16 @@ theorem principal_supported_path
     rw [hchainBuild]
   have hrunChain : Ownership.Nested.runN
       (Ownership.Path.build path value body (l :: rest)) mEnv H =
-      .done Hm₂ envm₂ vm ws₂ := by
+      .done Hm₂ envm₂ (.ref rA) ws₂ := by
     rw [← hrunEq]
     exact hcRun
   -- the two runs coincide at the counted chain's model witnesses
-  have hdoneEq : (Ownership.Res.done Hm₂ envm₂ vm ws₂) =
+  have hdoneEq : (Ownership.Res.done Hm₂ envm₂ (.ref rA) ws₂) =
       (Ownership.Res.done Hm₁ envm₁ (.ref rA) ws₁) := hrunChain ▸ hrun₁
-  injection hdoneEq with _ _ hvm hws
+  injection hdoneEq with _ _ _ hws
   have hrunG1 : Ownership.Nested.runN
       (Ownership.Path.build path value body (l :: rest)) mEnv H =
-      .done Hm₂ envm₂ (.ref rA) ws₂ := by
-    rw [← hvm]
-    exact hrunChain
+      .done Hm₂ envm₂ (.ref rA) ws₂ := hrunChain
   have hcopyG1 : ∀ w ∈ ws₂, w.2 = true := by
     intro w hw
     rw [hws] at hw
@@ -381,5 +392,151 @@ theorem principal_supported_path
   intro q hq
   rw [hcRestored]
   exact Ownership.Heap.set_other (H := Hout) (r := rA) (r' := q) _ hq
+
+/-! ## The whole counted fragment -/
+
+/-- The counted fragment's whole trace at one level of a finite supported path.
+
+`execCounted` runs the recognised declaration's own fragment from the entry
+machine: the counted block, whose boundary is `execCounted_protocol_boundary`'s,
+and then the post-release span from that boundary state, with the child call
+consumed where the interpreter reaches it and the restoration's `mutate` branch
+derived at the call's output heap. The counted outcome is reported against the
+model's run of `Path.build path value body (l :: rest)` by
+`NestedOutcome.Compat`: heap-compatible, with the model cursor no higher, and the
+same result, fault and write trace.
+
+Premise suppliers: `hproj`, `hl`, `hag` and `hm` as for
+`principal_supported_path`; `hpath` the level list's data, whose `slots`,
+`envok` and `levelCtx` give the level's cell, slot, index, and the two
+multiplicities the counted entry and the restoration boundary read;
+`checkNF_build` the remaining levels' checker acceptance; `hacc` the accounted
+entry; `hcall` the explicit counted call, whose boundary is the put-back's
+`ChildCall` and whose `accounted` field is the caller's accounting at the body's
+return (N10). The restoration's `mutate` disposition is not a premise: it is
+`counted_restore`'s conclusion at `Hout`.
+
+Not concluded: the emitted recursive callee's body (N10), whole-path non-growth
+outside the root's mutable footprint (the leaf's write account is not a premise),
+and any statement about the linked runtime. -/
+theorem principal_counted_fragment
+    {code : Lean.Compiler.LCNF.Code Lean.Compiler.LCNF.Purity.impure}
+    {p : NestedPrefix} {assign : Lean.FVarId → Ownership.Var}
+    (declName takeOut : Lean.Name)
+    (hproj : projectNested declName takeOut code = some p)
+    (hl : NestedLayout assign p)
+    (path value : Ownership.Var) (body : Ownership.Nested.NCode)
+    (rest : List Ownership.Path.Level) (l : Ownership.Path.Level)
+    (s : NestedMachine) (mEnv : Ownership.Env) (H : Ownership.Heap)
+    (rA : Ownership.Ref) (o : Ownership.Obj) (i v pv : Nat)
+    (childRef : Ownership.Ref)
+    (hm : LevelMatch assign p l path value rA o i childRef)
+    (hag : NestedAgrees assign p s mEnv H rA i v pv)
+    (c : Ownership.Ctx) (tip : Ownership.Ref) (cb : Ownership.Ctx) (y : Ownership.Var)
+    (hpath : PathContract path value body tip l rest H mEnv c cb y)
+    {support : List Ownership.Var}
+    (hacc : Ownership.Accounted support H mEnv c)
+    {Hout : Ownership.Heap}
+    (hcall : Ownership.CountedChildCall
+      (Ownership.CountedPair.protocol H rA childRef i).2 Hout
+      ((mEnv.set l.parentVar (.ref rA)).set l.childVar (.ref childRef))
+      ((c.move l.arrayVar l.parentVar).bindOwned l.childVar childRef)
+      l.childVar path value (Ownership.Path.build path value body rest) rA childRef
+      (l.childVar :: Ownership.replaceVar support l.arrayVar l.parentVar)) :
+    ∃ Hf envf ws Hm envm,
+      execCountedAST declName takeOut assign (Ownership.Path.build path value body rest)
+          p code s =
+        some ((execCounted assign (Ownership.Path.build path value body rest) p.fragment s).1,
+          some (.done Hf envf (.ref rA) (s.writes ++ ws))) ∧
+      (execCounted assign (Ownership.Path.build path value body rest) p.fragment s).1.heap = Hf ∧
+      (execCounted assign (Ownership.Path.build path value body rest) p.fragment s).1.env
+          (assign p.restored) = some (.ref rA) ∧
+      Ownership.Nested.runN (Ownership.Path.build path value body (l :: rest)) mEnv H =
+        .done Hm envm (.ref rA) ws ∧
+      (∀ w ∈ ws, w.2 = true) ∧
+      NestedOutcome.Compat
+        (NestedOutcome.ofMachine assign p
+          (execCounted assign (Ownership.Path.build path value body rest) p.fragment s).1
+          (Ownership.Res.done Hf envf (.ref rA) (s.writes ++ ws)))
+        (NestedOutcome.ofModel (Ownership.Nested.runN
+          (Ownership.Path.build path value body (l :: rest)) mEnv H)) ∧
+      Ownership.Accounted
+        (l.childVar :: Ownership.replaceVar support l.arrayVar l.parentVar)
+        (Ownership.CountedPair.protocol H rA childRef i).2
+        ((mEnv.set l.parentVar (.ref rA)).set l.childVar (.ref childRef))
+        ((c.move l.arrayVar l.parentVar).bindOwned l.childVar childRef) ∧
+      Ownership.Accounted
+        ((Ownership.replaceVar
+            (Ownership.replaceVar
+              (l.childVar :: Ownership.replaceVar support l.arrayVar l.parentVar)
+              l.childVar l.resultVar) l.parentVar l.restoredVar).erase l.resultVar)
+        Hf
+        ((((mEnv.set l.parentVar (.ref rA)).set l.childVar (.ref childRef)).set
+            l.resultVar (.ref childRef)).set l.restoredVar (.ref rA))
+        (((((c.move l.arrayVar l.parentVar).bindOwned l.childVar childRef).move
+            l.childVar l.resultVar).move l.parentVar l.restoredVar).setUs l.resultVar .dead) ∧
+      Ownership.HeapCompat Hf Hm ∧
+      (Ownership.CountedPair.protocol H rA childRef i).2.next = H.next + 1 ∧
+      (Ownership.CountedPair.protocol H rA childRef i).2.cells H.next = none ∧
+      (Ownership.CountedPair.protocol H rA childRef i).2.cells rA =
+        some (Ownership.PutBack.parentAfter o i) ∧
+      Ownership.Heap.Exclusive (Ownership.CountedPair.protocol H rA childRef i).2 rA ∧
+      Ownership.Heap.Exclusive (Ownership.CountedPair.protocol H rA childRef i).2 childRef ∧
+      Ownership.HeapCompat (Ownership.CountedPair.protocol H rA childRef i).2
+        (Ownership.Path.blankLevel H l) ∧
+      Ownership.PutBack.disposition? Hout rA i = some .mutate ∧
+      Ownership.PutBack.putBack Hout rA i childRef = some (rA, Hf) ∧
+      Hf = Ownership.PutBack.mutate Hout rA (Ownership.PutBack.parentAfter o i) i childRef ∧
+      ((Ownership.PutBack.parentAfter o i).fields.setIfInBounds i (.ref childRef))[i]? =
+        some (.ref childRef) ∧
+      (∀ q, ¬ Ownership.Entry.MutableFootprint
+          (Ownership.CountedPair.protocol H rA childRef i).2 childRef q →
+        Hout.cells q = (Ownership.CountedPair.protocol H rA childRef i).2.cells q) ∧
+      (∀ q, q ≠ rA → Hf.cells q = Hout.cells q) := by
+  obtain ⟨hcellSlot, hslotSlot, -⟩ := hpath.slots l (by simp)
+  have hr : c.refOf l.arrayVar = some rA := by
+    rw [hpath.levelCtx.ref_arr, hm.arr]
+  have hcell : H.cells rA = some o := by
+    simpa [hm.arr, hm.obj] using hcellSlot
+  have hslot : o.fields[i]? = some (.ref childRef) := by
+    simpa [hm.obj, hm.idx, hm.child] using hslotSlot
+  have hidx : mEnv l.indexVar = some (.scalar i) := by
+    obtain ⟨-, h, -⟩ := hpath.envok.1
+    rw [hm.idx] at h
+    exact h
+  have hmu : c.mult rA = 1 := by
+    rw [← hm.arr]
+    exact hpath.levelCtx.mult_arr
+  have he : c.mult childRef = 1 := by
+    rw [← hm.child]
+    exact hpath.levelCtx.mult_child
+  have hchainBuild : Ownership.chain l.arrayVar l.indexVar l.parentVar l.childVar childRef
+      path value l.resultVar l.restoredVar (Ownership.Path.build path value body rest) =
+      Ownership.Path.build path value body (l :: rest) := by
+    simp [Ownership.chain, Ownership.Path.build, hm.child]
+  have hbuild : Ownership.Nested.checkNF c []
+      (Ownership.Path.build path value body (l :: rest)) =
+      some (Ownership.PathConsolidation.levelFinal c l) :=
+    Ownership.PathConsolidation.checkNF_build rest l hpath.levelCtx hpath.shapes
+      hpath.counts hpath.chained hpath.checkBody hpath.retBody hpath.retOwned
+      hpath.retRef hpath.endsAt hpath.countFree
+  have hchk : Ownership.Nested.checkN c
+      (Ownership.chain l.arrayVar l.indexVar l.parentVar l.childVar childRef path value
+        l.resultVar l.restoredVar (Ownership.Path.build path value body rest)) =
+      some (Ownership.PathConsolidation.levelFinal c l) := by
+    rw [hchainBuild, Ownership.Nested.checkN]
+    exact hbuild
+  obtain ⟨Hf, envf, ws, Hm, envm, h1, h2, h3, h4, hcopy, h6, h7, h8, h9, h10, h11, h12,
+    h13, h14, h15, h16, h17, h18, h19, h20, h21⟩ :=
+    execCounted_full_fragment declName takeOut hproj hl
+      (Ownership.Path.build path value body rest) s mEnv H rA o i v pv childRef path value l
+      hm hag hcell hslot hidx hacc hpath.levelCtx.us_arr hr hmu he hchk hcall
+  refine ⟨Hf, envf, ws, Hm, envm, h1, h2, h3, ?_, hcopy, ?_, h7, h8, h9, h10, h11, h12,
+    h13, h14, ?_, h16, h17, h18, h19, h20, h21⟩
+  · rw [← hchainBuild]
+    exact h4
+  · rw [← hchainBuild]
+    exact h6
+  · simpa [Ownership.Path.blankLevel, hm.arr, hm.obj, hm.idx] using h15
 
 end OwnershipLcnf

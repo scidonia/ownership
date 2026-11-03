@@ -337,8 +337,8 @@ claiming either implies the other, and both directions are now proved:
 `aliasEntryInv` is `EntryInv` at a state no support accounts, and
 `accountedNotEntryInv` is an accounted state with no `EntryInv`.
 
-Still open: the trace-level abstraction of the counted interpreter; the LCNF
-extraction and restoration *store events* — the dispositions are theorems now,
+Still open: a step-by-step agreement between the two interpreters inside the
+counted pair-live window; the LCNF extraction and restoration *store events* — the dispositions are theorems now,
 but they are not `Write` records (Gap 4/Stage 4); invocation-local recursion
 (N10); and transport at the principal boundary. The heap remains a named-cell
 model: nothing here relates it to physical counted references.
@@ -379,16 +379,22 @@ What this does not say, and why:
   premise, not a consequence of the `PathRecursion` induction, which derives the
   ordinary `ChildContract` only; an instance discharges it by the caller's
   accounting at the body's return (`calledAccounted`).
-* **The trace-level agreement is not proved.** `OwnershipLcnf/CountedTrace.lean`
-  identifies the counted block of the recognised trace, defines the counted
-  interpreter, states its boundary (`execCounted_protocol_boundary`: the counted
-  block's heap is `CountedPair.protocol`'s, `HeapCompat` to the model's take-out
-  heap, with the non-heap machine fields agreeing), and derives the nested
-  correspondence's two exclusivity premises from accounting. It states no
-  correspondence between `execCounted` and `execNested` over the whole fragment:
-  `HeapCompat` is not an invariant of the counted window between the take-out and
-  the pair release, and the counted composition is the model-level
-  `counted_nested_chain`.
+* **No step-by-step agreement inside the pair-live window.**
+  `OwnershipLcnf/CountedTrace.lean` identifies the counted block of the recognised
+  trace, defines the counted interpreter, splits the fragment at the pair's release
+  (`countedPrefix`/`countedSuffix`, `fragment_decomp`), states the block's
+  boundary (`execCounted_protocol_boundary`) and runs the post-release span from
+  that boundary state (`execCounted_suffix`). The whole fragment is then executed
+  by `execCounted_full_fragment` through `execCountedAST`, and its outcome is
+  related to the model's run of the same extraction/call/restoration term by
+  `NestedOutcome.Compat`: `HeapCompat` on the heaps (the same cell at every name,
+  with the model cursor no higher than the counted one) and the same result,
+  fault and write trace.
+  What is not proved is an agreement between `execCounted` and `execNested` step
+  by step between the
+  take-out and the pair's release, where the counted heap carries the pair and
+  `HeapCompat` is not an invariant; the composition's model-level statement is
+  still `counted_nested_chain`.
 
 ### Stage 4 / Gate E status (2 November 2026)
 
@@ -421,9 +427,12 @@ What this does not say, and what remains open:
 
 * **The emitted callee is not captured (N10).** The child call is a contract on
   an admitted model body, and the theorem's termination is contractual.
-* **No trace-level suffix agreement.** `execCounted_protocol_boundary` relates the
-  counted prefix only; beyond it `HeapCompat` is not an invariant of the counted
-  window, and no correspondence over the whole fragment is claimed.
+* **No step-by-step agreement in the pair-live window.**
+  `execCounted_protocol_boundary` relates the counted block; beyond it
+  `execCounted_full_fragment` relates the whole counted run to the model's run by
+  `NestedOutcome.Compat` (heap-compatible, same result, fault and trace). What is
+  not claimed is a per-step agreement between the two interpreters inside the
+  counted window, where `HeapCompat` does not hold.
 * **The extraction/restoration store events remain outside the trace** (Gap 4):
   their target-cell dispositions are theorems, not `Write` records.
 * **Whole-path non-growth is not a conjunct.** The theorem does not conclude that

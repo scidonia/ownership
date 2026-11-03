@@ -20,7 +20,7 @@ reports only `propext`, `Classical.choice` and `Quot.sound`.
 | `project_sound` | `OwnershipLcnf.project_sound` | `projectPrefix`, `Layout`, `Machine`, `Agrees`, cell and bounds facts; equality of the executed and model `PrefixOutcome` | proved lemma, LCNF |
 | `recognized_write_in_place` | `OwnershipLcnf.recognized_write_in_place` | the same recogniser/layout/agreement facts, with `EntryInv H env (Runner.initCtx root) root client`; both outcomes are `inPlaceOutcome root i v o H` | proved lemma, LCNF |
 | `index_path_simulates_model` | `OwnershipLcnf.index_path_simulates_model` | `projectNested`, `NestedLayout`, `LevelMatch`, `NestedAgrees`, and **`PathContract path value body tip l rest H mEnv c cb y`**; returns the nested outcome equality and a completed nested run whose writes are exclusive | proved lemma, LCNF, **leaf contract supplied; ordinary `ChildContract` derived at every level** |
-| `principal_supported_path` | `OwnershipLcnf.principal_supported_path` | `projectNested`, `NestedLayout`, `LevelMatch`, `NestedAgrees`, **`PathContract`**, **`Accounted`**, and the counted child-call contract **`CountedChildCall`**; an inline `\exists` conclusion with the recognition-to-model correspondence, the counted boundary and final accounting, the counted prefix's boundary, and the child frame with restoration locality | proved lemma, LCNF, **child call supplied (N10): `CountedChildCall`'s post-call accounting is an explicit premise; emitted callee not captured; no trace-level agreement beyond the counted prefix** |
+| `principal_supported_path`, `principal_counted_fragment` | `OwnershipLcnf.principal_supported_path`, `OwnershipLcnf.principal_counted_fragment` | `projectNested`, `NestedLayout`, `LevelMatch`, `NestedAgrees`, **`PathContract`**, **`Accounted`**, and the counted child-call contract **`CountedChildCall`**; inline `\exists` conclusions: the first with the recognition-to-model correspondence, the counted boundary and final accounting, the counted block's boundary, and the child frame with restoration locality; the second with the counted run of the whole fragment over `execCountedAST`, its `NestedOutcome.Compat` relation to the model's run of `Path.build`, and the restoration at the call's output heap | proved lemma, LCNF, **child call supplied (N10): `CountedChildCall`'s post-call accounting is an explicit premise; emitted callee not captured; no step-by-step agreement inside the pair-live window** |
 | `principal_instance` | `OwnershipTest.principal_instance` | no hypotheses: the theorem at the recogniser's layout on the reified captured declaration, with `NestedLayout`, `LevelMatch`, `NestedAgrees`, `PathContract`, `Accounted` and `CountedChildCall` all supplied | proved instance, closed; `retained_parent_copies` is the negative control |
 | `pair_accounting` | `Ownership.CountedPair.pair_accounting` | `WellFormedEntry H p c i`; the protocol result has parent and child at count one, live and exclusive, with counts equal to the entry heap | proved lemma, counted pair |
 | `putBack_exclusive_of_wellFormed` | `Ownership.PutBack.putBack_exclusive_of_wellFormed` | `WellFormedEntry H p c i` and `ChildCall ...`; the put-back selects the mutate branch and leaves parent and child at count one and exclusive | proved lemma, restoration, child-call boundary supplied |
@@ -144,10 +144,13 @@ predicate for the nested checker, and `checkN_extraction_exclusive`: from `Inv`,
 `EntryInv` form, `checkN_extraction_exclusive_of_entryInv`, and
 `OwnershipTest/ExtractionExclusive.lean` instantiates it on the depth-two path
 certificate. The scope is the `Ownership.Nested` write: the nested interpreter's
-own extraction/restoration stores remain open as trace events, and the counted
-put-back's own execution inside the counted interpreter and the counted/abstract
-trace-level agreement are not claimed; the counted protocol's composition at its
-boundary is `Ownership.counted_nested_chain`. Both theorems print only the
+own extraction/restoration stores remain open as trace events. The counted
+put-back's own execution inside the counted interpreter *is* claimed:
+`execCounted_full_fragment` runs the whole fragment and relates it to the model's
+run by `NestedOutcome.Compat`, with `execCounted_suffix` the restorative step. No
+step-by-step agreement between the two interpreters inside the pair-live window is
+claimed, and the counted protocol's model-level composition at its boundary is
+`Ownership.counted_nested_chain`. Both theorems print only the
 standard axiom footprint.
 
 ## Other manuscript corrections established by the audit
@@ -180,7 +183,7 @@ questions.
 | Principal theorem | addressed | `OwnershipLcnf.principal_write` composes the flat LCNF and runtime-model claims; its full type is in Appendix A.2. `OwnershipLcnf.principal_supported_path` composes the nested recognition, counted chain and counted prefix at one level of a finite supported path, conditional on `CountedChildCall`; `OwnershipTest.principal_instance` is its closed instance. |
 | Alias/accounting | addressed with named preconditions | `Ownership.OwnersAccounted`, `CountFidelity`, `alias_not_accounted`, `initCtx_accounted`; Section 3.3; the checker's take-out/`dec` preconditions and arbitrary-entry `CountFidelity` are client/implementation obligations, not hidden. |
 | Recursive scope | addressed | `index_path_simulates_model` displays `PathContract`; `PathRecursion` discharges the finite tail; leaf and N10 are stated. |
-| Extraction/restoration | addressed at the model level, with named composition gaps | Protocol count table; `pair_accounting`/`putBack_exclusive_of_wellFormed`; `PairProjection` model term. `ExtractionExclusive`/`checkN_extraction_exclusive_of_entryInv` prove each accepted take-out and put-back targets an exclusive array cell. The nested interpreter abstracts the pair traffic and unconditional restoration, and the pair-live state is provably outside `Accounted`; because of that, the counted protocol is stated at its accounted boundaries (`Ownership.counted_nested_chain`). What remains open is the counted interpreter's trace-level abstraction and the LCNF-level extraction/restoration store events. |
+| Extraction/restoration | addressed at the model level, with named composition gaps | Protocol count table; `pair_accounting`/`putBack_exclusive_of_wellFormed`; `PairProjection` model term. `ExtractionExclusive`/`checkN_extraction_exclusive_of_entryInv` prove each accepted take-out and put-back targets an exclusive array cell. The nested interpreter abstracts the pair traffic and unconditional restoration, and the pair-live state is provably outside `Accounted`; because of that, the counted protocol is stated at its accounted boundaries (`Ownership.counted_nested_chain`). What remains open is a step-by-step agreement inside the pair-live window and the LCNF-level extraction/restoration store events. |
 | Recognition/observations | addressed with a trace scope | Accepted grammar and mutation-corpus scope; `PrefixOutcome` preservation paragraph; shared decoder/adequacy boundary. The nested trace records designated scalar writes, not extraction/restoration stores. |
 | Example/evaluation | addressed | Running `Layout5.setAt` source example; flat probe table with checker/runtime/buffer/result/config; nested C/IR gate; cost/allocation qualification. |
 | Reproducibility | addressed with a gate scope | Appendix A.3 commands; test and gate results; `scripts/check_axioms.lean`; pinned sibling `66e64334...`; toolchain. The probe's modes assert their observations; an ordinary mismatch returns 2, the armed copy controls abort with exit 1 and the exclusivity diagnostic, and the gate checks both. The differential mode compares recorded expectations rather than executing the model. |
@@ -193,7 +196,9 @@ Remaining named obligations:
 - the emitted recursive callee and continuation (N10) and the leaf contract;
 - the checker's take-out/`dec` accounting preconditions (`hno`/`hother`);
 - `CountFidelity` for arbitrary entry heaps, and the runtime's count fidelity;
-- the counted interpreter's trace-level abstraction over the recognised counted block;
+- a step-by-step agreement between the two interpreters inside the pair-live
+  window (the counted interpreter's whole trace is related to the model's run by
+  `execCounted_full_fragment`);
 - extraction/restoration disposition events for a full nested no-copy claim: the
   model-level target-cell exclusivity is proved by
   `checkN_extraction_exclusive_of_entryInv`, but the LCNF-level stores and their
@@ -210,6 +215,8 @@ single `(root, true)` write, `ChildCall.parent` derives parent preservation, and
 the counted-pair accounting has explicit increments and controls. The paper now
 presents the flat `principal_write` as the composed result and
 `principal_supported_path` as the nested composed result, conditional on the
-counted child call, whose counted protocol composes at its accounted boundaries
-and whose emitted callee and trace-level suffix are not claimed.
+counted child call, whose counted protocol composes at its accounted boundaries;
+`principal_counted_fragment` is the whole-fragment companion, whose counted run is
+`NestedOutcome.Compat` to the model's run. Neither claims the emitted callee, and
+neither claims a step-by-step agreement inside the pair-live window.
 

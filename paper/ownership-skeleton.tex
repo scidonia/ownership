@@ -107,9 +107,12 @@ and a runtime model at the designated write and takes no accounting premise. A
 nested theorem composes the finite-path correspondence, the counted chain and the
 counted interpreter's recognised-prefix boundary at one level of a supported
 path, conditional on an explicit, stronger counted child-call contract, with a
-closed kernel-checked instance. The claim is a checked count one for the
-fragment, not a physical count, whole-fragment execution equivalence, or C
-verification.
+closed kernel-checked instance. A second theorem runs the counted interpreter over
+the whole recognised fragment---extraction, child call, restoration and
+return---and relates its outcome to the model's run of the same term by heap
+compatibility (the same cell at every name, the model cursor no higher than the
+counted one), with the same result, fault and write trace. The claim is a checked count one for the fragment, not a physical
+count, a step-by-step agreement inside the pair-live window, or C verification.
 \end{abstract}
 
 \section{Introduction}\label{sec:intro}
@@ -186,8 +189,12 @@ with the counted chain and the counted interpreter's recognised-prefix boundary 
 one level of a finite supported path, from an accounted caller state. Its child call
 is a stronger contract: it requires the caller's complete accounting at the body's
 return, which the finite-path induction does not derive. A closed kernel-checked
-instance inhabits the statement at the recogniser's layout, with a retained-parent
-copy control; trace agreement stops at the pair's release.
+instance inhabits the statement at the recogniser's layout. The counted
+interpreter's run over the whole $p.\mathit{fragment}$
+(\lean{principal\_counted\_fragment}) is \lean{NestedOutcome.Compat} to the
+model's run: heap compatibility with the same result, fault and write trace. The
+boundary controls remain. Neither a step-by-step agreement inside the pair-live
+window nor the emitted callee is claimed.
 
 The closest predecessor, Huisinga's static uniqueness analysis for a Lean IR model
 \cite{huisinga}, has no compiler connection and leaves soundness as future work.
@@ -729,16 +736,28 @@ equation fails there. At the concrete pair-live state of
 (\lean{pairPhase\_refused}). This is a boundary relation, not an every-instruction
 invariant.
 
-The counted interpreter executes five heap-touching operations;
-\lean{countedPrefix} restricts \lean{execCounted\_protocol\_boundary} to the first
-nineteen, through the pair's release. Its heap is the protocol boundary,
-\lean{HeapCompat} to the abstract take-out heap, and its non-heap fields
-(including the write trace) agree with \lean{execNested}'s. Beyond it no
-trace-level agreement is claimed: \lean{HeapCompat} is not invariant in the
-counted window, and the restoration lies outside \lean{countedPrefix}. Extraction
-and restoration stores are not \lean{Write} records in either interpreter's
-trace, so the trace does not encode them; their target-cell dispositions are the
-separate model facts \lean{checkN\_extraction\_exclusive} and
+The counted interpreter executes five heap-touching operations. The recognised
+fragment splits at the pair's release: \lean{countedPrefix} is the
+release-terminated span rather than a numeric cutoff, and \lean{fragment\_decomp}
+records that the rest of the trace (\lean{countedSuffix}) follows it. On that span
+\lean{execCounted\_protocol\_boundary} reports the protocol boundary heap,
+\lean{HeapCompat} to the abstract take-out heap, with its non-heap fields
+(including the write trace) agreeing with \lean{execNested}'s. From that boundary
+state \lean{execCounted\_full\_fragment} runs the rest of the trace: the child
+assertion, the call at the boundary state, the restoration at the call's output
+heap, and the return. Its entry point is \lean{execCountedAST}, the counted
+counterpart of \lean{execNestedAST}, so the recogniser's verdict is spent by the
+theorem. The counted outcome and the model's run of the same
+extraction/call/restoration term are related by \lean{NestedOutcome.Compat}: the
+heaps are \lean{HeapCompat}---the same cell at every name, with the model cursor
+no higher than the counted one---and the result, the fault and the write trace
+are literally equal. \lean{HeapCompat} is still not an invariant in the pair-live
+window, so the correspondence is stated between the accounted boundary states,
+not step by step.
+Extraction and restoration stores are not \lean{Write} records in either
+interpreter's trace, so the trace does not encode them, although the restoration's
+execution is a counted step; their target-cell dispositions are the separate model
+facts \lean{checkN\_extraction\_exclusive} and
 \lean{checkN\_extraction\_exclusive\_of\_entryInv}. Event representation and
 target exclusivity are different claims: the second is proved at the model level
 and the first is not attempted.
@@ -852,13 +871,15 @@ restoration's heap as $H_f$.
 call leaves its cell as $B$ has it; and the restoration changes no cell other
 than the caller's array.
 
-\noindent{\small\itshape (a) and (c) are the statement's outstanding
-correspondence. The enumerated conjuncts (b) and (d)--(h), the checked theorem's
-first conjunct---the recognition-to-model equality
+\noindent{\small\itshape (a) and (c) are
+\lean{principal\_counted\_fragment}, whose recognised-code entry point,
+\lean{execCountedAST}, runs the whole fragment; the conjuncts (b) and (d)--(h), the
+recognition-to-model equality
 \lean{NestedOutcome.ofExec … = some (NestedOutcome.ofModel …)}---and the counted
 protocol's boundary over the recognised fragment's prefix are the kernel-checked
-content of \lean{principal\_supported\_path}; premise providers are
-\Cref{tab:contracts} and the instance of \Cref{sec:case}.}
+content of \lean{principal\_supported\_path}. Both are instantiated closed at the
+reified declaration (\Cref{sec:case}); premise providers are
+\Cref{tab:contracts}.}
 
 \lean{PathContract} is supplied, and \lean{childContracts\_of\_path} derives the
 ordinary \lean{ChildContract} at every level; the leaf body's own contract and
@@ -914,11 +935,22 @@ theorem principal_instance :
 \noindent{\small\itshape Abbreviated at the first group; the full existential is in
 \lean{OwnershipTest/Principal.lean}.}
 
-The retained-parent control: \lean{retained\_parent\_not\_mutate} shows a
-count-two parent does not mutate; \lean{retained\_parent\_copies} records the copy
-and untouched sibling. \lean{OwnershipTest/\allowbreak PathRecursion.lean} is the
-depth-two witness; \lean{OwnershipTest/\allowbreak PathConsolidation.lean}
-supplies a depth-three leaf, not an instance. Both are kernel-checked.
+\lean{counted\_fragment\_instance} inhabits
+\lean{principal\_counted\_fragment} at the same data. The instance is a closed
+definition whose type is inferred from the theorem, and its \lean{\#print axioms}
+record is the footprint; a second, concrete re-ascription of the 21-conjunct
+conclusion is not present in this revision.
+
+The retained-parent controls are in the boundary fixture:
+\lean{retained\_parent\_not\_mutate} shows a count-two parent does not mutate, and
+\lean{retained\_parent\_copies} records the copy and the untouched sibling. A
+T1-specific \lean{HeapCompat} non-vacuity control is not a declaration in this
+revision; the copy branch allocates at the entry cursor while the model's
+unconditional set does not, which is the fact the relation exposes rather than a
+separate T1 theorem.
+\lean{OwnershipTest/\allowbreak PathRecursion.lean} is the depth-two witness;
+\lean{OwnershipTest/\allowbreak PathConsolidation.lean} supplies a depth-three
+leaf, not an instance. The listed declarations are kernel-checked.
 
 \subsection{Evidence}
 A compiled probe compares the model's predicates with \lean{lean\_is\_exclusive}
@@ -1060,7 +1092,13 @@ The composed statements do not carry accounting across models.
 either relation to a physical counted reference. Its child call is an admitted
 model body, not the emitted callee, and its conclusion is the
 reached in-place store at one level, not whole-path non-growth outside the root's
-mutable footprint. Beyond the counted prefix no trace-level agreement is claimed.
+mutable footprint. The counted interpreter's own trace is related to the model's
+run over the whole fragment (`execCounted\_full\_fragment`, consumed at the level
+by `principal\_counted\_fragment`), but the relation is `HeapCompat` plus
+equality on the result, the fault and the write trace: the same cell at every
+name, with the model cursor no higher than the counted one, `HeapCompat` is not
+an invariant inside the pair-live window, and no step-by-step agreement between
+the two interpreters is claimed.
 The nested trace omits extraction and restoration stores---neither interpreter
 records them as \lean{Write} records---but each target cell is proved exclusive
 by \lean{checkN\_extraction\_exclusive\_of\_entryInv}, a fact about the store's
@@ -1082,8 +1120,11 @@ runtime model for the flat write, composed as \lean{principal\_write}, which tak
 no accounting premise. The nested \lean{principal\_supported\_path} composes the
 finite-path correspondence, the counted chain and the counted-prefix boundary at
 one level, from an accounted caller state (\lean{hacc}) and conditional on the
-child-call contract (\lean{hcall}); beyond that boundary, and the emitted callee,
-remain open. The result buys a checked count one for a recognised fragment, not a
+child-call contract (\lean{hcall}); the counted interpreter's run over the whole
+$p.\mathit{fragment}$ (\lean{principal\_counted\_fragment}) is
+\lean{NestedOutcome.Compat} to the model's run: heap compatibility with the same
+result, fault and write trace. Neither a step-by-step agreement inside the
+pair-live window nor the emitted callee is claimed. The result buys a checked count one for a recognised fragment, not a
 type system or a physical count. Next: the C semantics, replay/backend and
 address identity, free and cascade, and the emitted callee; soundness is proved,
 not completeness.
