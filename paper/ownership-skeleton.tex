@@ -917,7 +917,50 @@ classified by provider.}
 \end{table}
 
 \section{The closed instance and the evidence}\label{sec:case}
-\subsection{The instance and its controls}
+\subsection{The case study}\label{sec:case-family}
+The instance is a family. For an outer slot $i$, a leaf slot $j$ and a value $w$,
+the entry holds two live, non-persistent cells at count one: the parent array at
+\lean{ref 0} carries the child handle in slot $i$ and scalars elsewhere, the child
+array at \lean{ref 1} is all scalars, and \lean{ref 2} is the fresh name. The
+child body is one designated write: it stores $w$ in the child's slot $j$ and
+returns the child handle. \lean{family\_chain} proves, for every $i < n$ and
+$j < n$, the entry accounting, the protocol boundary and its accounting, the
+counted child-call contract, and the whole \lean{counted\_nested\_chain}
+conclusion at that data; \lean{family\_chain\_two} is its length-two instance, the
+configuration the rest of the paper uses. The bound is the only length fact the
+proof needs: the slot facts are
+\lean{Array.\allowbreak getElem?\_setIfInBounds\_self\_of\_lt}, and the count
+equation is the take-out's own edge-fill lemma
+\lean{IncomingCount\_set\_fill} applied to the all-scalar array.
+
+\begin{lstlisting}
+theorem family_chain (n i j w : Nat) (hi : i < n) (hj : j < n) :
+    ∃ Hf Hm envm ws,
+      Accounted [3, 2] (B n i) (boundaryEnv i j w) (boundaryCtx n i) ∧
+      HeapCompat (B n i) ((famHeap n i).set 0 (parentAfter (parentObj n i) i)) ∧
+      (B n i).cells 2 = none ∧ (B n i).next = 3 ∧
+      Exclusive (B n i) 0 ∧ Exclusive (B n i) 1 ∧
+      disposition? (Hc n i j w) 0 i = some .mutate ∧
+      putBack (Hc n i j w) 0 i 1 = some (0, Hf) ∧
+      -- six further conjuncts: accounting at Hf, the model run, the child
+      -- body's run, exclusive writes, and HeapCompat Hf Hm
+\end{lstlisting}
+\noindent{\small\itshape Abbreviated; each conjunct is named by its own projection
+theorem, so a dropped conjunct fails the build.}
+
+\paragraph{The worked instance.} Take $i = 0$, $j = 1$ and $w = 7$. Before the
+take-out the parent's slot 0 holds \lean{.ref 1} and its slot 1 a scalar; after
+it, slot 0 holds the placeholder \lean{.scalar 0}, the temporary pair has been
+allocated at name 2 and released, and the cursor stands at 3. The leaf then
+stores \lean{.scalar 7} in the child's slot 1, and the restoration refills the
+parent's slot 0 with \lean{.ref 1}. Three facts are separate and none implies the
+others: the restored array is functionally the model's own \lean{set}; the counts
+are back to one at both components with the pair gone; and the restoration took
+the \lean{.mutate} branch because the parent is exclusive at the call's output
+state, not because the counts happen to be unchanged. The final heap and the
+abstract run's heap are related by \lean{HeapCompat}, not by equality: the counted
+run's cursor is one higher, the residue of the temporary pair.
+
 \lean{principal\_instance} inhabits \lean{principal\_supported\_path} at the
 recogniser's layout on a reified transcription of the captured declaration; every
 premise is supplied, so the conclusion has no hypotheses. It is a 25-conjunct
@@ -941,10 +984,27 @@ definition whose type is inferred from the theorem, and its \lean{\#print axioms
 record is the footprint; a second, concrete re-ascription of the 21-conjunct
 conclusion is not present in this revision.
 
-The retained-parent controls are in the boundary fixture:
-\lean{retained\_parent\_not\_mutate} shows a count-two parent does not mutate, and
-\lean{retained\_parent\_copies} records the copy and the untouched sibling. A
-T1-specific \lean{HeapCompat} non-vacuity control is not a declaration in this
+\begin{table}[h]
+\centering
+\scriptsize
+\setlength{\tabcolsep}{3pt}
+\begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}p{3.0cm}>{\raggedright\arraybackslash}p{5.0cm}X@{}}
+\toprule
+Variation & What is observed & Which mechanism answers it \\
+\midrule
+retained parent (count two) & the restoration copies; \lean{.mutate} is not taken (\lean{retained\_parent\_not\_mutate}, \lean{retained\_parent\_copies}) & copies in the model's branch; the relation exposes the extra cell through the cursor, not by a theorem refuting \lean{HeapCompat} \\
+pair not released & both component counts elevated, no exclusivity (\lean{no\_free\_components\_not\_exclusive}) & refused by the relation \\
+pair-live state & no accounting at the run's own take-out context (\lean{pairPhase\_refused}) & refused by the relation \\
+duplicated, omitted or unbound owner entry & the count equation cannot hold (\lean{dupSupport\_witness}, \lean{omittedOwner\_witness}, \lean{unboundRoot\_witness}) & refused by the relation \\
+persistent parent & the check aborts and the store reports no write (\lean{persistent\_check}, \lean{persistent\_setAt}) & rejected by the checker; outside the certified fragment \\
+\bottomrule
+\end{tabularx}
+\caption{Controls. The mechanisms are not interchangeable: a row refused by the
+relation is not a checker rejection, and a copy branch in the model is not an
+allocation claim about the executable.}
+\label{tab:controls}
+\end{table}
+A T1-specific \lean{HeapCompat} non-vacuity control is not a declaration in this
 revision; the copy branch allocates at the entry cursor while the model's
 unconditional set does not, which is the fact the relation exposes rather than a
 separate T1 theorem.

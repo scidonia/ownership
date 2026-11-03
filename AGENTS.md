@@ -128,6 +128,16 @@
   requested `Path` constructor. The contract is report completeness only: it
   does not establish that the labels follow from the AST, which the focused
   branch-local gate in `scripts/dump_executor.lean` checks separately.
+- `OwnershipTest/CountedFamily.lean` is the parameterised one-level case study:
+  for every outer slot `i < n`, leaf slot `j < n` and value `w` it proves the
+  entry accounting, the protocol boundary and its accounting, the counted
+  child-call contract, and the whole `counted_nested_chain` conclusion
+  (`family_chain`, with `family_chain_two` its length-two instance). The bound is
+  the only length fact the proof uses: the slot facts come from
+  `Array.getElem?_setIfInBounds_self_of_lt` and the count equation from
+  `IncomingCount_set_fill` on the all-scalar array. It imports its own heap and
+  contexts rather than reusing the fixed fixtures, because the family varies the
+  outer slot, the leaf slot and the value.
 - Fixtures without a page (`OwnershipTest/Array.lean`,
   `OwnershipTest/Nested.lean`, `OwnershipTest/RecursiveProof.lean`,
   `OwnershipTest/PairBranchProof.lean`) are regression and artifact checks.

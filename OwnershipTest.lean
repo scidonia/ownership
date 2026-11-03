@@ -14,5 +14,6 @@ import OwnershipTest.ExtractionExclusive
 import OwnershipTest.CompleteAccounting
 import OwnershipTest.Preservation
 import OwnershipTest.CountedNested
+import OwnershipTest.CountedFamily
 import OwnershipTest.Principal
 import OwnershipTest.PrincipalCounted
