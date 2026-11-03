@@ -538,6 +538,8 @@ theorem supported_run {c : Ctx} {s : Code} (hs : Supported c s)
       Accounted (resultSupport s support) H' env' c' ∧
       AccountedAlong H env c support s
 \end{lstlisting}
+The slot fact concerns the store's old selected slot as well as the scalar written,
+so reference-valued array updates lie outside this preservation theorem.
 \lean{AccountedAlong} is a conclusion, never a hypothesis: at each instruction the
 relation holds at the interpreter's own post-state, and at each array store the
 target is exclusive (\lean{supported\_store\_exclusive} states the store's own pre-
@@ -681,6 +683,13 @@ copies nor allocates under the contracts these statements take, while the
 protocol's take-out allocates the temporary pair and the counted cursor records
 it.
 
+The recorded trace is the list the interpreters report: the child body's stores
+and the protocol's own scalar events. The take-out exchange and the restoration's
+array store are justified separately — the first by the boundary accounting, the
+second by the derived disposition and its target's exclusivity — rather than by
+appearing in that list, so trace equality is evidence about recorded events and the
+store coverage comes from those statements.
+
 The pair-live window is a deliberate boundary abstraction, and it is worth naming
 the interpretation it refuses. During the window we use the context the abstract
 take-out returns, whose two owning variables are the take-out's obligations for
@@ -782,6 +791,11 @@ invocation holds. The recognised outer fragment is related to a supplied model
 child computation, and the emitted callee's frame and path projections remain
 outside the correspondence.
 
+The flat and nested guarantees take different premises: the flat one takes the
+entry invariant and the runtime-model correspondence and concludes no accounting,
+while the accounting results take \lean{Accounted}. They are adjacent theorems,
+not one preservation result for every recognised prefix.
+
 Read without the formal apparatus, the correspondence says this. If the caller's
 state is accounted, the recogniser accepts the emitted declaration, and the child
 call is covered by its contract, then running the counted interpreter over the
@@ -846,23 +860,8 @@ the model's (\lean{NestedOutcome.Compat.observed\_iff}). The in-place update is
 therefore indistinguishable from the functional one at this boundary, and the
 cursor is the only component that differs.
 
-\begin{lstlisting}
-theorem principal_counted_fragment
-    (hproj : projectNested declName takeOut code = some p)
-    (hl : NestedLayout assign p) (hm : LevelMatch assign p l path value rA o i childRef)
-    (hag : NestedAgrees assign p s mEnv H rA i v pv)
-    (hpath : PathContract path value body tip l rest H mEnv c cb y)
-    (hacc : Ownership.Accounted support H mEnv c)
-    (hcall : Ownership.CountedChildCall
-      (Ownership.CountedPair.protocol H rA childRef i).2 Hout ... ) :
-    ∃ Hf envf ws Hm envm,
-      execCountedAST ... = some ((execCounted ... p.fragment s).1, some (.done Hf envf (.ref rA) ...)) ∧
-      NestedOutcome.Compat (NestedOutcome.ofMachine ...) (NestedOutcome.ofModel ...) ∧
-      Ownership.Accounted ... (Ownership.CountedPair.protocol H rA childRef i).2 ... ∧ ...
-\end{lstlisting}
-\noindent{\small\itshape Abbreviated: the full type, all conjuncts and the premise
-providers are in \lean{OwnershipLcnf/Principal.lean}; \Cref{sec:map} points at the
-declaration map.}
+\noindent{\small\itshape The full type, all conjuncts and the premise providers are
+in \lean{OwnershipLcnf/Principal.lean}.}
 
 \begin{figure}[t]
 \centering
@@ -1031,6 +1030,14 @@ artifact gate & the pinned sibling revision, its cleanliness, and byte-identical
 than its scope.}
 \label{tab:evidence}
 \end{table}
+
+Applying the development to a changed source update is four steps. Pin the sibling
+and recapture, which fails visibly if the recogniser's prefix changes; run
+\lean{projectNested} on the new declaration; supply the client facts — the entry
+accounting, the layout, agreement and level data, the path contract, and the child
+call with its accounting at the body's return; then check the certificate with the
+axiom audit and the claim census. The manual work is the third step: recognition,
+the model correspondence and the boundary accounting are automatic.
 
 \section{Related work}\label{sec:related}
 

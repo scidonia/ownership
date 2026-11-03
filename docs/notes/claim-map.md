@@ -21,7 +21,7 @@ allowlisted in the script and must carry the reason the last column records.
 | `.scalar 0` | expression | `Ownership.Val.scalar` | `Ownership/Heap.lean` | A worked instance | displayed heap value: the `scalar` constructor of `Ownership.Val` holding 0. |
 | `.scalar 7` | expression | `Ownership.Val.scalar` | `Ownership/Heap.lean` | A worked instance | displayed heap value: the `scalar` constructor of `Ownership.Val` holding 7. |
 | `1 < c.mult r` | expression | `Ownership.Supported.decOne` | `Ownership/CompleteAccounting.lean` | The supported fragment | displayed premise of the `decOne` constructor: the checker's `n < c.mult r` at n = 1, with `c.mult` being `Ownership.Ctx.mult`. |
-| `Accounted` | declaration | `Ownership.Accounted` | `Ownership/CompleteAccounting.lean` | The pair and its boundary; Compatibility and the boundary argument; Proof sketch.; Recognition, and the flat guarantee; Related work | — |
+| `Accounted` | declaration | `Ownership.Accounted` | `Ownership/CompleteAccounting.lean` | The pair and its boundary; Compatibility and the boundary argument; Proof sketch.; Recognition, and the flat guarantee; The finite path and the counted fragment; Related work | — |
 | `Accounted (resultSupport s support) H' env' c'` | expression | `Ownership.Accounted` | `Ownership/CompleteAccounting.lean` | Preservation | applied conclusion of the preservation theorem; `Ownership.resultSupport` supplies the extended support. |
 | `Accounted support H env c` | expression | `Ownership.Accounted` | `Ownership/CompleteAccounting.lean` | Complete ownership accounting; Preservation | applied form of the relation, not a second declaration. |
 | `Accounted support H mEnv c` | expression | `Ownership.Accounted` | `Ownership/CompleteAccounting.lean` | The finite path and the counted fragment | applied form of the relation at the model environment. |
@@ -156,7 +156,7 @@ allowlisted in the script and must carry the reason the last column records.
 | `principal_accounted` | declaration | `OwnershipLcnf.principal_accounted` | `OwnershipLcnf/Principal.lean` | Recognition, and the flat guarantee | — |
 | `principal_counted_fragment` | declaration | `OwnershipLcnf.principal_counted_fragment` | `OwnershipLcnf/Principal.lean` | Introduction; The finite path and the counted fragment; Scope, conclusion and disclosure | — |
 | `principal_supported_path` | declaration | `OwnershipLcnf.principal_supported_path` | `OwnershipLcnf/Principal.lean` | Introduction; Scope, conclusion and disclosure | — |
-| `projectNested` | declaration | `OwnershipLcnf.projectNested` | `OwnershipLcnf/NestedProjection.lean` | Recognition, and the flat guarantee; The finite path and the counted fragment | — |
+| `projectNested` | declaration | `OwnershipLcnf.projectNested` | `OwnershipLcnf/NestedProjection.lean` | Recognition, and the flat guarantee; The finite path and the counted fragment; Evidence and artifact | — |
 | `projectPair` | declaration | `OwnershipLcnf.projectPair` | `OwnershipLcnf/PairProjection.lean` | Recognition, and the flat guarantee | — |
 | `projectPrefix` | declaration | `OwnershipLcnf.projectPrefix` | `OwnershipLcnf/Projection.lean` | Recognition, and the flat guarantee | — |
 | `projectPrefix code = some p` | expression | `OwnershipLcnf.projectPrefix` | `OwnershipLcnf/Projection.lean` | Recognition, and the flat guarantee | the recogniser's success equation, not a declaration. |
