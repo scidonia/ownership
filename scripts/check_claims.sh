@@ -238,10 +238,6 @@ MODULES = {
     "Ownership": "Ownership.lean",
     "OwnershipLcnf": "OwnershipLcnf.lean",
     "OwnershipTest": "OwnershipTest.lean",
-    "Ownership/CompleteAccounting.lean": "Ownership/CompleteAccounting.lean",
-    "Ownership/CountedNested.lean": "Ownership/CountedNested.lean",
-    "Ownership/Preservation.lean": "Ownership/Preservation.lean",
-    "OwnershipLcnf/CountedTrace.lean": "OwnershipLcnf/CountedTrace.lean",
     "OwnershipLcnf/Principal.lean": "OwnershipLcnf/Principal.lean",
 }
 

@@ -71,12 +71,8 @@ allowlisted in the script and must carry the reason the last column records.
 | `OwnersAccounted` | declaration | `Ownership.OwnersAccounted` | `Ownership/Accounting.lean` | Complete ownership accounting; Recognition, and the flat guarantee; Scope, conclusion and disclosure | — |
 | `Ownership` | module | `Ownership.lean` | `Ownership.lean` | Evidence and artifact; Scope, conclusion and disclosure | — |
 | `Ownership.Pair.runP` | declaration | `Ownership.Pair.runP` | `Ownership/Pair.lean` | Scope, conclusion and disclosure | — |
-| `Ownership/CompleteAccounting.lean` | module | `Ownership/CompleteAccounting.lean` | `Ownership/CompleteAccounting.lean` | Evidence and artifact | — |
-| `Ownership/CountedNested.lean` | module | `Ownership/CountedNested.lean` | `Ownership/CountedNested.lean` | Evidence and artifact | — |
-| `Ownership/Preservation.lean` | module | `Ownership/Preservation.lean` | `Ownership/Preservation.lean` | Evidence and artifact | — |
 | `OwnershipLcnf` | module | `OwnershipLcnf.lean` | `OwnershipLcnf.lean` | Evidence and artifact; Scope, conclusion and disclosure | — |
-| `OwnershipLcnf/CountedTrace.lean` | module | `OwnershipLcnf/CountedTrace.lean` | `OwnershipLcnf/CountedTrace.lean` | Evidence and artifact | — |
-| `OwnershipLcnf/Principal.lean` | module | `OwnershipLcnf/Principal.lean` | `OwnershipLcnf/Principal.lean` | The finite path and the counted fragment; Evidence and artifact | — |
+| `OwnershipLcnf/Principal.lean` | module | `OwnershipLcnf/Principal.lean` | `OwnershipLcnf/Principal.lean` | The finite path and the counted fragment | — |
 | `OwnershipTest` | module | `OwnershipTest.lean` | `OwnershipTest.lean` | Evidence and artifact | — |
 | `Path.build` | declaration | `Ownership.Path.build` | `Ownership/Path.lean` | The finite path and the counted fragment | — |
 | `Path.build path value body (l :: rest)` | expression | `Ownership.Path.build` | `Ownership/Path.lean` | The finite path and the counted fragment | applied form at a cons list of levels. |

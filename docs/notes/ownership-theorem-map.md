@@ -10,6 +10,10 @@ The map is not exhaustive. It lists the declarations named in the paper, grouped
 by the section that uses them. Every name here is a declaration in this
 repository. Module paths are relative to the repository root.
 
+The paper-to-code entry points are `Ownership/CompleteAccounting.lean`,
+`Ownership/Preservation.lean`, `Ownership/CountedNested.lean`,
+`OwnershipLcnf/CountedTrace.lean` and `OwnershipLcnf/Principal.lean`.
+
 | Declarations | Role |
 | --- | --- |
 | `check_sound`; `checkN_sound_of_entryInv`; `Accounted` (`mult_eq`, `count_one_dichotomy`, `at_most_one_owner`, `countFidelity`); `initCtx`; `initCtx_accounted`; `OwnersAccounted`; `alias_not_accounted`; `aliasEntryInv`; `accountedNotEntryInv`; `Supported`; `supported_check`; `supported_run`; `supported_store_exclusive`; `storeSlots_init` | checker; accounting and independence; preservation with `Accounted` + `StoreSlots` |

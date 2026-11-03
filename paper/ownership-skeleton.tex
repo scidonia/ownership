@@ -942,11 +942,7 @@ right response is boundary simulation with internal count identities, not a
 stronger invariant that the protocol would have to satisfy. Fourth, allocator
 progress prevents plain equality, so correspondence between a counted run and an
 abstract one needs an explicit cursor slack; \lean{HeapCompat} is that slack made
-a relation, and it degenerates to equality when the cursors agree. Finally, some
-restrictions follow from the chosen representation---the flat environment cannot
-express a re-projected index---while others are unimplemented features: general
-increments are excluded because no supported obligation carries them, whereas
-concurrency and persistence flags are simply outside the fragment.
+a relation, and it degenerates to equality when the cursors agree.
 
 \subsection{Evidence and artifact}\label{sec:map}
 The proof checks are kernel builds of \lean{Ownership}, \lean{OwnershipTest} and
@@ -962,12 +958,9 @@ and its closed-pure-array case is an unchecked observation recorded in
 \texttt{docs/notes/OWNERSHIP\_RUNTIME\_EVIDENCE.md}. The linked gate observes the primitives'
 behaviour on the certified shapes, including whether the write changes the
 address, and proves none of it. The declarations behind every claim, with their
-roles, are listed in the supplementary document
+roles and the paper-to-code entry points, are listed in the supplementary document
 \texttt{docs/notes/ownership-theorem-map.md}, which is artifact documentation and
-not part of the argument; the paper-to-code entry points are
-\lean{Ownership/CompleteAccounting.lean}, \lean{Ownership/Preservation.lean},
-\lean{Ownership/CountedNested.lean}, \lean{OwnershipLcnf/CountedTrace.lean} and
-\lean{OwnershipLcnf/Principal.lean}.
+not part of the argument.
 
 \section{Related work}\label{sec:related}
 
