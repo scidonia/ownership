@@ -123,8 +123,8 @@ linear types, and adding them would be a language change. This paper recovers th
 guarantee without one, for a fragment of the compiler's IR, by an external
 count-one discipline whose soundness is proved in Lean~4 against model semantics.
 
-The first obstruction is that a count of one is not one owner. The natural
-invariant equates the heap's stored count with the context's multiplicity, but
+The first obstruction is that the raw invariant does not establish ownership
+accounting. It equates the heap's stored count with the context's multiplicity, but
 binding a second owned variable leaves that equality true while two variables now
 denote the cell; a kernel-checked countermodel (\lean{alias\_not\_accounted})
 exhibits exactly that state. The repair is complete accounting: a duplicate-free
@@ -813,12 +813,11 @@ while the accounting results take \lean{Accounted}. They are adjacent theorems,
 not one preservation result for every recognised prefix.
 
 \begin{claim}[in words]\label{claim:inwords}
-Let the caller's state be accounted, let the recogniser accept the emitted
-declaration, and let the child call satisfy its contract with its edge effect.
-Then the counted interpreter's run of the recognised fragment returns the caller's
-array handle with no fault, writes only to exclusive targets, and leaves a heap
-that agrees with the model's run of the same nested update cell for cell; the
-allocator cursor is the only component that differs.
+Let the caller's state be accounted, the recogniser accept the emitted declaration,
+and the child call satisfy its contract with its edge effect. Then the counted run
+of the recognised fragment returns the caller's array handle with no fault, writes
+only to exclusive targets, and leaves a heap agreeing with the model's run cell for
+cell; only the allocator cursor differs.
 \end{claim}
 
 The connection has four layers, and they are separate claims. Structural
@@ -1006,9 +1005,10 @@ roles and the paper-to-code entry points, are listed in the supplementary docume
 \texttt{docs/notes/ownership-theorem-map.md}, which is artifact documentation and
 not part of the argument.
 
-The evidence answers different questions and no item establishes more than its
-scope. The parameterised family covers one model extraction/call/restoration level
-for arbitrary length, valid outer and leaf slots and any value; the closed instance
+The evidence answers different questions.
+The parameterised family covers one model extraction/call/restoration level
+for arbitrary length, valid outer and leaf slots and any value, but it is not
+itself a parameterised application of the recognition theorem; the closed instance
 covers the whole counted-fragment theorem at the captured declaration with a
 supplied model child body; the structural controls reject the specified malformed
 traces without claiming that every malformed trace is rejected; the linked probes
@@ -1057,6 +1057,14 @@ reasoning is a boundary discipline: a count of one is not one owner, so the
 accounting needs a support of owning variables and a live-cell domain, and a
 correct temporary-alias protocol is not an invariant, so the pair-live window is
 covered by count identities with accounting asserted at its boundaries.
+
+The five works differ on every axis that matters: Huisinga certifies an analysis
+over a Lean IR model, with no soundness proof and no compiler link; Perceus and
+Counting Immutable Beans certify transformations with a resource calculus, over
+their own semantics; Linear Haskell and Clean certify source-level type properties.
+This paper certifies a recognised fragment of emitted code, with roots-and-edges
+accounting, a proved correspondence to the model, and an explicit child-call
+contract the caller discharges, changing nothing in the compiler.
 
 \section{Scope, conclusion and disclosure}\label{sec:limits}
 

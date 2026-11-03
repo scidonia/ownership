@@ -33,7 +33,7 @@ command's own.
 | `nix develop -c bash scripts/check_claims.sh` | 0 | `claim census: OK: 183 distinct tokens, 183 rows (declaration 122, module 4, runtime-primitive 4, concept 3, expression 50)`; the declaration rows were `#check`ed with `nix develop -c lake env lean <tmp>/ClaimCheck.lean`. |
 | `nix develop -c bash scripts/check_claims.sh --self-test` | 0 | `self-test (a) … orphanTokenForSelfTest`, `(b) … ghostTokenForSelfTest`, `(c) … Unknown identifier 'Ownership.thisDeclarationDoesNotExist'`; `self-test OK`, unmodified inputs pass. |
 | `cd paper && latexmk -pdf -interaction=nonstopmode ownership-skeleton.tex` | 0 | build succeeds; `grep -cE '^!|Overfull \\hbox|undefined'` on the log reports `0`. |
-| `pdfinfo paper/ownership-skeleton.pdf` | 0 | `Pages: 17`, `Page size: 595.276 x 841.89 pts (A4)`, abstract 179 words. The body ends about three quarters of the way down page 16, with the references beginning there and continuing on page 17. |
+| `pdfinfo paper/ownership-skeleton.pdf` | 0 | `Pages: 17`, `Page size: 595.276 x 841.89 pts (A4)`, abstract 179 words. The body ends at the foot of page 16; the references occupy page 17 and are additional. |
 | `pdffonts paper/ownership-skeleton.pdf` | 0 | 33 embedded fonts, all Type 1/Custom, none reported as not embedded; no missing-glyph warnings in the log. |
 | `nix develop -c bash scripts/check_artifacts.sh` | 0 | sibling revision and cleanliness checks pass; the `execP` and nested `setAt` captures regenerate and diff clean against `docs/notes/artifacts/`. |
 | `nix develop -c bash scripts/check_runtime_binding.sh` | 0 | artifact gate, sibling IR-shape build, generated C and runtime-header primitive checks, and the linked probe modes with the check off and on all pass. |
