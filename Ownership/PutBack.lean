@@ -155,6 +155,7 @@ child violates the separation premise.
   out and the take-out's success rules out the former, so the model returns
   `none` rather than a fabricated heap outside the path.
 -/
+import Ownership.CompleteAccounting
 import Ownership.CountedPair
 import Ownership.Entry
 
@@ -464,6 +465,42 @@ theorem ChildCall.runs {Hin Hout : Heap} {env : Env} {ctx : Ctx}
     ∃ envb ws, Nested.runN body (Nested.isolateEnv env state path x) Hin =
       .done Hout envb (.ref c) ws :=
   h.outcome
+
+/-- The caller's invariant at the body's return is a consequence of the call
+boundary and the caller's accounting, not a further field: the body's checker
+multiplicities are the caller's (`Nested.countFree_check_mult`), the decrement-
+free run keeps live cells live (`Nested.runN_cells_none`), the returned handle
+keeps the child's persistence flag, and `Nested.inv_of_rc_cells` reassembles the
+invariant. -/
+theorem ChildCall.inv_caller {Hin Hout : Heap} {env : Env} {ctx : Ctx}
+    {state path x : Var} {body : Nested.NCode} {p c : Ref} {support : List Var}
+    (h : ChildCall Hin Hout env ctx state path x body p c)
+    (hacc : Accounted support Hin env ctx) : Inv Hout env ctx := by
+  obtain ⟨cb, hc, hret⟩ := h.checked
+  obtain ⟨H', env', v, ws, hrun, hws, hinv⟩ :=
+    Nested.checkN_sound (c := body) (ctx := Nested.isolatedCtx ctx state path x c)
+      hc h.inv h.extraction
+  obtain ⟨envb, wsb, hrunb⟩ := h.outcome
+  have hrun2 : Nested.runN body (Nested.isolateEnv env state path x) Hin =
+      .done Hout envb (.ref c) wsb := hrunb
+  rw [hrun] at hrun2
+  injection hrun2 with hH _ _ _
+  subst hH
+  have hcbm : ∀ q, cb.mult q = ctx.mult q := by
+    intro q
+    have hq := Nested.countFree_check_mult (ctx := Nested.isolatedCtx ctx state path x c)
+      h.admitted hc q
+    simpa [Nested.isolatedCtx] using hq
+  exact Nested.inv_of_rc_cells hacc.inv (fun q => by rw [hinv.rc_eq q, hcbm q])
+    (fun q hq => Nested.runN_cells_none hrunb q hq) hinv.nonPersistent
+
+/-- The stored counts agree across the call: both are the caller's checker
+multiplicities, so the child call preserves every count in the heap. -/
+theorem ChildCall.rc_eq {Hin Hout : Heap} {env : Env} {ctx : Ctx}
+    {state path x : Var} {body : Nested.NCode} {p c : Ref} {support : List Var}
+    (h : ChildCall Hin Hout env ctx state path x body p c)
+    (hacc : Accounted support Hin env ctx) (q : Ref) : Hout.rc q = Hin.rc q :=
+  ((ChildCall.inv_caller h hacc).rc_eq q).trans (hacc.inv.rc_eq q).symm
 
 /-- A body that retains a counted handle is not a child call: the contract's
 admission premise is `CountFree`, which excludes the increment. -/

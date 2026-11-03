@@ -689,6 +689,16 @@ theorem calledAccounted : Ownership.Accounted [4, 3] Hout env1 ctx1 := by
     B_cells_one (by decide)
   simpa [Hout, childAfter, Ownership.Heap.set, Array.set!] using h
 
+/-- The call's edge effect at the boundary: the leaf's write replaces a scalar
+slot with a scalar, so no `.ref` occurrence at any name changes. -/
+theorem B_edges : Ownership.EdgePreserved B Hout :=
+  Ownership.EdgePreserved.set (H := B) (r := 1) (o := childObj) (o' := childAfter)
+    B_cells_one
+    (fun q => by
+      simpa [childAfter] using
+        (Ownership.RefCount_set_scalar_scalar (fields := childObj.fields) (i := 1)
+          (old := 0) (w := 7) (q := q) (by decide)).symm)
+
 /-! ## The child call -/
 
 theorem bodyCountFree : Ownership.Nested.CountFree body = true := rfl
@@ -797,12 +807,17 @@ theorem childCall :
   child_rc := callChildRc
   child_persistent := callChildPersistent
 
-/-- The counted child-call contract: the boundary's call and the caller's
-complete accounting at the body's return. This is the instance's `hcall`. -/
+/-- The counted child-call contract: the boundary's call and the call's edge
+effect. This is the instance's `hcall`. -/
 theorem countedCall :
     Ownership.CountedChildCall B Hout env1 ctx1 4 5 2 body 0 1 [4, 3] where
   call := childCall
-  accounted := calledAccounted
+  edges := B_edges
+
+/-- The caller's accounting at the body's return, derived from the boundary
+accounting and the call's edge effect; its type is `calledAccounted`'s. -/
+theorem countedCall_accounted : Ownership.Accounted [4, 3] Hout env1 ctx1 :=
+  countedCall.accounted_of boundaryAccounted
 
 /-! ## The controls -/
 
@@ -1053,6 +1068,7 @@ example : (∃ Hm envm ws Hf,
 #print axioms principal_instance
 #print axioms instance_conjuncts
 #print axioms countedCall
+#print axioms countedCall_accounted
 #print axioms retained_parent_copies
 
 end OwnershipTest

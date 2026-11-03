@@ -148,9 +148,10 @@ between. The proof is therefore a boundary simulation: count
 identities for the pair's traffic, restoration's in-place branch derived from the
 protocol and call boundaries, and a compatibility relation that lets the counted
 cursor run one ahead of the model's. Closing the fragment needs a modular
-boundary. The child call is a contract, and its counted version must also supply
-the caller's accounting at the body's return, which the finite-path induction
-over model paths does not construct.
+boundary. The child call is a contract, and its counted version must also state
+the call's effect on the caller's incoming edges; from that effect and the
+caller's accounting at the call, the accounting at the body's return is derived.
+The finite-path induction over model paths does not construct that edge effect.
 
 We prove, for one level of a finite supported path under that contract, that the
 counted interpreter's run over the whole recognised fragment---extraction, child
@@ -640,8 +641,8 @@ model child-call contract:
 structure CountedChildCall (Hin Hout : Heap) (env : Env) (ctx : Ctx)
     (state path x : Var) (body : Nested.NCode) (p c : Ref)
     (support : List Var) : Prop where
-  call      : PutBack.ChildCall Hin Hout env ctx state path x body p c
-  accounted : Accounted support Hout env ctx
+  call  : PutBack.ChildCall Hin Hout env ctx state path x body p c
+  edges : EdgePreserved Hin Hout
 \end{lstlisting}
 \lean{call} is the boundary the put-back consumes. Unfolding it, the body must be
 admitted, the checker must accept it from the isolated context and return the
@@ -651,11 +652,20 @@ footprint, and the body must complete on the caller's heap returning that
 reference with its count and persistence unchanged and its effect confined to the
 child's footprint. Those are the ordinary call contract, and the finite-path
 induction derives them at every level (\lean{childContracts\_of\_path}).
-\lean{accounted} adds the caller's complete accounting at the body's return: the
-induction does not construct it, because the ordinary contract never mentions the
-caller's ownership state. The closed instance supplies it from the caller's own
-accounting at the return (\lean{calledAccounted}), and the body it runs is a model
-computation; the emitted recursive callee remains an implementation obligation.
+\lean{edges} states the call's effect on the caller's heap: every reference keeps
+its incoming-edge count, the cursor does not go backwards, and no cell appears
+where the entry had none. It is the semantic fact a counted body is responsible
+for; the boundary alone does not imply it, because a scalar store over a
+`.ref` slot of the child's own cell can erase an edge into a caller-owned
+cell while every field of the call boundary and the confinement fact hold (checked
+as a negative control beside the harmless rewrite). From \lean{edges} and the
+caller's accounting at the call, \lean{accounted\_of} derives the caller's
+complete accounting at the body's return; the induction does not construct the
+edge effect, because the ordinary contract never mentions incoming edges. The
+closed instance supplies it from the leaf's scalar rewrite and computes the same
+accounting directly (\lean{calledAccounted}), and the body it runs
+is a model computation; the emitted recursive callee remains an implementation
+obligation.
 From the call's output state, \lean{counted\_restore}
 derives the mutate branch and the accounted post-state, and
 \lean{putBack\_exclusive\_of\_wellFormed} concludes \lean{Heap.Exclusive} for both
@@ -830,9 +840,10 @@ Let the recogniser accept the declared shape (\lean{projectNested} yielding $p$)
 let the layout, the machine-to-model agreement \lean{NestedAgrees} and the level
 match hold at one level of a finite path, let the client's path contract and the
 caller's complete accounting \lean{Accounted support H mEnv c} hold, and let the
-counted child call
-be supplied at the protocol's boundary with the caller's accounting at the body's
-return. Then, writing $H_f$ for the counted final heap:
+counted child call be supplied at the protocol's boundary with its
+\lean{EdgePreserved} effect on the caller's heap (the caller's accounting at the
+body's return is derived from that effect). Then, writing $H_f$ for the counted
+final heap:
 \begin{enumerate}
 \item \lean{execCountedAST} runs the whole recognised fragment
 $p.\mathit{fragment}$ from the entry machine to a completed state with heap $H_f$,
@@ -1084,7 +1095,7 @@ Category & What it covers & Status \\
 \midrule
 checked syntax & the recogniser's accepted grammar; the two model languages & checked by elaborating \lean{\#guard} tests and by the recogniser itself \\
 proved model facts & accounting and preservation; protocol boundaries; counted fragment run; the runtime model's in-place statements & theorems in \lean{Ownership} and \lean{OwnershipLcnf}, no axioms beyond Lean's \\
-supplied client and call facts & entry invariant, agreement, layout and path contract, the leaf computation, and \lean{CountedChildCall}'s \lean{accounted} field & hypotheses of \lean{principal\_supported\_path} and \lean{principal\_counted\_fragment}; discharged at the closed instance \\
+supplied client and call facts & entry invariant, agreement, layout and path contract, the leaf computation, and \lean{CountedChildCall}'s \lean{edges} effect (the post-call accounting is derived from it) & hypotheses of \lean{principal\_supported\_path} and \lean{principal\_counted\_fragment}; discharged at the closed instance \\
 implementation assumptions & primitive fidelity, replay-to-backend identity, reference identity & fixed by the runtime contract and observed by the linked gate \\
 \bottomrule
 \end{tabularx}

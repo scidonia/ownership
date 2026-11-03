@@ -242,10 +242,11 @@ theorem boundaryAccounted :
 
 /-! ## The accounting after the child call's leaf write -/
 
-/-- The caller's accounting at the heap the child call leaves: the body's write
-is an in-place scalar store in the child's own cell, so
-`Accounted.setFieldsScalar` carries the boundary's accounting across it. This is
-the field `CountedChildCall.accounted` takes. -/
+/-- The caller's accounting at the heap the child call leaves, computed directly:
+the body's write is an in-place scalar store in the child's own cell, so
+`Accounted.setFieldsScalar` carries the boundary's accounting across it. The
+derived route is `countedBoundaryCall_accounted`, which reaches the same fact
+from the boundary accounting and the call's edge effect. -/
 theorem calledAccounted :
     Accounted [3, 2] OwnershipTest.PutBack.Hc boundaryEnv boundaryCtx := by
   have h := Accounted.setFieldsScalar (h := boundaryAccounted)
@@ -253,6 +254,19 @@ theorem calledAccounted :
     (by simpa using boundary_cells.2.2.2.2.2) (by decide)
   simpa [OwnershipTest.PutBack.Hc, OwnershipTest.PutBack.B, OwnershipTest.PutBack.childAfter,
     Array.set!, childObj, parentObj] using h
+
+/-- The call's edge effect at the boundary: the body rewrites the child's own
+cell and the rewrite replaces a scalar with a scalar, so no `.ref` occurrence at
+any name changes. -/
+theorem boundaryEdges :
+    EdgePreserved (protocol H0 0 1 0).2 OwnershipTest.PutBack.Hc :=
+  EdgePreserved.set (H := (protocol H0 0 1 0).2) (r := 1) (o := childObj)
+    (o' := OwnershipTest.PutBack.childAfter)
+    (by simpa using boundary_cells.2.2.2.2.2)
+    (fun q => by
+      simpa [OwnershipTest.PutBack.childAfter] using
+        (RefCount_setIfInBounds_scalar_scalar (fields := childObj.fields) (i := 0)
+          (old := 0) (w := 7) (q := q) (by decide)).symm)
 
 /-! ## The boundary heap's cells and counts -/
 
@@ -485,23 +499,67 @@ theorem boundaryCall :
         boundary_cells.2.2.2.2.2]
     rfl
 
-/-- The counted child-call contract at the boundary, with the caller's accounting
-at the body's return. This is the witness that `counted_nested_chain`'s `hcall`
-is inhabited. -/
+/-- The counted child-call contract at the boundary: the boundary's call and the
+call's edge effect. This is the witness that `counted_nested_chain`'s `hcall` is
+inhabited. -/
 theorem countedBoundaryCall :
     CountedChildCall (protocol H0 0 1 0).2 OwnershipTest.PutBack.Hc boundaryEnv
       boundaryCtx 3 10 11 boundaryBody 0 1 [3, 2] where
   call := boundaryCall
-  accounted := calledAccounted
+  edges := boundaryEdges
+
+/-- The caller's accounting at the body's return, derived from the boundary
+accounting and the call's edge effect. Its type is `calledAccounted`'s, whose
+direct proof is the independent computation of the same fact. -/
+theorem countedBoundaryCall_accounted :
+    Accounted [3, 2] OwnershipTest.PutBack.Hc boundaryEnv boundaryCtx :=
+  countedBoundaryCall.accounted_of boundaryAccounted
 
 /-- The contract's result binding at the boundary: the state's handle moves to
 the result variable and the accounting follows it. -/
 theorem countedBoundaryCall_move :
     Accounted (replaceVar [3, 2] 3 12) OwnershipTest.PutBack.Hc
       (boundaryEnv.set 12 (.ref 1)) (boundaryCtx.move 3 12) :=
-  countedBoundaryCall.move (result := 12)
+  countedBoundaryCall.move boundaryAccounted (result := 12)
     (by simp [boundaryCtx, Ctx.bindOwned]) (by simp [boundaryCtx, Ctx.bindOwned])
     (by simp [boundaryCtx, Ctx.bindOwned, entryCtx])
+
+/-! ## The edge effect is not a consequence of the call boundary -/
+
+/-- The same-shaped child cell whose selected slot holds a reference to a cell
+the caller owns at count two. -/
+def leakyChild : Obj := ⟨#[.ref 2, .scalar 0], 1, false⟩
+
+/-- The child cell after the body's scalar write over that reference slot. -/
+def leakyAfter : Obj := { leakyChild with fields := leakyChild.fields.setIfInBounds 0 (.scalar 7) }
+
+/-- The entry heap: the child cell at `1` and the referenced cell at `2`. -/
+def leakyHin : Heap :=
+  { cells := fun r =>
+      if r = 1 then some leakyChild
+      else if r = 2 then some ⟨#[.scalar 0], 2, false⟩
+      else none
+    next := 3 }
+
+/-- The heap after the scalar-over-reference store. -/
+def leakyHout : Heap := leakyHin.set 1 leakyAfter
+
+theorem leaky_incoming : IncomingCount leakyHin 2 = 1 := by
+  rw [IncomingCount_eq_edges]; decide
+
+theorem leaky_incoming_after : IncomingCount leakyHout 2 = 0 := by
+  rw [IncomingCount_eq_edges]; decide
+
+/-- The scalar-over-reference store is not edge-preserving: the caller-owned
+cell at `2` loses its only incoming edge. This is the negative control beside
+`boundaryEdges`, and the reason `CountedChildCall` carries the edge effect rather
+than deriving it from the boundary: the store is in the child's own cell, inside
+its mutable footprint, and changes no stored count. -/
+theorem leaky_not_edgePreserved : ¬ EdgePreserved leakyHin leakyHout := by
+  intro h
+  have hin := h.incoming 2
+  rw [leaky_incoming_after, leaky_incoming] at hin
+  exact absurd hin (by decide)
 
 #print axioms Ownership.counted_takeOut
 #print axioms Ownership.Accounted.of_compat
@@ -517,8 +575,11 @@ theorem countedBoundaryCall_move :
 #print axioms boundaryAccounted
 #print axioms calledAccounted
 #print axioms boundaryCall
+#print axioms boundaryEdges
 #print axioms countedBoundaryCall
+#print axioms countedBoundaryCall_accounted
 #print axioms countedBoundaryCall_move
+#print axioms leaky_not_edgePreserved
 #print axioms counted_retained_copies
 
 end OwnershipTest.CountedNested

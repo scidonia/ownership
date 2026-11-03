@@ -102,14 +102,18 @@ Quantify indices and values to the extent supported by the semantics. If the cla
 `OwnershipLcnf/PathRecursion.lean` derives `ChildContract` along finite model paths. `Ownership.CountedChildCall` additionally includes:
 
 ```lean
-accounted : Accounted support Hout env ctx
+edges : EdgePreserved Hin Hout
 ```
 
-That post-call accounting fact is supplied to the current nested principal theorem. In the closed instance it is established by `calledAccounted`. The existing ordinary path induction does not itself construct the stronger counted contract.
+That edge effect is supplied to the current nested principal theorem; the
+caller's post-call accounting is derived from it and the caller's accounting at
+the call (`CountedChildCall.accounted_of`). In the closed instance it is
+established by `B_edges`. The existing ordinary path induction does not itself
+construct the stronger counted contract.
 
 Required corrections:
 
-- State that ordinary finite-path call properties are derived, while the stronger counted return accounting remains an explicit premise of the counted theorem.
+- State that ordinary finite-path call properties are derived, while the stronger counted edge effect remains an explicit premise of the counted theorem (the return accounting is derived from it).
 - Correct the comment preceding `CountedChildCall` that says the added field is discharged by the same finite-path induction. It currently reads as a completed connection that the referenced module does not establish.
 - Avoid unqualified phrases such as “only the leaf and N10 remain” when discussing a theorem that separately takes the stronger counted postcondition.
 - Keep the emitted recursive callee outside the theorem unless it is actually captured and interpreted with activation-local environments and path reprojection.
@@ -299,7 +303,7 @@ Render the final PDF and inspect every page at normal reading size. Require legi
 | Current wording/problem | Required replacement |
 | --- | --- |
 | “The composed statements do not transport accounting” | Restrict that observation to the flat theorem where appropriate. The nested theorem does conclude final counted-boundary accounting; transport to physical runtime objects is unproved |
-| “The child contract is derived at every level” without qualification | Specify ordinary `ChildContract`; state the separate counted post-call accounting obligation |
+| “The child contract is derived at every level” without qualification | Specify ordinary `ChildContract`; state the separate counted edge-effect obligation, from which the post-call accounting is derived |
 | Pair-live state treated as an accounting failure | Explain intentional boundary abstraction and its internal count argument, rather than suggesting the whole protocol is unaccounted |
 | Omitted extraction/restoration trace events listed like an absent safety theorem | Explain the separate target-exclusivity predicate; distinguish event representation from missing full counted-execution correspondence |
 | “The checker guarantees …” used for the stronger preservation result | Name the additional supported certification, entry relation, and store-slot premise |

@@ -39,10 +39,12 @@ Three boundaries the map must not blur when it is used to check a claim:
 
 - **Ordinary and counted child contracts.** `childContracts_of_path` derives the
   ordinary `ChildContract` at every level of a finite path from one supplied leaf.
-  `CountedChildCall` adds the field `accounted`, the caller's complete accounting
-  at the body's return. No theorem derives that field from the path induction; it
-  is a premise of `principal_supported_path` and `principal_counted_fragment`, and
-  `OwnershipTest/Principal.lean` supplies it as `calledAccounted`.
+  `CountedChildCall` adds the field `edges`, the call's effect on the caller's
+  incoming edges, cursor and cell carrier; `accounted_of` derives the caller's
+  complete accounting at the body's return from it and the caller's accounting at
+  the call. No theorem derives that edge effect from the path induction; it is a
+  premise of `principal_supported_path` and `principal_counted_fragment`, and
+  `OwnershipTest/Principal.lean` supplies it as `B_edges`.
 - **Accounting at boundaries, not inside the pair-live window.** `pairPhase_refused`
   is the kernel check that no support accounts the take-out state. `Accounted` is
   concluded at the entry, at the protocol boundary and at the restored state; it is

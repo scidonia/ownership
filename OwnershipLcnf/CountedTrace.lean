@@ -992,7 +992,9 @@ release (`fragment_decomp`): `execCounted` runs the counted block to the boundar
 state (`execCounted_boundary_env`), and then runs the post-release span from that
 state (`execCounted_suffix`) with the caller's own `CountedChildCall` run, so the
 call is consumed where the interpreter reaches it and the restoration's mutate
-branch is derived at the call's output heap.
+branch is derived at the call's output heap. The caller's accounting at the body's
+return is derived from the boundary accounting and the call's edge effect, not
+supplied.
 
 The counted outcome is reported against the model's run of the same
 extraction/call/restoration term (`Ownership.chain`) by `NestedOutcome.Compat`:

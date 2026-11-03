@@ -333,12 +333,14 @@
 - `OwnershipLcnf/PathRecursion.lean` discharges `ChildContract` for a finite
   level list by induction: the tail contract is the hypothesis, the leaf the
   base, and `index_path_simulates_model` takes no arbitrary `ChildContract`. The
-  induction derives `ChildContract` only: `Ownership.CountedChildCall`'s
-  `accounted` field is an explicit premise of every theorem that consumes it,
-  supplied at an instance from the caller's accounting at the body's return
-  (`calledAccounted`). The leaf contract and N10 remain; the module records that
-  the model's flat environment cannot express the emitted per-invocation path
-  re-projection.
+  induction derives `ChildContract` only: `Ownership.CountedChildCall`'s `edges`
+  field (the call's `EdgePreserved` effect on the caller's heap) is an explicit
+  premise of every theorem that consumes it, and the caller's accounting at the
+  body's return is *derived* from that effect and the caller's accounting at the
+  call (`CountedChildCall.accounted_of`); the instance supplies the effect from
+  the leaf rewrite (`B_edges`). The leaf contract and N10 remain; the module
+  records that the model's flat environment cannot express the emitted
+  per-invocation path re-projection.
 - `OwnershipLcnf/RuntimeModel.lean` is the concrete runtime state for the
   `setAt` write: counts, persistence, fields, the exclusivity predicate, a
   guarded allocator, the check's ok/abort outcomes and both array-set
@@ -391,18 +393,29 @@
   `HeapCompat.eq_of_cursor_eq` as the control that the cursor is the only slack;
   `Accounted.of_compat` carries the relation across it, using
   `HeapCompat.IncomingCount` (the extra cursor range holds no cell, by
-  `Accounted.domain`). `counted_takeOut` lands the entry at the protocol boundary
-  with the fresh-name side conditions *derived*, `restorationBoundary_of_accounted`
+  `Accounted.domain`). `EdgePreserved Hin Hout` is the *effect* a call must have
+  for the caller's accounting to survive: equal incoming-edge counts, a
+  non-decreasing cursor, and no new cells; `EdgePreserved.of_compat` reads it off
+  a `HeapCompat` only together with the input heap's live-cell domain, which
+  `HeapCompat` alone does not imply. `counted_takeOut` lands the entry at the
+  protocol boundary with the fresh-name side conditions *derived*, `restorationBoundary_of_accounted`
   derives the boundary's cells, counts, persistence and the entry's distinctness
   from accounting, `CountedChildCall` adds exactly one field to the child-call
-  contract (the caller's `Accounted` at the body's return) and `counted_restore`
-  derives the mutate branch and carries the accounting there, and
-  `counted_nested_chain` composes the three with the model's own `runN` of the
+  contract — the call's edge effect `EdgePreserved Hin Hout` — and
+  `counted_restore` derives the mutate branch and carries the accounting there,
+  while `accounted_of_edges` derives the caller's `Accounted` at the body's
+  return from its accounting at the call (so no post-call accounting is
+  supplied), and `counted_nested_chain` composes the three with the model's own
+  `runN` of the
   take-out/call/restore term related by `HeapCompat`. `run_compat`/`runN_compat`
   relate the model language's runs at two `HeapCompat` heaps **for copy-free
   runs**: `Code.setArr`'s copy branch allocates at each heap's own cursor, so the
   lemmas take the premise that every recorded write flag is `true` (which the
-  child call's `writes_exclusive` supplies). The child call stays contractual and
+  child call's `writes_exclusive` supplies). The chain does not conclude an
+  entry-to-output edge effect: the take-out lowers the extracted child's incoming
+  count by one and the restoration raises it by one, so `EdgePreserved` holds only
+  of the net run and composing a nested level's `edges` would need that net
+  statement, not the final-state `HeapCompat`. The child call stays contractual and
   the emitted callee is not captured (N10); the mid-pair state is not `Accounted`
   and its refusal is proved, so the relation is a boundary relation rather than an
   every-instruction one. `OwnershipTest/CountedNested.lean` carries the boundary
@@ -428,7 +441,8 @@
   `fragment_decomp` the split, so the split is the recognised shape's and not a
   numeric cutoff), the counted block reaches `execCounted_protocol_boundary`'s
   state, and the post-release span runs the child assertion, the call at that
-  state, the restoration at the call's output heap and the return
+  state (with the caller's accounting at the body's return derived from the
+  call's `EdgePreserved` effect), the restoration at the call's output heap and the return
   (`execCounted_suffix`). The entry point is `execCountedAST`, so the recogniser's
   verdict is spent by the theorem, and the counted outcome is
   `NestedOutcome.Compat` to the model's run: `HeapCompat` on the heaps and literal

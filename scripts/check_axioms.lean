@@ -46,6 +46,7 @@ import OwnershipTest.CountedFamily
 #print axioms Ownership.RefCount_set_scalar_ref_of_ne
 #print axioms Ownership.RefCount_setIfInBounds_ref_scalar_of_eq
 #print axioms Ownership.RefCount_setIfInBounds_ref_scalar_of_ne
+#print axioms Ownership.RefCount_setIfInBounds_scalar_scalar
 #print axioms Ownership.IncomingCount_set
 #print axioms Ownership.IncomingCount_inc
 #print axioms Ownership.IncomingCount_dec
@@ -152,8 +153,15 @@ import OwnershipTest.CountedFamily
 #print axioms Ownership.HeapCompat.IncomingCount
 #print axioms Ownership.HeapCompat.inc
 #print axioms Ownership.HeapCompat.dec
+#print axioms Ownership.EdgePreserved
+#print axioms Ownership.EdgePreserved.refl
+#print axioms Ownership.EdgePreserved.trans
+#print axioms Ownership.EdgePreserved.domain_of
+#print axioms Ownership.EdgePreserved.of_compat
+#print axioms Ownership.EdgePreserved.set
 #print axioms Ownership.Inv.of_compat
 #print axioms Ownership.Accounted.of_compat
+#print axioms Ownership.accounted_of_edges
 #print axioms Ownership.exclusive_of_accounted
 #print axioms Ownership.exclusive?_of_accounted
 #print axioms Ownership.setPlaceholder_next
@@ -165,7 +173,10 @@ import OwnershipTest.CountedFamily
 #print axioms Ownership.counted_takeOut
 #print axioms Ownership.restorationBoundary_of_accounted
 #print axioms Ownership.CountedChildCall
+#print axioms Ownership.CountedChildCall.accounted_of
 #print axioms Ownership.CountedChildCall.move
+#print axioms Ownership.PutBack.ChildCall.inv_caller
+#print axioms Ownership.PutBack.ChildCall.rc_eq
 #print axioms Ownership.counted_restore
 #print axioms Ownership.ResCompat
 #print axioms Ownership.ResCompat.addWrite

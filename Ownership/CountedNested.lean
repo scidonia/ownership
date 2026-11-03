@@ -33,10 +33,20 @@ refusal beside the boundary's positive accounting.
   neither;
 * the restoration boundary's `r ≠ e` follows from the count equation, the array
   slot and the checker's count-one condition, not from a caller premise;
-* the child call's contract gains exactly one accounting field: the caller's
-  `Accounted` at the body's return. Everything else — the suspended parent's
-  cell, the child's exclusivity, the result binding — is derived from
-  `PutBack.ChildCall` and from `Accounted`.
+* the child call's contract gains exactly one field: the call's edge effect
+  `EdgePreserved Hin Hout`. The caller's `Accounted` at the body's return is
+  *derived* from it (`accounted_of_edges`), together with the caller's invariant
+  (`ChildCall.inv_caller`) and stored counts (`ChildCall.rc_eq`). Everything
+  else — the suspended parent's cell, the child's exclusivity, the result
+  binding — is derived from `PutBack.ChildCall` and from `Accounted`.
+
+The chain does not conclude an edge effect between its entry and its output. Its
+take-out lowers the extracted child's incoming-edge count by one and the
+restoration raises it by one, so `EdgePreserved` holds only of the net run, while
+`counted_nested_chain`'s `HeapCompat` relates the chain's final counted heap to
+the model's final heap rather than the call's entry to its output. Composing a
+nested level's `edges` from that relation would need the net statement; the
+edge effect is not transitive through the pair's traffic.
 
 Nothing here is a runtime, transport or address-identity claim: the heap is the
 fragment's named-cell model, the child call is contractual and the emitted
@@ -164,6 +174,103 @@ theorem IncomingCount {support : List Var} {Hc Ha : Heap} {env : Env} {c : Ctx}
 
 end HeapCompat
 
+/-! ## The call's edge effect -/
+
+/-- The effect a call must have on its caller's heap for the caller's accounting
+to survive it: every reference keeps its incoming-edge count, the fresh-name
+counter does not go backwards, and no cell appears where the entry had none.
+
+Stored counts alone do not suffice. `PutBack.ChildCall` fixes every stored count
+(`ChildCall.rc_eq`) and confines the body to the child's mutable footprint, yet a
+body can store a scalar over a `.ref` slot of its own cell and erase an incoming
+edge into a caller-owned cell whose stored count is two. The caller's count
+equation then fails although every `ChildCall` field holds.
+`OwnershipTest/CountedNested.lean` kernel-checks that refusal beside the harmless
+rewrite of the same shape, where no edge is erased.
+
+`incoming` is the missing semantic fact; `cursor` and `carrier` carry the
+live-cell domain of `Accounted` across the call. With the three,
+`accounted_of_edges` derives the caller's accounting at the body's return from
+its accounting at the call's entry. -/
+structure EdgePreserved (Hin Hout : Heap) : Prop where
+  /-- Every reference has as many incoming heap edges after the call as before. -/
+  incoming : ∀ r, IncomingCount Hout r = IncomingCount Hin r
+  /-- The fresh-name counter advances (or stays): every name the entry used is
+  still below the post-call cursor. -/
+  cursor : Hin.next ≤ Hout.next
+  /-- No cell appears where the call's entry had none. -/
+  carrier : ∀ q o, Hout.cells q = some o → ∃ o', Hin.cells q = some o'
+
+namespace EdgePreserved
+
+theorem refl (H : Heap) : EdgePreserved H H :=
+  ⟨fun _ => rfl, Nat.le_refl _, fun _ o h => ⟨o, h⟩⟩
+
+theorem trans {H₁ H₂ H₃ : Heap} (h₁₂ : EdgePreserved H₁ H₂)
+    (h₂₃ : EdgePreserved H₂ H₃) : EdgePreserved H₁ H₃ where
+  incoming r := (h₂₃.incoming r).trans (h₁₂.incoming r)
+  cursor := Nat.le_trans h₁₂.cursor h₂₃.cursor
+  carrier q o h := by
+    obtain ⟨o', h'⟩ := h₂₃.carrier q o h
+    obtain ⟨o'', h''⟩ := h₁₂.carrier q o' h'
+    exact ⟨o'', h''⟩
+
+/-- The live-cell domain is carried when the entry's cells are inside its own
+cursor range. -/
+theorem domain_of {Hin Hout : Heap} (h : EdgePreserved Hin Hout)
+    (hdom : ∀ q o, Hin.cells q = some o → q < Hin.next) :
+    ∀ q o, Hout.cells q = some o → q < Hout.next := by
+  intro q o hq
+  obtain ⟨o', ho'⟩ := h.carrier q o hq
+  exact Nat.lt_of_lt_of_le (hdom q o' ho') h.cursor
+
+/-- A heap-compatible transport is an edge-preserving call effect in the
+direction the cursor permits: the input is the heap with the lower cursor and the
+output the compatible heap with the higher one. The domain premise is not
+removable: `HeapCompat` only bounds the cursors, and a cell at a name the input's
+cursor already passed contributes to the output's sum but not to the input's. -/
+theorem of_compat {Hin Hout : Heap} (h : HeapCompat Hout Hin)
+    (hdom : ∀ q o, Hin.cells q = some o → q < Hin.next) : EdgePreserved Hin Hout where
+  incoming r := by
+    rw [IncomingCount_eq_edges, IncomingCount_eq_edges]
+    have htail : ∀ q, Hin.next ≤ q → q < Hout.next → EdgeAt Hout q r = 0 := by
+      intro q hq hq'
+      have hnone : Hin.cells q = none := by
+        cases hqcell : Hin.cells q with
+        | none => rfl
+        | some o => exact absurd (hdom q o hqcell) (Nat.not_lt.mpr hq)
+      simp [EdgeAt, h.cells q, hnone]
+    rw [HeapCompat.sum_range_zero_tail h.cursor htail]
+    exact sum_range_congr (fun q _ => by simp [EdgeAt, h.cells q])
+  cursor := h.cursor
+  carrier q o hq := ⟨o, (h.cells q).symm.trans hq⟩
+
+/-- Rewriting one live cell with an object that holds the same number of `.ref q`
+occurrences for every name leaves the incoming-edge count unchanged, so the
+rewrite is an edge-preserving call effect. This is the shape of the child body's
+in-place scalar store when the slot it overwrites held a scalar. -/
+theorem set {H : Heap} {r : Ref} {o o' : Obj} (hcell : H.cells r = some o)
+    (hrefs : ∀ q, RefCount o.fields q = RefCount o'.fields q) :
+    EdgePreserved H (H.set r o') where
+  incoming r' := by
+    rw [IncomingCount_eq_edges, IncomingCount_eq_edges]
+    exact sum_range_congr (fun q _ => by
+      unfold EdgeAt
+      by_cases hq : q = r
+      · subst hq
+        rw [Heap.set_self, hcell]
+        exact (hrefs r').symm
+      · rw [Heap.set_other H r q o' hq])
+  cursor := by rw [PutBack.set_next]; exact Nat.le_refl _
+  carrier q oq hq := by
+    by_cases hqr : q = r
+    · subst hqr
+      exact ⟨o, hcell⟩
+    · refine ⟨oq, ?_⟩
+      rwa [Heap.set_other H r q o' hqr] at hq
+
+end EdgePreserved
+
 /-! ## Carrying the invariant and the accounting across the relation -/
 
 /-- The checker invariant depends on the heap only through counts, liveness and
@@ -213,6 +320,34 @@ theorem exclusive?_of_accounted {support : List Var} {H : Heap} {env : Env} {c :
     (hx : c.us x = .owned) (hr : c.refOf x = some r) (hm : c.mult r = 1) :
     H.exclusive? r = true :=
   (Heap.exclusive?_eq_true).mpr (exclusive_of_accounted h hx hr hm)
+
+/-! ## Carrying the accounting across a call -/
+
+/-- The caller's accounting at the body's return, derived from its accounting at
+the call and the call's edge effect.
+
+Every field except `incoming` and the live-cell domain follows from
+`PutBack.ChildCall`: the invariant is `ChildCall.inv_caller`, the stored counts
+are `ChildCall.rc_eq`, and the enumeration is the context's. The domain follows
+from the edge effect's `carrier` and `cursor`. The count equation is where the
+edge premise is spent: without it a body that erases an incoming edge leaves the
+caller's stored counts consistent but its count equation false. -/
+theorem accounted_of_edges {support : List Var} {Hin Hout : Heap} {env : Env}
+    {ctx : Ctx} {state path x : Var} {body : Nested.NCode} {p c : Ref}
+    (hacc : Accounted support Hin env ctx)
+    (hcall : PutBack.ChildCall Hin Hout env ctx state path x body p c)
+    (hedges : EdgePreserved Hin Hout) : Accounted support Hout env ctx where
+  inv := PutBack.ChildCall.inv_caller hcall hacc
+  support_nodup := hacc.support_nodup
+  support_sound := hacc.support_sound
+  support_complete := hacc.support_complete
+  support_bound := hacc.support_bound
+  domain := hedges.domain_of hacc.domain
+  count r := by
+    calc Hout.rc r = Hin.rc r := PutBack.ChildCall.rc_eq hcall hacc r
+      _ = IncomingCount Hin r + EnvOwnerCount ctx support r := hacc.count r
+      _ = IncomingCount Hout r + EnvOwnerCount ctx support r := by
+        rw [hedges.incoming r]
 
 end Ownership
 
@@ -419,25 +554,37 @@ theorem restorationBoundary_of_accounted {support : List Var} {H : Heap} {env : 
 `PutBack.ChildCall` states the call's boundary: admission, checking from the
 isolated context, the caller's invariant, the annotations, the extraction
 obligations, the parent's separation and the body's outcome. The counted
-contract adds exactly one field — the caller's complete accounting at the body's
-return — because that is the fact the counted chain consumes and that the model
-body is responsible for. Everything else stays derived: the suspended parent's
-cell (`ChildCall.parent`), its count, the child's exclusivity and the result
+contract adds exactly one field — the call's edge effect on the caller's heap,
+`EdgePreserved Hin Hout` — which is the semantic fact a counted body is
+responsible for and which the boundary alone does not imply. Everything else
+stays derived: the suspended parent's cell (`ChildCall.parent`), its count, the
+child's exclusivity, the caller's invariant at the body's return
+(`ChildCall.inv_caller`), the stored counts (`ChildCall.rc_eq`) and the result
 binding are consequences.
 
-The added field is not derived by the finite-path induction: the induction in
+The edge effect is not derived by the finite-path induction: the induction in
 `OwnershipLcnf/PathRecursion.lean` derives ordinary `ChildContract` at every
-level, while `accounted` is an explicit premise of every theorem that consumes
-this structure. At an instance it is discharged by the caller's own accounting
-at the body's return (`calledAccounted` in `OwnershipTest/Principal.lean`); for
-the emitted recursive callee it is not available at all. -/
+level, while `edges` is an explicit premise of every theorem that consumes this
+structure. The caller's accounting at the body's return is *not* a field: it is
+`accounted_of`, derived from this structure, its `call`, and the caller's own
+accounting at the call. For the emitted recursive callee the edge effect is not
+available at all. -/
 structure CountedChildCall (Hin Hout : Heap) (env : Env) (ctx : Ctx)
     (state path x : Var) (body : Nested.NCode) (p c : Ref)
     (support : List Var) : Prop where
   /-- The child call's boundary, unchanged from `Ownership.PutBack`. -/
   call : PutBack.ChildCall Hin Hout env ctx state path x body p c
-  /-- The caller's complete accounting at the body's return. -/
-  accounted : Accounted support Hout env ctx
+  /-- The call's effect on the caller's incoming edges, cursor and cell carrier. -/
+  edges : EdgePreserved Hin Hout
+
+/-- The caller's complete accounting at the body's return, derived from its
+accounting at the call and the call's edge effect. The structure does not carry
+the caller's accounting, so it is an argument. -/
+theorem CountedChildCall.accounted_of {Hin Hout : Heap} {env : Env} {ctx : Ctx}
+    {state path x : Var} {body : Nested.NCode} {p c : Ref} {support : List Var}
+    (h : CountedChildCall Hin Hout env ctx state path x body p c support)
+    (hacc : Accounted support Hin env ctx) : Accounted support Hout env ctx :=
+  accounted_of_edges hacc h.call h.edges
 
 /-- The call's result binding, derived from the accounting: the checker's
 `.callAt` rule moves the state's handle to the result variable, and the
@@ -445,12 +592,13 @@ enumeration follows the handle. The two context facts the rule supplies are
 premises because the structure describes the body, not the caller's rule. -/
 theorem CountedChildCall.move {Hin Hout : Heap} {env : Env} {ctx : Ctx}
     {state path x : Var} {body : Nested.NCode} {p c : Ref} {support : List Var}
-    (h : CountedChildCall Hin Hout env ctx state path x body p c support) {result : Var}
+    (h : CountedChildCall Hin Hout env ctx state path x body p c support)
+    (hacc : Accounted support Hin env ctx) {result : Var}
     (howned : ctx.us state = .owned) (href : ctx.refOf state = some c)
     (hdead : ctx.us result ≠ .owned) :
     Accounted (replaceVar support state result) Hout (env.set result (.ref c))
       (ctx.move state result) :=
-  h.accounted.move howned href hdead
+  (h.accounted_of hacc).move howned href hdead
 
 /-! ## Restoration
 
@@ -1021,7 +1169,7 @@ theorem counted_nested_chain {support : List Var} {H : Heap} {env : Env} {c : Ct
   have hexclC? : (CountedPair.protocol H r eR idx).2.exclusive? eR = true :=
     (Heap.exclusive?_eq_true).mpr hexclC
   -- the call's result binding, derived from the accounting
-  have hacc2 := hcall.move (result := result) hcs hcref (by rw [hcr]; decide)
+  have hacc2 := hcall.move haccB (result := result) hcs hcref (by rw [hcr]; decide)
   -- the restoration
   obtain ⟨hdisp, hpb, haccF⟩ :=
     counted_restore (Hc := (CountedPair.protocol H r eR idx).2) hb hcall.call hacc2

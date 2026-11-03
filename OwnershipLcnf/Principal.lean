@@ -25,9 +25,11 @@ explicitly contractual child call (`CountedChildCall`, N10). Its premises are th
 level list's data (`PathContract`), the layout and the recogniser's verdict at
 this level, the initial machine/model agreement, and the accounted entry; the
 child call is an explicit premise `CountedChildCall` — the put-back's `ChildCall`
-boundary plus the caller's complete accounting at the body's return, which the
-finite-path induction of `OwnershipLcnf/PathRecursion.lean` does not derive — and
-the emitted callee's body is not captured. The conclusion is the reached
+boundary plus the call's effect on the caller's incoming edges, cursor and cell
+carrier, from which the caller's accounting at the body's return is derived
+(`CountedChildCall.accounted_of`). The finite-path induction of
+`OwnershipLcnf/PathRecursion.lean` does not derive that edge effect — and the
+emitted callee's body is not captured. The conclusion is the reached
 in-place store: the boundary and final accounting, the pair release and cursor,
 both exclusive targets, the mutate disposition, the functional restoration and
 its restored slot, the model run's own completion and its copy-free trace, the
@@ -412,8 +414,9 @@ Premise suppliers: `hproj`, `hl`, `hag` and `hm` as for
 multiplicities the counted entry and the restoration boundary read;
 `checkNF_build` the remaining levels' checker acceptance; `hacc` the accounted
 entry; `hcall` the explicit counted call, whose boundary is the put-back's
-`ChildCall` and whose `accounted` field is the caller's accounting at the body's
-return (N10). The restoration's `mutate` disposition is not a premise: it is
+`ChildCall` and whose edge effect is the premise from which the caller's
+accounting at the body's return is derived (`CountedChildCall.accounted_of`,
+N10). The restoration's `mutate` disposition is not a premise: it is
 `counted_restore`'s conclusion at `Hout`.
 
 Not concluded: the emitted recursive callee's body (N10), whole-path non-growth

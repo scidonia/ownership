@@ -11,11 +11,12 @@ so the correspondence no longer takes an arbitrary `ChildContract` for the
 emitted callee.
 
 The induction derives `ChildContract` only. `Ownership.CountedChildCall` adds the
-counted post-call field `accounted`, the caller's complete accounting at the
-body's return; nothing here constructs it, and every theorem that consumes
-`CountedChildCall` takes that field as an explicit premise. An instance
-discharges it from the caller's accounting at the body's return (`calledAccounted`
-in `OwnershipTest/Principal.lean`).
+counted call's edge effect, `EdgePreserved` on the caller's heap; nothing here
+constructs it, and every theorem that consumes `CountedChildCall` takes that field
+as an explicit premise. The caller's accounting at the body's return is not a
+field: it is derived from the caller's accounting at the call and that edge effect
+(`CountedChildCall.accounted_of`). An instance supplies the edge effect from the
+body's own leaf rewrite (`B_edges` in `OwnershipTest/Principal.lean`).
 
 ## The induction
 

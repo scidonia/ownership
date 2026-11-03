@@ -258,6 +258,17 @@ theorem RefCount_setIfInBounds_ref_scalar_of_ne {fields : Array Val} {i w : Nat}
   exact filter_set_length_eq (p := fun v => v = .ref q) (old := .ref e)
     (new := .scalar w) h (by simp [hqe])
 
+/-- A `.scalar` slot rewritten in bounds with another `.scalar` leaves every
+reference's occurrence count unchanged. -/
+theorem RefCount_setIfInBounds_scalar_scalar {fields : Array Val} {i old w : Nat}
+    (h : fields[i]? = some (.scalar old)) (q : Ref) :
+    RefCount (fields.setIfInBounds i (.scalar w)) q = RefCount fields q := by
+  unfold RefCount
+  rw [Array.toList_setIfInBounds]
+  rw [← Array.getElem?_toList] at h
+  exact filter_set_length_eq (p := fun v => v = .ref q) (old := .scalar old)
+    (new := .scalar w) h (by simp)
+
 /-! ### The edge count under one cell replacement -/
 
 /-- Replacing the cell at `r` changes the incoming-edge count of `q` only by the

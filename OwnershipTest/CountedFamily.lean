@@ -600,11 +600,29 @@ theorem calledAccounted (n i j w : Nat) (hi : i < n) (hj : j < n) :
     (boundary_child_cell n i) (childSlot n j hj)
   simpa [Hc, childAfter, Array.set!, B, boundaryEnv, boundaryCtx, childVar, fstVar] using h
 
+/-- The call's edge effect at the family boundary: the leaf's write replaces a
+scalar slot of the all-scalar child cell with a scalar, so no `.ref` occurrence
+at any name changes. -/
+theorem B_edges (n i j w : Nat) (hi : i < n) (hj : j < n) :
+    EdgePreserved (B n i) (Hc n i j w) :=
+  EdgePreserved.set (H := B n i) (r := 1) (o := scalarObj n) (o' := childAfter n j w)
+    (boundary_child_cell n i)
+    (fun q => by
+      simpa [childAfter] using
+        (RefCount_setIfInBounds_scalar_scalar (fields := (scalarObj n).fields) (i := j)
+          (old := 0) (w := w) (q := q) (childSlot n j hj)).symm)
+
 theorem countedBoundaryCall (n i j w : Nat) (hi : i < n) (hj : j < n) :
     CountedChildCall (B n i) (Hc n i j w) (boundaryEnv i j w) (boundaryCtx n i)
       childVar leafIdxVar valueVar body 0 1 [childVar, fstVar] where
   call := childCall n i j w hi
-  accounted := calledAccounted n i j w hi hj
+  edges := B_edges n i j w hi hj
+
+/-- The caller's accounting at the body's return, derived from the boundary
+accounting and the call's edge effect; its type is `calledAccounted`'s. -/
+theorem countedBoundaryCall_accounted (n i j w : Nat) (hi : i < n) (hj : j < n) :
+    Accounted [childVar, fstVar] (Hc n i j w) (boundaryEnv i j w) (boundaryCtx n i) :=
+  (countedBoundaryCall n i j w hi hj).accounted_of (boundary_accounted n i j w hi).1
 
 /-! ## The chain's own check -/
 
@@ -737,7 +755,9 @@ theorem family_child_after (n i j w : Nat) (hj : j < n) :
 #print axioms boundary_cells
 #print axioms boundary_accounted
 #print axioms calledAccounted
+#print axioms B_edges
 #print axioms countedBoundaryCall
+#print axioms countedBoundaryCall_accounted
 #print axioms famChecked
 #print axioms family_chain
 #print axioms family_chain_two

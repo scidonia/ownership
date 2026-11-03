@@ -42,6 +42,7 @@ allowlisted in the script and must carry the reason the last column records.
 | `CountFidelity` | declaration | `Ownership.CountFidelity` | `Ownership/Accounting.lean` | Complete ownership accounting; Recognition, and the flat guarantee | — |
 | `CountFree b` | expression | `Ownership.Nested.CountFree` | `Ownership/Nested.lean` | The judgement. | applied form of the body predicate used as a checker premise. |
 | `CountedChildCall` | declaration | `Ownership.CountedChildCall` | `Ownership/CountedNested.lean` | The pair and its boundary; The counted call and restoration; Scope, conclusion and disclosure | — |
+| `EdgePreserved` | declaration | `Ownership.EdgePreserved` | `Ownership/CountedNested.lean` | The finite path and the counted fragment | the call-effect relation; `Ownership.HeapCompat` is the boundary relation |
 | `EntryInv H env (Runner.initCtx root) root client` | expression | `Ownership.Entry.EntryInv` | `Ownership/Entry.lean` | Recognition, and the flat guarantee | applied form of the entry invariant at the initializer's context. |
 | `EnvOwnerCount` | declaration | `Ownership.EnvOwnerCount` | `Ownership/Accounting.lean` | Proof sketch.; The pair and its boundary | — |
 | `Exclusive H r` | expression | `Ownership.Heap.Exclusive` | `Ownership/Heap.lean` | Complete ownership accounting | applied form; `Ownership.Heap.Exclusive` is the predicate it spells. |
@@ -86,7 +87,7 @@ allowlisted in the script and must carry the reason the last column records.
 | `WellFormedEntry H p c i` | expression | `Ownership.CountedPair.WellFormedEntry` | `Ownership/CountedPair.lean` | The pair and its boundary | applied form of the pair-protocol entry predicate at its parameters. |
 | `\#guard` | concept | `\#guard` | — | Scope, conclusion and disclosure | Lean command syntax (an elaboration-time test) written with a LaTeX-escaped `#`; a command, not a declaration. |
 | `a` | expression | `Ownership.Nested.NCode.takeOut` | `Ownership/Nested.lean` | The judgement. | program variable: the array in the `takeOut` rule; a binder, not a declaration. |
-| `accounted` | declaration | `Ownership.CountedChildCall.accounted` | `Ownership/CountedNested.lean` | The counted call and restoration; Scope, conclusion and disclosure | the field, not a free-standing declaration; `Ownership.CountedChildCall.call` is its sibling |
+| `accounted_of` | declaration | `Ownership.accounted_of_edges` | `Ownership/CountedNested.lean` | The counted call and restoration | the derivation `Ownership.CountedChildCall.accounted_of` is its structure form |
 | `alias_not_accounted` | declaration | `Ownership.alias_not_accounted` | `Ownership/Accounting.lean` | Introduction; Complete ownership accounting | — |
 | `at_most_one_owner` | declaration | `Ownership.Accounted.at_most_one_owner` | `Ownership/CompleteAccounting.lean` | Complete ownership accounting | — |
 | `bindAlias` | declaration | `Ownership.Supported.bindAlias` | `Ownership/CompleteAccounting.lean` | Proof sketch. | constructor of `Ownership.Supported`, not `Ownership.Ctx.bindOwned` |
@@ -121,6 +122,7 @@ allowlisted in the script and must carry the reason the last column records.
 | `decTwo_rejected` | declaration | `Ownership.decTwo_rejected` | `Ownership/CompleteAccounting.lean` | Proof sketch. | — |
 | `dupSupport_witness` | declaration | `Ownership.dupSupport_witness` | `Ownership/CompleteAccounting.lean` | Complete ownership accounting | — |
 | `e` | expression | `Ownership.Nested.NCode.takeOut` | `Ownership/Nested.lean` | The judgement. | program variable: the fresh reference in the `takeOut` rule; a binder, not a declaration. |
+| `edges` | declaration | `Ownership.CountedChildCall.edges` | `Ownership/CountedNested.lean` | The counted call and restoration; Scope, conclusion and disclosure | the field, not a free-standing declaration; `Ownership.CountedChildCall.call` is its sibling |
 | `execAST_recognized` | declaration | `OwnershipLcnf.execAST_recognized` | `OwnershipLcnf/Semantics.lean` | Recognition, and the flat guarantee | — |
 | `execCountedAST` | declaration | `OwnershipLcnf.execCountedAST` | `OwnershipLcnf/CountedTrace.lean` | The finite path and the counted fragment; Proof sketch. | — |
 | `execCounted_full_fragment` | declaration | `OwnershipLcnf.execCounted_full_fragment` | `OwnershipLcnf/CountedTrace.lean` | Proof sketch. | — |
