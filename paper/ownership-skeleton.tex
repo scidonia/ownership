@@ -164,7 +164,9 @@ uniqueness analysis for a Lean IR model \cite{huisinga}, enforces uniqueness by 
 static analysis and leaves soundness and the compiler connection as future work;
 here the analysis is a proved relation over an existing IR, and a recognised
 emitted declaration's trace is interpreted and related to the model. The guarantee remains relative to entry, layout,
-recognition and call premises, and stops at the model heap.
+recognition and call premises, and is stated at the observation boundary of cells,
+result, fault and trace: the allocator cursor is the only component that differs,
+and no client reading those sees it.
 
 \paragraph*{Three contributions.}
 \begin{itemize}
@@ -834,6 +836,15 @@ abstract take-out heap; at the call's output heap the put-back selects
 other cell.
 \end{enumerate}
 \end{theorem}
+
+Client observations are what the relation leaves free. Write \lean{Observed} for
+an outcome's cells, result, fault and write trace; the allocator cursor is not
+part of it, because addresses are not observable in the source. The theorem's
+\lean{NestedOutcome.Compat} conjunct fixes every component of that observation, so
+no client reading cells, result, fault and trace can separate the counted run from
+the model's (\lean{NestedOutcome.Compat.observed\_iff}). The in-place update is
+therefore indistinguishable from the functional one at this boundary, and the
+cursor is the only component that differs.
 
 \begin{lstlisting}
 theorem principal_counted_fragment

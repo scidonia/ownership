@@ -208,6 +208,8 @@ import OwnershipTest.CountedFamily
 #print axioms OwnershipLcnf.execCounted_full_fragment
 #print axioms OwnershipLcnf.principal_counted_fragment
 #print axioms OwnershipLcnf.NestedOutcome.Compat
+#print axioms OwnershipLcnf.NestedOutcome.Compat.observed_eq
+#print axioms OwnershipLcnf.NestedOutcome.Compat.observed_iff
 #print axioms OwnershipTest.counted_fragment_instance
 
 #print axioms OwnershipTest.CountedFamily.entryAccounted

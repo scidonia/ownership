@@ -94,6 +94,8 @@ DECLARATIONS = {
     "Nat": ("Nat", "Init"),
     "NestedOutcome": ("OwnershipLcnf.NestedOutcome", "OwnershipLcnf/NestedSemantics.lean"),
     "NestedOutcome.Compat": ("OwnershipLcnf.NestedOutcome.Compat", "OwnershipLcnf/CountedTrace.lean"),
+    "NestedOutcome.Compat.observed_iff": ("OwnershipLcnf.NestedOutcome.Compat.observed_iff", "OwnershipLcnf/CountedTrace.lean"),
+    "Observed": ("OwnershipLcnf.Observed", "OwnershipLcnf/CountedTrace.lean"),
     "OwnersAccounted": ("Ownership.OwnersAccounted", "Ownership/Accounting.lean"),
     "Path.build": ("Ownership.Path.build", "Ownership/Path.lean"),
     "Prefix.toModel_supported": ("OwnershipLcnf.Prefix.toModel_supported", "OwnershipLcnf/Principal.lean"),

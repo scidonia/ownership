@@ -959,6 +959,33 @@ structure NestedOutcome.Compat (a b : NestedOutcome) : Prop where
   /-- The heaps are related by `HeapCompat`. -/
   heap : Ownership.HeapCompat a.heap b.heap
 
+/-- What a client can observe of a run at this boundary: the content of every
+cell, the reported result, the fault and the write trace. The allocator cursor is
+deliberately not part of it: addresses are not source-observable, and the cursor
+is the one component `Compat` leaves free. -/
+def Observed (a : NestedOutcome) :
+    (Ownership.Ref → Option Ownership.Obj) × Option Ownership.Val ×
+      Option Ownership.Fault × List Ownership.Write :=
+  (a.heap.cells, a.result, a.fault, a.writes)
+
+/-- The counted run and the model run are indistinguishable to every observation
+of that boundary: `Compat` fixes each component the observation reads. -/
+theorem NestedOutcome.Compat.observed_eq {a b : NestedOutcome}
+    (h : NestedOutcome.Compat a b) :
+    Observed a = Observed b := by
+  unfold Observed
+  rw [funext h.heap.cells, h.result, h.fault, h.writes]
+
+/-- Consequently no predicate of cells, result, fault and trace can separate the
+two runs: it holds of one exactly when it holds of the other. -/
+theorem NestedOutcome.Compat.observed_iff {a b : NestedOutcome}
+    (h : NestedOutcome.Compat a b)
+    (p : (Ownership.Ref → Option Ownership.Obj) → Option Ownership.Val →
+      Option Ownership.Fault → List Ownership.Write → Prop) :
+    p a.heap.cells a.result a.fault a.writes ↔
+      p b.heap.cells b.result b.fault b.writes := by
+  rw [funext h.heap.cells, h.result, h.fault, h.writes]
+
 /-- The counted fragment's whole trace, from the entry machine through the pair
 protocol, the child call and the restoration. `p.fragment` splits at the pair's
 release (`fragment_decomp`): `execCounted` runs the counted block to the boundary

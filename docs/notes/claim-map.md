@@ -64,6 +64,8 @@ allowlisted in the script and must carry the reason the last column records.
 | `NestedAgrees` | declaration | `OwnershipLcnf.NestedAgrees` | `OwnershipLcnf/NestedSemantics.lean` | The finite path and the counted fragment | — |
 | `NestedOutcome` | declaration | `OwnershipLcnf.NestedOutcome` | `OwnershipLcnf/NestedSemantics.lean` | The finite path and the counted fragment | — |
 | `NestedOutcome.Compat` | declaration | `OwnershipLcnf.NestedOutcome.Compat` | `OwnershipLcnf/CountedTrace.lean` | The finite path and the counted fragment; Proof sketch. | — |
+| `NestedOutcome.Compat.observed_iff` | declaration | `OwnershipLcnf.NestedOutcome.Compat.observed_iff` | `OwnershipLcnf/CountedTrace.lean` | The finite path and the counted fragment | — |
+| `Observed` | declaration | `OwnershipLcnf.Observed` | `OwnershipLcnf/CountedTrace.lean` | The finite path and the counted fragment | — |
 | `OwnersAccounted` | declaration | `Ownership.OwnersAccounted` | `Ownership/Accounting.lean` | Complete ownership accounting; Recognition, and the flat guarantee | — |
 | `Ownership` | module | `Ownership.lean` | `Ownership.lean` | Evidence and artifact; Scope, conclusion and disclosure | — |
 | `OwnershipLcnf` | module | `OwnershipLcnf.lean` | `OwnershipLcnf.lean` | Evidence and artifact; Scope, conclusion and disclosure | — |
