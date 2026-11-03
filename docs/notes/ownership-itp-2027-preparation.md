@@ -23,11 +23,13 @@ The existing Markdown gap programme remains a useful technical specification. Th
 
 ## 2. Venue facts and provisional requirements
 
-The official ITP 2027 site places the conference at the University of Strathclyde, Glasgow. Its header gives 2–7 August 2027, while its welcome text still says the dates are being finalised. No submission CFP or deadlines were visible on that page when checked on 2 November 2026. Treat the event dates as provisional and the submission deadline as unknown. [S1]
+The official ITP 2027 site places the conference at the University of Strathclyde, Glasgow. Its header gives 2–7 August 2027, while its welcome text still says the dates are being finalised and may be either the last week of July or the first week of August; the programme chairs are Dmitriy Traytel and Stephanie Weirich, and the event is co-located with the SPLV summer school at Heriot-Watt University. No submission CFP or deadlines were visible on that page when rechecked on 3 November 2026. Treat the event dates as provisional and the submission deadline as unknown. [S1]
 
 Use the previous call only as a planning precedent: ITP 2026 allowed regular papers of 16 pages excluding references, in LIPIcs format, without appendices; short papers were six pages. It used lightweight double-blind review and requested anonymised verifiable supplementary material. None of these is yet a confirmed 2027 rule. [S2]
 
 When the 2027 CFP appears, record its actual abstract/paper deadlines, time zone, categories, formatting, anonymity, supplementary-material rules, and AI policy. Replace this provisional requirements paragraph. Do not transfer 2026 dates to 2027 or use third-party deadline estimates.
+
+The publisher's current GenAI statement (Dagstuhl Publishing, rechecked 3 November 2026) requires disclosure of the type and purpose of assistance and the extent of human review and editorial control, with the tool, its version, the interaction date and the free-or-paid status optional. The manuscript's assistance paragraph gives the categories of use, the recorded model identifier, and now the editorial-control statement and the recorded absence of line-by-line proof review; the model version, interaction dates and licensing are not recorded and are not claimed. Recheck both the CFP and this statement when the call appears. [S3]
 
 ## 3. The central argument
 
@@ -391,9 +393,9 @@ Keep implementation changes and paper-claim changes reviewable together. A close
 
 ## Sources and baseline links
 
-- **[S1]** [Official ITP 2027 site](https://itp-conference-2027.github.io/), checked 2 November 2026. Location confirmed; dates internally inconsistent/provisional; no submission call visible.
-- **[S2]** [Official ITP 2026 CFP](https://itp-conference-2026.github.io/cfp.html), checked 2 November 2026. Historical formatting/category precedent only.
-- **[S3]** [Dagstuhl statement on GenAI](https://drops.dagstuhl.de/docs/gen-ai), checked 2 November 2026. Recheck for the submission's applicable policy.
+- **[S1]** [Official ITP 2027 site](https://itp-conference-2027.github.io/), checked 3 November 2026. Location confirmed; dates internally inconsistent/provisional; no submission call visible.
+- **[S2]** [Official ITP 2026 CFP](https://itp-conference-2026.github.io/cfp.html), checked 3 November 2026. Historical formatting/category precedent only.
+- **[S3]** [Dagstuhl statement on GenAI](https://drops.dagstuhl.de/docs/gen-ai), checked 3 November 2026. Recheck for the submission's applicable policy.
 - **[S4]** [Marc Huisinga, Static Uniqueness Analysis for the Lean 4 Theorem Prover, 2023](https://pp.ipd.kit.edu/uploads/publikationen/huisinga23masterarbeit.pdf), especially implementation and future-work sections.
 - [Inspected ownership revision](https://github.com/scidonia/ownership/tree/61a01439f4b313fb51f7240097b29cdff53131fb).
 - [Accounting definitions and local lemmas](https://github.com/scidonia/ownership/blob/61a01439f4b313fb51f7240097b29cdff53131fb/Ownership/Accounting.lean).
