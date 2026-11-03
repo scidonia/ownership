@@ -35,7 +35,7 @@ allowlisted in the script and must carry the reason the last column records.
 | `AnnotationsIn` | declaration | `Ownership.Entry.AnnotationsIn` | `Ownership/Entry.lean` | Compatibility and the boundary argument | — |
 | `Array.markLinear` | declaration | `Array.markLinear` | `Init` | Related work | — |
 | `ChildCall.separated` | declaration | `Ownership.PutBack.ChildCall.separated` | `Ownership/PutBack.lean` | Compatibility and the boundary argument | — |
-| `ChildContract` | declaration | `OwnershipLcnf.ChildContract` | `OwnershipLcnf/NestedSemantics.lean` | The counted call and restoration; The finite path and the counted fragment | — |
+| `ChildContract` | declaration | `OwnershipLcnf.ChildContract` | `OwnershipLcnf/NestedSemantics.lean` | The finite path and the counted fragment | — |
 | `Code` | declaration | `Ownership.Code` | `Ownership/Code.lean` | Two languages, one accounted subset | — |
 | `Corr` | declaration | `OwnershipLcnf.Runtime.Corr` | `OwnershipLcnf/RuntimeModel.lean` | Recognition, and the flat guarantee | the runtime correspondence relation inside `OwnershipLcnf.Runtime`; the model-side `OwnershipLcnf.Agrees` is a different relation |
 | `Corr H R` | expression | `OwnershipLcnf.Runtime.Corr` | `OwnershipLcnf/RuntimeModel.lean` | Recognition, and the flat guarantee | applied form of the runtime correspondence relation. |
@@ -73,6 +73,7 @@ allowlisted in the script and must carry the reason the last column records.
 | `Path.build path value body (l :: rest)` | expression | `Ownership.Path.build` | `Ownership/Path.lean` | The finite path and the counted fragment | applied form at a cons list of levels. |
 | `Path.index` | concept | `Path.index` | — | Recognition, and the flat guarantee | the `.index` constructor arm of the sibling `Path` type that `Layout5.setAt` matches; declared in the pinned sibling repository, and the local `Ownership.Path` module has no `index` constructor. |
 | `Prefix.toModel_supported` | declaration | `OwnershipLcnf.Prefix.toModel_supported` | `OwnershipLcnf/Principal.lean` | Recognition, and the flat guarantee | — |
+| `Runtime.RHeap` | declaration | `OwnershipLcnf.Runtime.RHeap` | `OwnershipLcnf/RuntimeModel.lean` | Related work | — |
 | `Runtime.setAt_inPlace_of_entryInv` | declaration | `OwnershipLcnf.Runtime.setAt_inPlace_of_entryInv` | `OwnershipLcnf/RuntimeModel.lean` | Recognition, and the flat guarantee | — |
 | `StoreSlots` | declaration | `Ownership.StoreSlots` | `Ownership/Preservation.lean` | The supported fragment; Recognition, and the flat guarantee | — |
 | `StoreSlots H env s` | expression | `Ownership.StoreSlots` | `Ownership/Preservation.lean` | The supported fragment; Preservation | applied form of the supplied slot premise. |

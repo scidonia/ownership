@@ -33,15 +33,14 @@ pdfinfo ownership-skeleton.pdf
 ```
 
 Observed on 3 November 2026 with pdfTeX 3.141592653-2.6-1.40.25 (TeX Live
-2023/Debian) and latexmk 4.83: exit 0, A4, **17 pages**, references beginning
-on page 17.
+2023/Debian) and latexmk 4.83: exit 0, A4, **17 pages**, the body filling pages
+1-16 and the bibliography on page 17.
 
 ## Page footprint
 
-The manuscript occupies 17 pages in the LIPIcs class: the eight sections run
-through page 16, and page 17 carries the acknowledgements and the bibliography
-(10 entries). This is the footprint of the scientific content unchanged; the
-revision plan's compression targets are measured against it.
+The manuscript runs to 16 body pages, with the bibliography as the additional
+page 17 (10 entries). The body is at the 16-page limit of the ITP 2026 precedent,
+so any further addition needs a compensating cut.
 
 ## Warnings
 

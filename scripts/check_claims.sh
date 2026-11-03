@@ -135,6 +135,7 @@ DECLARATIONS = {
     "counted_takeOut": ("Ownership.counted_takeOut", "Ownership/CountedNested.lean"),
     "counted_nested_chain_restoration": ("Ownership.counted_nested_chain_restoration", "Ownership/CountedNested.lean"),
     "NestedAgrees": ("OwnershipLcnf.NestedAgrees", "OwnershipLcnf/NestedSemantics.lean"),
+    "Runtime.RHeap": ("OwnershipLcnf.Runtime.RHeap", "OwnershipLcnf/RuntimeModel.lean"),
     "dec": ("Ownership.Ctx.dec", "Ownership/Code.lean",
             "the context update; `Ownership.Code.dec` is the constructor of the same name"),
     "decOne": ("Ownership.Accounted.decOne", "Ownership/CompleteAccounting.lean",

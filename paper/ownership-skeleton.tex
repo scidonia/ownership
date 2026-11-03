@@ -142,8 +142,9 @@ of the array, allocates a pair holding parent and child, projects both handles,
 frees the pair, calls on the child and puts the result back. At the take-out the
 pair's field duplicates the parent reference without raising the count, while the
 caller's handle still owns it, so the equation reads one $=$ one plus one; it
-becomes true again at entry, after the release and after restoration, and nothing
-in between is accounted. The proof is therefore a boundary simulation: count
+becomes true again at entry, after the release and after restoration, and at the
+context the abstract take-out returns no support accounts the pair-live states in
+between. The proof is therefore a boundary simulation: count
 identities for the pair's traffic, restoration's in-place branch derived from the
 protocol and call boundaries, and a compatibility relation that lets the counted
 cursor run one ahead of the model's. Closing the fragment needs a modular
@@ -161,8 +162,8 @@ finite-path model correspondence and the counted boundary accounting
 it at the recogniser's layout. The closest predecessor, Huisinga's static
 uniqueness analysis for a Lean IR model \cite{huisinga}, enforces uniqueness by a
 static analysis and leaves soundness and the compiler connection as future work;
-here the analysis is a proved relation over an existing IR, and the connection to
-the emitted fragment is checked. The guarantee remains relative to entry, layout,
+here the analysis is a proved relation over an existing IR, and a recognised
+emitted declaration's trace is interpreted and related to the model. The guarantee remains relative to entry, layout,
 recognition and call premises, and stops at the model heap.
 
 \paragraph*{Three contributions.}
@@ -184,13 +185,9 @@ survives a correct protocol under which the simple invariant is deliberately
 false: count identities inside the window, accounting at its boundaries.
 \item \textbf{A checked connection from emitted LCNF to the models.} A recogniser
 walks the actual declaration, pinning operation order, arities, operand identities
-and branch constructors, and its trace is executed and related to the model. The
-flat composed guarantee relates recognised execution, model run and runtime model
-at the designated in-place write with no accounting premise; the nested statement
-composes the finite-path correspondence, the counted chain and the counted
-interpreter's whole-fragment run at one supported level, from an accounted caller
-state and the counted child-call contract, with a closed instance discharging
-every premise.
+and branch constructors; its trace is executed and related to the model, at the
+designated flat write and, with the counted chain, over the whole recognised
+fragment at one supported level, with a closed instance discharging every premise.
 \end{itemize}
 
 The rest of the paper follows that order: the example and the two languages
@@ -623,6 +620,9 @@ counts are per-stage effects, not boundary facts. The boundary rows are the firs
 the free and the put-back; \lean{Accounted} is asserted only there.}
 \label{tab:protocol}
 \end{table}
+The table's component roots are the take-out's obligations in the context the
+abstract take-out returns; the pair's own cell is a heap object with no owning
+variable there.
 
 \subsection{The counted call and restoration}
 \lean{counted\_takeOut} consumes the array's cell and selected slot plus the
@@ -637,13 +637,20 @@ structure CountedChildCall (Hin Hout : Heap) (env : Env) (ctx : Ctx)
   call      : PutBack.ChildCall Hin Hout env ctx state path x body p c
   accounted : Accounted support Hout env ctx
 \end{lstlisting}
-\lean{call} is the boundary the put-back consumes. \lean{accounted} is the
-caller's complete accounting at the body's return, and it is an \emph{explicit
-premise}: the finite-path induction derives the ordinary \lean{ChildContract} at
-every level (\lean{childContracts\_of\_path}) but not this field, because the
-ordinary contract does not mention the caller's ownership state. The closed
-instance supplies it from the caller's own accounting at the return
-(\lean{calledAccounted}). From the call's output state, \lean{counted\_restore}
+\lean{call} is the boundary the put-back consumes. Unfolding it, the body must be
+admitted, the checker must accept it from the isolated context and return the
+call's own reference, the isolated caller invariant, the annotations and the
+extraction obligations must hold, the parent must lie outside the child's mutable
+footprint, and the body must complete on the caller's heap returning that
+reference with its count and persistence unchanged and its effect confined to the
+child's footprint. Those are the ordinary call contract, and the finite-path
+induction derives them at every level (\lean{childContracts\_of\_path}).
+\lean{accounted} adds the caller's complete accounting at the body's return: the
+induction does not construct it, because the ordinary contract never mentions the
+caller's ownership state. The closed instance supplies it from the caller's own
+accounting at the return (\lean{calledAccounted}), and the body it runs is a model
+computation; the emitted recursive callee remains an implementation obligation.
+From the call's output state, \lean{counted\_restore}
 derives the mutate branch and the accounted post-state, and
 \lean{putBack\_exclusive\_of\_wellFormed} concludes \lean{Heap.Exclusive} for both
 the parent and the restored child.
@@ -672,12 +679,17 @@ copies nor allocates under the contracts these statements take, while the
 protocol's take-out allocates the temporary pair and the counted cursor records
 it.
 
-The pair-live window is not an accounting failure but a deliberate boundary
-abstraction, and the case we exhibit is forced: at the take-out state of
-\Cref{fig:traffic}(b), at the context the run's own take-out rule produces, no
-support satisfies \lean{Accounted} (\lean{pairPhase\_refused}), because the count
-equation reads one $=$ one plus one. The positive control is the boundary, where
-the counts match again. Three facts make the window safe. The projections' effect
+The pair-live window is a deliberate boundary abstraction, and it is worth naming
+the interpretation it refuses. During the window we use the context the abstract
+take-out returns, whose two owning variables are the take-out's obligations for
+the parent and the extracted child; the pair itself is the fresh heap cell and is
+owned by no variable of that context. At the take-out state of
+\Cref{fig:traffic}(b), at exactly that context, no support satisfies
+\lean{Accounted} (\lean{pairPhase\_refused}), because the count equation reads one
+$=$ one plus one. A finer intermediate relation could root the pair and treat its
+projections as borrowed; the boundary relation instead keeps one invariant at the
+entry, the release and the restoration, which is where the caller's code observes
+the array. Three facts make the window safe. The projections' effect
 is exactly the pair's component increment (\lean{incPairComponents\_eq}). The
 release is boundary-neutral (\lean{pair\_traffic\_neutral}): the parent's and
 child's counts are their entry counts, the child's cell is the entry's, and the
@@ -761,10 +773,12 @@ shape and heap facts, and yields the ordinary
 nested prefix's \lean{NestedOutcome} is the model run of
 \lean{Path.build path value body (l :: rest)}, completing with an all-exclusive
 trace under the recogniser's verdict, layout, level match, agreement and path
-contract. The counted call enters through its own contract
-(\Cref{sec:protocol}), and the correspondence is stated at one level of a finite
-path, so a level that re-indexes by re-projecting a continuation is described by
-the path list rather than by the flat environment.
+contract. The finite model does not interpret successive path-node projections by
+the emitted recursive callee: a level after the first takes its index from one of
+the two scalars the call exposes, while the recogniser re-projects the path each
+invocation holds. The recognised outer fragment is related to a supplied model
+child computation, and the emitted callee's frame and path projections remain
+outside the correspondence.
 
 Read without the formal apparatus, the correspondence says this. If the caller's
 state is accounted, the recogniser accepts the emitted declaration, and the child
@@ -773,6 +787,25 @@ whole recognised fragment returns the caller's array handle with no fault, write
 only to exclusive targets, and leaves a heap that agrees with the model's run of
 the same nested update cell for cell, apart from the one allocation the temporary
 pair takes.
+
+\begin{table}[t]
+\centering
+\small
+\begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}p{3.0cm}X@{}}
+\toprule
+Layer & What is established there, and what stands in for the compiler \\
+\midrule
+structural recognition & the recogniser walks the compiled declaration and pins operation order, arities, operand identities and branch constructors \\
+decoding consistency & the recognised trace decodes to the expected prefix, so the recogniser's verdict is spent by the execution theorem rather than assumed by it \\
+interpreter correspondence & the counted interpreter's run of that trace is related to the model's run of the built path: same cells, result, fault and trace \\
+supplied meanings & the take-out helper's store, the child body and the emitted recursive callee enter as contracts; the runtime's C primitives are observed, not proved \\
+\bottomrule
+\end{tabularx}
+\caption{What the correspondence covers. The first three rows are proved; the last
+names the modelling boundary, so recognition is not mistaken for execution
+adequacy of the emitted LCNF or C.}
+\label{tab:layers}
+\end{table}
 
 \begin{theorem}[Counted fragment correspondence]\label{thm:principal-fragment}
 Let the recogniser accept the declared shape (\lean{projectNested} yielding $p$),
@@ -939,14 +972,14 @@ documentation.}
 \end{table}
 
 \subsection{What the mechanisation taught}
-Two lessons carried the work. First, a count of one is not one owner: the tempting
-invariant equates the stored count with the context's multiplicity, and two owning
-variables can satisfy it, so the missing quantity is the environment's owners; the
-support and domain fields are what make the equation two-sided. Second, a correct
-temporary-alias protocol is not an invariant: the pair duplicates a reference
-before any count is incremented, so the right response is boundary simulation with
-count identities inside the window, and because allocation advances the cursor, the
-two runs are related by an explicit slack---equal cells, not equal heaps.
+The reusable insight is that count-one reasoning is a boundary discipline. A count
+of one is not one owner: equating the stored count with the context's multiplicity
+leaves two owning variables satisfying it, so the accounting adds a support of
+owning variables and a live-cell domain. And a correct temporary-alias protocol
+cannot be an invariant at all: the pair duplicates a reference before any count is
+incremented, so the pair-live window is covered by count identities and by an
+explicit cursor slack between the runs, with accounting asserted at the entry, the
+release and the restoration.
 
 \subsection{Evidence and artifact}\label{sec:map}
 The proof checks are kernel builds of \lean{Ownership}, \lean{OwnershipTest} and
@@ -969,6 +1002,25 @@ roles and the paper-to-code entry points, are listed in the supplementary docume
 \texttt{docs/notes/ownership-theorem-map.md}, which is artifact documentation and
 not part of the argument.
 
+\begin{table}[t]
+\centering
+\small
+\begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}p{3.4cm}X@{}}
+\toprule
+Evidence & Scope established \\
+\midrule
+parameterised family & one model extraction/call/restoration level, for arbitrary length, valid outer and leaf slots, and replacement value \\
+closed instance & the whole counted-fragment theorem at the captured declaration, with a supplied model child body \\
+structural controls & rejection of the specified malformed traces; not a theorem that every malformed trace is rejected \\
+linked probes & observed exclusivity, address and result behaviour on the recorded corpus \\
+artifact gate & the pinned sibling revision, its cleanliness, and byte-identical regenerated captures \\
+\bottomrule
+\end{tabularx}
+\caption{The evidence layers answer different questions; no row establishes more
+than its scope.}
+\label{tab:evidence}
+\end{table}
+
 \section{Related work}\label{sec:related}
 
 Huisinga's 2023 thesis \cite{huisinga} is the closest predecessor and the
@@ -979,18 +1031,17 @@ its soundness argument and compiler integration are stated as future work. The
 difference is not that our proofs are machine checked---theirs could be
 too---but what is connected: here a count-one checker is proved against a model
 heap with an explicit roots-and-edges accounting, that result is composed with a
-transform of the recognised emitted prefix and with a second runtime model at the
+transform of the recognised emitted prefix and with a second model of the write's
+runtime state (\lean{Runtime.RHeap}, distinct from the linked Lean runtime) at the
 flat write, and the extraction protocol is isolated at proved accounted
 boundaries. This is not a claim to the first static uniqueness analysis for Lean.
 
-Perceus \cite{perceus} and Counting Immutable Beans \cite{countingbeans} are
-count-insertion and reuse transformations: an ownership pass inserts counts and
-reuse tokens, the runtime maintains them, and the correctness argument is about
-the transformation's semantics preservation and its allocation behaviour. They do
-not answer the question asked here, which is when a count of one is justified at a
-given write in code that already exists; \lean{Accounted} is a specification of
-that justification, and this paper proves it for a restricted fragment rather than
-proving a transformation. Linear Haskell \cite{linearhaskell} makes linearity a
+Perceus \cite{perceus} and Counting Immutable Beans \cite{countingbeans} transform
+programs by inserting counts and reuse tokens, and prove the transformation
+preserves semantics and allocation behaviour; neither asks when a count of one is
+justified at a write in code that already exists. \lean{Accounted} is a
+specification of that justification, proved here for a restricted fragment rather
+than as a transformation. Linear Haskell \cite{linearhaskell} makes linearity a
 source-level type property through linear arrows and multiplicities, and Clean's
 uniqueness typing \cite{uniqueness} is uniqueness rather than linearity; neither
 is a checker over an existing compiler IR, and neither is connected to emitted
@@ -1052,8 +1103,7 @@ displayed name against the development; no line-by-line human review of the proo
 scripts is recorded. The author exercised editorial control over the submitted text
 and evidence; kernel checking is not human validation, and the definitions,
 theorem statements, interpretation of evidence, novelty claims and citations are
-the author's responsibility. The conference and publisher policy must be rechecked
-at submission.
+the author's responsibility.
 
 \bibliographystyle{plainurl}
 \bibliography{references}
