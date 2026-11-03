@@ -299,7 +299,8 @@ accounted, at the entry and at the protocol's boundary.}
 The checker does not run on Lean source or on LCNF. Its programs are two small
 inductive types, interpreted over a model heap and environment; the compiler
 connection is a mapping from recognised LCNF to these values.
-\begin{lstlisting}
+\begin{samepage}
+\begin{lstlisting}[basicstyle=\footnotesize\ttfamily]
 inductive Code where
   | let (x : Var) (v : LetF) (k : Code)
   | inc (x : Var) (n : Nat) (k : Code)
@@ -315,6 +316,7 @@ inductive NCode where
   | callAt (state path x result : Var) (body : NCode) (k : NCode)
   | ret (x : Var)
 \end{lstlisting}
+\end{samepage}
 A \lean{Code} is the straight-line array-write fragment; an \lean{NCode} adds
 extraction, restoration and the recursive call. A \lean{LetF} is one of
 \lean{lit n}, \lean{size a}, \lean{isShared x} or \lean{checkAlias x}. Variables

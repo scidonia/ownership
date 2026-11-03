@@ -78,6 +78,11 @@
   and the checked-in copy is compared byte for byte; `--self-test` proves the
   detector by failing an orphan token, an uncited row and a nonexistent
   declaration each with its own diagnostic.
+- `scripts/check_all.sh` runs the whole suite in one go — the three Lean builds,
+  the axiom audit, the claim census with its self-test, the artifact and runtime
+  gates when `../lean-examples` is present, and the paper build. Without the
+  sibling it reports those two as skipped and prints the pinned provisioning
+  commands; `--require-sibling` makes their absence an error.
 - The pair projection check replays the private `setAt` and runs `projectPair` on
   its `Path.left`/`Path.right` arms:
   `(cd ../lean-examples && nix develop -c lake env bash -c 'export LEAN_PATH="../ownership/.lake/build/lib/lean:$LEAN_PATH"; lean ../ownership/scripts/check_pair_projection.lean')`.
