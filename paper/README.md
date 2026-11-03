@@ -82,3 +82,14 @@ single-blind, author-named series, and the 2027 event's anonymity rule could
 not be confirmed. If the call for papers requires anonymisation, add
 `anonymous` to the `\documentclass` options rather than maintaining a second
 source file.
+
+## Anonymised submission
+
+`bash scripts/build_anonymous.sh` derives
+`paper/ownership-skeleton-anonymous.pdf` from the same source, without a
+divergent copy: it adds the class's `anonymous` option, which makes
+`lipics-v2021` replace the author block, the affiliation, the copyright line and
+the PDF metadata author with anonymous forms, and it blanks the acknowledgements.
+It then checks that the author's name, affiliation and address appear nowhere in
+the extracted text and that the anonymous author marker is present, failing
+loudly otherwise. The checked-in anonymous PDF is the output of that command.
