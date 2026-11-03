@@ -30,10 +30,10 @@ command's own.
 | `nix develop -c lake build OwnershipLcnf` | 0 | `Build completed successfully (28 jobs).` |
 | `nix develop -c lake build OwnershipTest` | 0 | `Build completed successfully (51 jobs).` |
 | `nix develop -c lake env lean scripts/check_axioms.lean` | 0 | 464 `depends on axioms` lines; zero occurrences of `sorryAx` or `Lean.ofReduceBool`; every listed declaration prints only `propext`, `Classical.choice`, `Quot.sound` (or a subset). Includes `execCounted_full_fragment`, `principal_counted_fragment`, `counted_fragment_instance`, the fourteen `OwnershipTest.CountedFamily` declarations, `NestedOutcome.Compat`, and both `counted_nested_chain` consumers. |
-| `nix develop -c bash scripts/check_claims.sh` | 0 | `claim census: OK: 202 distinct tokens, 202 rows (declaration 139, module 4, runtime-primitive 4, concept 4, expression 51)`; the declaration rows were `#check`ed with `nix develop -c lake env lean <tmp>/ClaimCheck.lean`. |
+| `nix develop -c bash scripts/check_claims.sh` | 0 | `claim census: OK: 176 distinct tokens, 176 rows (declaration 115, module 4, runtime-primitive 4, concept 3, expression 50)`; the declaration rows were `#check`ed with `nix develop -c lake env lean <tmp>/ClaimCheck.lean`. |
 | `nix develop -c bash scripts/check_claims.sh --self-test` | 0 | `self-test (a) … orphanTokenForSelfTest`, `(b) … ghostTokenForSelfTest`, `(c) … Unknown identifier 'Ownership.thisDeclarationDoesNotExist'`; `self-test OK`, unmodified inputs pass. |
 | `cd paper && latexmk -pdf -interaction=nonstopmode ownership-skeleton.tex` | 0 | build succeeds; `grep -cE '^!|Overfull \\hbox|undefined'` on the log reports `0`. |
-| `pdfinfo paper/ownership-skeleton.pdf` | 0 | `Pages: 17`, `Page size: 595.276 x 841.89 pts (A4)`, abstract 189 words. The body ends on page 16, with the bibliography beginning about four fifths of the way down that page; references continue on page 17. |
+| `pdfinfo paper/ownership-skeleton.pdf` | 0 | `Pages: 16`, `Page size: 595.276 x 841.89 pts (A4)`, abstract 175 words. The body ends about a third of the way down page 16, so it runs to roughly 15.3 pages; the references occupy the rest of that page and are additional. |
 | `pdffonts paper/ownership-skeleton.pdf` | 0 | 33 embedded fonts, all Type 1/Custom, none reported as not embedded; no missing-glyph warnings in the log. |
 | `nix develop -c bash scripts/check_artifacts.sh` | 0 | sibling revision and cleanliness checks pass; the `execP` and nested `setAt` captures regenerate and diff clean against `docs/notes/artifacts/`. |
 | `nix develop -c bash scripts/check_runtime_binding.sh` | 0 | artifact gate, sibling IR-shape build, generated C and runtime-header primitive checks, and the linked probe modes with the check off and on all pass. |
@@ -47,10 +47,11 @@ claim census and the paper build need only this repository and the dev shell.
 
 ## Manuscript inspection
 
-Pages 1, 5, 9 and 14 of the final PDF were rendered at 110 dpi and read: the LIPIcs
-title block is on page 1, theorem and listing blocks are set with legible line
-numbers, the two tables and both figures are inside the text block, and no rule,
-listing or glyph is clipped. The empty gold box in the footer and the red `XX:`
+Pages 1, 5, 9, 11 and 13 of the final PDF were rendered at 110 dpi and read: the
+LCN publication title block is on page 1, theorem and listing blocks are set with
+legible line numbers, the plain-language statement precedes the formal counted
+theorem, the case study reads as prose rather than a declaration list, and no
+rule, listing or glyph is clipped. The empty gold box in the footer and the red `XX:`
 article marker are the class's rendering of unfilled proceedings metadata; no
 event, volume or article number is invented, and the source records that choice
 next to the title block.

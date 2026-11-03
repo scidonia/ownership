@@ -21,6 +21,7 @@ The paper-to-code entry points are `Ownership/CompleteAccounting.lean`,
 | `pair_accounting`; `pair_traffic_neutral`; `boundary_correspondence`; `no_free_components_not_exclusive`; `pairPhase_refused`; `counted_takeOut`; `CountedChildCall`; `counted_restore`; `counted_nested_chain`; `HeapCompat` | counted protocol; N10 |
 | `putBack_exclusive_of_wellFormed`; `execCounted_protocol_boundary`; `checkExclusive_no_abort`; `setAt_inPlace_of_entryInv`; `prefix_abort_impossible`; `checkN_extraction_exclusive`; `checkN_extraction_exclusive_of_entryInv` | restoration; counted prefix; runtime model; store targets |
 | `principal_write`; `Prefix.toModel_supported`; `principal_accounted`; `principal_supported_path`; `principal_instance`; `principal_counted_fragment`; `counted_fragment_instance`; `family_chain`; `family_chain_two` | flat and nested guarantees; instance and family |
+| `retained_parent_copies`; `retained_parent_not_mutate`; `no_free_components_not_exclusive`; `pairPhase_refused`; `dupSupport_witness`; `omittedOwner_witness`; `unboundRoot_witness`; `persistent_check`; `persistent_setAt` | control witnesses: retained parent, omitted release, pair-live state, invalid owner support, persistent root |
 
 ## Where the groups live
 
