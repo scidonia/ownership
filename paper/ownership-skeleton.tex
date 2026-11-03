@@ -88,10 +88,10 @@ separation logic}
 \maketitle
 
 \begin{abstract}
-Copy-on-write gives Lean~4 in-place array updates unobservable in its pure
-semantics: when the array is unshared---reference count one---the write
-mutates existing storage, and otherwise it copies, so the meaning is that of
-immutable arrays and only the cost depends on sharing. We turn that condition
+Copy-on-write gives Lean~4 in-place array updates indistinguishable from updating
+an immutable array: when the array is unshared---reference count one---the write
+mutates existing storage, and otherwise it copies, so only the cost changes. We
+turn that condition
 into a static guarantee for a compiler-IR fragment, by a count-one
 ownership discipline mechanised against model semantics. Its foundation is an accounting relation equating each count
 with the fields that reference it plus the owning variables that denote it, which
@@ -112,8 +112,8 @@ predicted.
 Lean~4 arrays are pure functional values, and copy-on-write updates them in place
 without that being observable: when the array is unshared---reference count one,
 and not persistent---a write mutates the existing storage, and otherwise it
-copies, so the result is always the value an immutable update would give
-\cite{lean4,perceus,countingbeans}. The cost is what is not invariant: Lean's
+copies, so the result is indistinguishable from an immutable array's and only the
+cost changes \cite{lean4,perceus,countingbeans}. That cost is not invariant: Lean's
 \lean{lean\_is\_exclusive} decides at run time, from heap state, so $n$ updates
 over an $n$-element array can cost linear or quadratic time according to sharing
 alone. A static ownership discipline would
