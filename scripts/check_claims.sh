@@ -140,6 +140,14 @@ DECLARATIONS = {
     "counted_nested_chain": ("Ownership.counted_nested_chain", "Ownership/CountedNested.lean"),
     "counted_restore": ("Ownership.counted_restore", "Ownership/CountedNested.lean"),
     "counted_takeOut": ("Ownership.counted_takeOut", "Ownership/CountedNested.lean"),
+    "counted_nested_chain_restoration": ("Ownership.counted_nested_chain_restoration", "Ownership/CountedNested.lean"),
+    "entryAccounted": ("OwnershipTest.CountedFamily.entryAccounted", "OwnershipTest/CountedFamily.lean"),
+    "boundary_cells": ("OwnershipTest.CountedFamily.boundary_cells", "OwnershipTest/CountedFamily.lean"),
+    "boundary_accounted": ("OwnershipTest.CountedFamily.boundary_accounted", "OwnershipTest/CountedFamily.lean"),
+    "countedBoundaryCall": ("OwnershipTest.CountedFamily.countedBoundaryCall", "OwnershipTest/CountedFamily.lean"),
+    "IncomingCount_baseHeap": ("OwnershipTest.CountedFamily.IncomingCount_baseHeap", "OwnershipTest/CountedFamily.lean"),
+    "IncomingCount_set_fill_ne": ("Ownership.IncomingCount_set_fill_ne", "Ownership/CompleteAccounting.lean"),
+    "NestedAgrees": ("OwnershipLcnf.NestedAgrees", "OwnershipLcnf/NestedSemantics.lean"),
     "dec": ("Ownership.Ctx.dec", "Ownership/Code.lean",
             "the context update; `Ownership.Code.dec` is the constructor of the same name"),
     "decOne": ("Ownership.Accounted.decOne", "Ownership/CompleteAccounting.lean",
@@ -279,9 +287,6 @@ ALLOWLIST = {
     "\\#print axioms": (
         "concept", "\\#print axioms", "—",
         "Lean command that prints a declaration's axiom footprint; a command, not a declaration."),
-    "d330fa0": (
-        "concept", "d330fa0", "—",
-        "git revision hash of the runtime observation the paper cites, not a Lean name."),
     # -- expressions ---------------------------------------------------------
     ".dec x 1": (
         "expression", "Ownership.Code.dec", "Ownership/Code.lean",

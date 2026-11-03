@@ -21,8 +21,8 @@ What is proved, for every outer slot `i` with `i < n`, leaf slot `j` with
   (`countedBoundaryCall`);
 * the whole counted chain, `Ownership.counted_nested_chain`, at the family's
   data (`family_chain`), with five of its conjuncts also named by their own
-  projection theorems and the whole conclusion projected conjunct-for-conjunct,
-  so a weakened conjunct fails.
+  projection theorems, and the statement formed from the chain's conclusion
+  conjunct for conjunct.
 
 `family_chain` is the length-`n` version and `family_chain_two` its `n := 2`
 application: the parent's and the child's field arrays then both have length two,
@@ -30,9 +30,9 @@ and the parameters are the outer slot, the leaf slot and the written value. The
 bound hypotheses `i < n` and `j < n` are the only length facts the proof uses:
 the slot facts are `Array.getElem?_setIfInBounds_self_of_lt`, and the count
 equation combines the take-out's edge-fill lemmas (`IncomingCount_set_fill`,
-`IncomingCount_set_fill_ne`) with the all-scalar base heap's zero edge count
-(`IncomingCount_baseHeap`, an induction on `n`), so nothing depends on the value
-of `n` beyond those bounds.
+`IncomingCount_set_fill_ne`) with the base heap's zero edge count
+(`IncomingCount_baseHeap`), which follows from `Accounted.RefCount_initFields` at
+every `n`, so nothing depends on the value of `n` beyond those bounds.
 
 What is not claimed: no runtime or backend statement, no emitted callee, and no
 heap equality against an abstract run — the chain's own `HeapCompat` conjunct is
@@ -622,8 +622,8 @@ theorem famChecked (n i : Nat) :
 
 /-- The counted extraction / child call / restoration chain at the family's data:
 the child body writes the child's own slot `j` with `w` and the chain returns the
-restored parent. Every conjunct of `Ownership.counted_nested_chain` is named at
-the family's parameters, so a weakened conjunct fails to typecheck. -/
+restored parent. Every conjunct of `Ownership.counted_nested_chain` is stated at
+the family's parameters, conjunct for conjunct. -/
 theorem family_chain (n i j w : Nat) (hi : i < n) (hj : j < n) :
     ∃ Hf Hm envm ws,
       Accounted [childVar, fstVar] (B n i) (boundaryEnv i j w) (boundaryCtx n i) ∧

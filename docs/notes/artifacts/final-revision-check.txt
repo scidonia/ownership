@@ -1,17 +1,18 @@
 # Final revision check
 
 Record of what was run for the revised manuscript and its mechanisation, with the
-observed result of each command. Base revision `08e98bc` (2026-11-03); this record
+observed result of each command. Base revision `6fe7811` (2026-11-03); this record
 is committed with the changes it describes, so the tree it verifies is that
-revision plus the claim-census and evidence files committed alongside it. Nothing
-here is reported that was not observed in this session.
+revision plus the review fixes committed alongside it. Nothing here is reported
+that was not observed in this session.
 
 ## Environment
 
 | Item | Value |
 | --- | --- |
 | Date | 2026-11-03 |
-| Base revision | `08e98bc536ab188b9f1171028165ddc20c539ab6` |
+| Base revision | `6fe7811df07f331d690e716dc10bcd89c411e679` |
+| Manuscript revision model | `deepseek/deepseek-flash`, the model used to produce this revision; recorded here because the manuscript's disclosure cites this file |
 | Lean | 4.35.0-rc3 (from the flake dev shell) |
 | Nix | 2.31.2 |
 | `flake.lock` SHA-256 | `f053eec0dda0cdcdc30d7ac5c1a09d8bbb294e2a2d5bb76930df85c3a06d1947` |
@@ -29,10 +30,10 @@ command's own.
 | `nix develop -c lake build OwnershipLcnf` | 0 | `Build completed successfully (28 jobs).` |
 | `nix develop -c lake build OwnershipTest` | 0 | `Build completed successfully (51 jobs).` |
 | `nix develop -c lake env lean scripts/check_axioms.lean` | 0 | 464 `depends on axioms` lines; zero occurrences of `sorryAx` or `Lean.ofReduceBool`; every listed declaration prints only `propext`, `Classical.choice`, `Quot.sound` (or a subset). Includes `execCounted_full_fragment`, `principal_counted_fragment`, `counted_fragment_instance`, the fourteen `OwnershipTest.CountedFamily` declarations, `NestedOutcome.Compat`, and both `counted_nested_chain` consumers. |
-| `nix develop -c bash scripts/check_claims.sh` | 0 | `claim census: OK: 199 distinct tokens, 199 rows (declaration 131, module 8, runtime-primitive 4, concept 5, expression 51)`; the declaration rows were `#check`ed with `nix develop -c lake env lean <tmp>/ClaimCheck.lean`. |
+| `nix develop -c bash scripts/check_claims.sh` | 0 | `claim census: OK: 206 distinct tokens, 206 rows (declaration 139, module 8, runtime-primitive 4, concept 4, expression 51)`; the declaration rows were `#check`ed with `nix develop -c lake env lean <tmp>/ClaimCheck.lean`. |
 | `nix develop -c bash scripts/check_claims.sh --self-test` | 0 | `self-test (a) … orphanTokenForSelfTest`, `(b) … ghostTokenForSelfTest`, `(c) … Unknown identifier 'Ownership.thisDeclarationDoesNotExist'`; `self-test OK`, unmodified inputs pass. |
 | `cd paper && latexmk -pdf -interaction=nonstopmode ownership-skeleton.tex` | 0 | build succeeds; `grep -cE '^!|Overfull \\hbox|undefined'` on the log reports `0`. |
-| `pdfinfo paper/ownership-skeleton.pdf` | 0 | `Pages: 17`, `Page size: 595.276 x 841.89 pts (A4)`. The body ends on page 16 before the bibliography; references occupy the rest of page 16 and page 17. |
+| `pdfinfo paper/ownership-skeleton.pdf` | 0 | `Pages: 17`, `Page size: 595.276 x 841.89 pts (A4)`, abstract 189 words. The body ends on page 16 before the bibliography; references occupy the rest of page 16 and page 17. |
 | `pdffonts paper/ownership-skeleton.pdf` | 0 | 33 embedded fonts, all Type 1/Custom, none reported as not embedded; no missing-glyph warnings in the log. |
 | `nix develop -c bash scripts/check_artifacts.sh` | 0 | sibling revision and cleanliness checks pass; the `execP` and nested `setAt` captures regenerate and diff clean against `docs/notes/artifacts/`. |
 | `nix develop -c bash scripts/check_runtime_binding.sh` | 0 | artifact gate, sibling IR-shape build, generated C and runtime-header primitive checks, and the linked probe modes with the check off and on all pass. |

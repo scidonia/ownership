@@ -92,11 +92,12 @@ separation logic}
 \maketitle
 
 \begin{abstract}
-A reference-counted array update copies the array whenever its stored count exceeds
-one, so update cost is decided at run time by aliasing the source never mentions. We define a count-one ownership discipline for a fragment of Lean~4's
-compiler IR and mechanise it against model semantics. Its foundation is a
-complete accounting relation equating each stored count with the heap fields that
-reference the cell plus the owning variables that denote it, which at count one
+A reference-counted array update copies whenever the array is shared or persistent,
+decided at run time from heap state the source never mentions. We define a
+count-one ownership discipline for a fragment of Lean~4's compiler IR and mechanise
+it against model semantics. Its foundation is a
+complete accounting relation equating each count with the fields that reference the
+cell plus the owning variables that denote it, which at count one
 forces one owning root with no edge, or one edge with no root. Preservation is
 proved for a restricted flat fragment, and separately for the extraction, call and
 restoration protocol at its accounted boundaries, since the temporary pair the
@@ -644,22 +645,24 @@ the parent and the restored child.
 \begin{theorem}[Counted chain]\label{thm:chain}
 From an accounted caller entry, take-out, an admitted \lean{CountedChildCall} and
 restoration compose into one chain: \lean{counted\_nested\_chain} concludes the
-final counted state, its accounting, the restoration's \lean{.mutate} disposition
-and slot, and \lean{HeapCompat} to \lean{runN}'s state.
+final counted state, its accounting, the restoration's \lean{.mutate} disposition,
+and \lean{HeapCompat} to \lean{runN}'s state; the restored slot's own equation is
+\lean{counted\_nested\_chain\_restoration}.
 \end{theorem}
 
 \subsection{Compatibility and the boundary argument}
 \begin{definition}[Heap compatibility]\label{def:compat}
 \lean{HeapCompat Hc Ha} holds when $Hc$ and $Ha$ hold the same cell at every name
-and $Ha.\mathit{next} \le Hc.\mathit{next}$. The slack is exactly the pair
-allocation the counted protocol performs and the model's take-out does not;
+and $Ha.\mathit{next} \le Hc.\mathit{next}$. At the protocol instance the slack is
+exactly the pair allocation the counted side performs and the model's take-out does
+not; the relation itself permits any slack, and
 \lean{HeapCompat.eq\_of\_cursor\_eq} shows that with equal cursors the heaps are
-equal, so the relation is equality up to one allocation, not a weakened
-equivalence.
+equal, so it is equality of cells up to the counted side's allocation, not a
+weakened equivalence.
 \end{definition}
 
 The pair-live window is not an accounting failure but a deliberate boundary
-abstraction, and it is forced: at the take-out state of
+abstraction, and the case we exhibit is forced: at the take-out state of
 \Cref{fig:traffic}(b), at the context the run's own take-out rule produces, no
 support satisfies \lean{Accounted} (\lean{pairPhase\_refused}), because the count
 equation reads one $=$ one plus one. The positive control is the boundary, where
@@ -738,8 +741,10 @@ $p.\mathit{toModel}$. The two results are adjacent, not one theorem.
 \subsection{The finite path and the counted fragment}
 The model nests take-out, call and put-back per level. For a finite level path the
 ordinary child contract is derived at every level: \lean{childContracts\_of\_path}
-takes the level list and one supplied leaf computation (agreement, checker
-acceptance, exit variable, count-freedom, annotation) and yields the ordinary
+takes the level list and a supplied path contract whose one function-level
+ingredient is the leaf computation (agreement, checker acceptance, exit variable,
+count-freedom, annotation), the rest being the level's slot, environment, context,
+shape and heap facts, and yields the ordinary
 \lean{ChildContract} at each level, whose body is the remaining levels'
 \lean{Path.build}; \lean{index\_path\_simulates\_model} concludes that the executed
 nested prefix's \lean{NestedOutcome} is the model run of
@@ -754,9 +759,10 @@ the admitted model body with only the call's state, path and value (N10).
 
 \begin{theorem}[Counted fragment correspondence]\label{thm:principal-fragment}
 Let the recogniser accept the declared shape (\lean{projectNested} yielding $p$),
-let the layout and level match hold for the machine $s$ and the model at one level
-of a finite path, let the client's path contract and the caller's complete
-accounting \lean{Accounted support H mEnv c} hold, and let the counted child call
+let the layout, the machine-to-model agreement \lean{NestedAgrees} and the level
+match hold at one level of a finite path, let the client's path contract and the
+caller's complete accounting \lean{Accounted support H mEnv c} hold, and let the
+counted child call
 be supplied at the protocol's boundary with the caller's accounting at the body's
 return. Then, writing $H_f$ for the counted final heap:
 \begin{enumerate}
@@ -866,14 +872,17 @@ the entry holds two live, non-persistent cells at count one: the parent array at
 reference $0$ carries the child handle in slot $i$ and scalars elsewhere, the
 child array at reference $1$ is all scalars, and reference $2$ is the fresh name.
 The child body is one designated write that stores $w$ in the child's slot $j$ and
-returns the child handle. \lean{family\_chain} proves, for every $i < n$ and
-$j < n$, the entry accounting, the protocol boundary and its accounting, the
-counted child-call contract, and the whole \lean{counted\_nested\_chain}
-conclusion at that data; \lean{family\_chain\_two} is the length-two instance.
-The bound is the only length fact the proof needs: the slot facts are
-\lean{Array.getElem?\_setIfInBounds\_self\_of\_lt} and the count equation is the
-take-out's own edge-fill lemma \lean{IncomingCount\_set\_fill} applied to the
-all-scalar array.
+returns the child handle. Four declarations carry the family, for every $i < n$
+and $j < n$: \lean{entryAccounted} accounts the entry; \lean{boundary\_cells} and
+\lean{boundary\_accounted} report the protocol boundary and its accounting;
+\lean{countedBoundaryCall} discharges the counted child-call contract; and
+\lean{family\_chain} states the whole \lean{counted\_nested\_chain} conclusion at
+that data, with \lean{family\_chain\_two} its length-two instance. The bound is the
+only length fact these proofs use: the slot facts are
+\lean{Array.getElem?\_setIfInBounds\_self\_of\_lt}, and the count equation at the
+parent's and the child's own references comes from
+\lean{IncomingCount\_baseHeap}, \lean{IncomingCount\_set\_fill} and
+\lean{IncomingCount\_set\_fill\_ne} on the all-scalar array.
 
 Take $i = 0$, $j = 1$ and $w = 7$. Before the take-out the parent's slot $0$
 holds \lean{.ref 1} and its slot $1$ a scalar; after it, slot $0$ holds the
@@ -909,7 +918,7 @@ Variation & What is observed & Which mechanism answers it \\
 retained parent (count two) & the restoration copies; \lean{.mutate} is not taken (\lean{retained\_parent\_not\_mutate}, \lean{retained\_parent\_copies}) & the model's copy branch; the relation exposes the extra allocation through the cursor \\
 pair not released & both counts elevated, no exclusivity (\lean{no\_free\_components\_not\_exclusive}) & refused by the relation \\
 pair-live state & no accounting at the take-out context (\lean{pairPhase\_refused}) & refused by the relation \\
-duplicated, omitted or unbound owner & the count equation cannot hold (\lean{dupSupport\_witness}, \lean{omittedOwner\_witness}, \lean{unboundRoot\_witness}) & refused by the relation \\
+duplicated, omitted or unbound owner entry & each field is load-bearing: a duplicate double-counts a root, an omitted owner still satisfies the equation, an unbound entry counts nothing (\lean{dupSupport\_witness}, \lean{omittedOwner\_witness}, \lean{unboundRoot\_witness}) & refused by the relation \\
 persistent parent & the check aborts, no write is reported (\lean{persistent\_check}, \lean{persistent\_setAt}) & rejected by the checker; outside the certified fragment \\
 \bottomrule
 \end{tabularx}
@@ -921,12 +930,12 @@ allocation claim about the executable.}
 
 \subsection{What the mechanisation taught}
 Four lessons transfer to anyone building another analysis of this kind. First,
-the tempting invariant---count equals multiplicity---is too weak, and a five-line
-countermodel exposed it: the missing quantity is the environment's owning
-variables, not the heap's edges. Second, support and domain coverage are not
-bureaucracy; without them the edge count is taken over a range that does not
-contain every live cell, and the uniqueness corollary fails at a cell outside the
-range. Third, the simple accounted relation cannot hold inside a correct
+the tempting invariant---count equals multiplicity---is too weak, and the
+countermodel \lean{alias\_not\_accounted} exposes it: the missing quantity is the
+environment's owning variables, not the heap's edges. Second, support and domain
+coverage are not bureaucracy: without the domain field the edge count is taken
+over a range that need not contain every live cell, so a cell's stored count and
+the enumerated edges can disagree. Third, the simple accounted relation cannot hold inside a correct
 temporary-alias protocol, and no amount of invariant engineering fixes that: the
 pair legitimately duplicates a reference before any count is incremented, so the
 right response is boundary simulation with internal count identities, not a
@@ -949,8 +958,8 @@ compares the model's predicates with \lean{lean\_is\_exclusive} and address
 identity on a corpus including a unique array, a live alias, the alias dropped
 back to one, a persistent literal and a closure-held array; its differential mode
 compares recorded expectations rather than executing the \lean{Ownership} model,
-and its closed-pure-array case is an unchecked observation at revision
-\lean{d330fa0} (2 November 2026). The linked gate observes the primitives'
+and its closed-pure-array case is an unchecked observation recorded in
+\texttt{docs/notes/OWNERSHIP\_RUNTIME\_EVIDENCE.md}. The linked gate observes the primitives'
 behaviour on the certified shapes, including whether the write changes the
 address, and proves none of it. The declarations behind every claim, with their
 roles, are listed in the supplementary document
@@ -1002,7 +1011,7 @@ different in kind from a checker over a fragment of an existing backend's input.
 \toprule
 Category & What it covers & Status \\
 \midrule
-checked syntax & the recogniser's accepted grammar; the two model languages & checked by kernel evaluation of \lean{\#guard} and by the recogniser itself \\
+checked syntax & the recogniser's accepted grammar; the two model languages & checked by elaborating \lean{\#guard} tests and by the recogniser itself \\
 proved model facts & accounting and preservation; protocol boundaries; counted fragment run; the runtime model's in-place statements & theorems in \lean{Ownership} and \lean{OwnershipLcnf}, no axioms beyond Lean's \\
 supplied client and call facts & entry invariant, agreement, layout and path contract, the leaf computation, and \lean{CountedChildCall}'s \lean{accounted} field & hypotheses of \lean{principal\_supported\_path} and \lean{principal\_counted\_fragment}; discharged at the closed instance \\
 implementation assumptions & primitive fidelity, replay-to-backend identity, reference identity & assumed or empirically observed; not proved \\
@@ -1063,18 +1072,17 @@ cascade, and the emitted callee. Soundness is proved; completeness is not claime
 \section*{Acknowledgements}
 \paragraph*{AI assistance.}
 The development and this manuscript were produced with substantial AI assistance.
-Tools and model versions used across the development were not recorded; the model
-identifier recorded for this manuscript revision is
-\texttt{deepseek/deepseek-flash}. Categories of assistance: prose, Lean proofs, code,
-analysis and literature search. The division of labour between the author and
-these tools is not recorded; the tools produced the section drafts and theorem
-statements here and assisted the Lean modules and scripts. Outputs were checked by
-the pinned kernel build and the axiom audit, and a declaration census checks each
-displayed name against the development; proofs were machine-generated and
-spot-checked, not checked line by line. Kernel checking is not human validation:
-the definitions, theorem statements, interpretation of evidence, novelty claims
-and citations are the author's responsibility. The conference and publisher policy
-must be rechecked at submission.
+Tools and model versions used across the development were not recorded. The model
+identifier \texttt{deepseek/deepseek-flash} is recorded for this manuscript revision
+in \texttt{docs/notes/artifacts/final-revision-check.txt}. Categories of assistance:
+prose, Lean proofs, code, analysis and literature search. The division of labour
+between the author and these tools is not recorded. Outputs were checked by the
+pinned kernel build and the axiom audit, and a declaration census checks each
+displayed name against the development; no line-by-line human review of the proof
+scripts is recorded. Kernel checking is not human validation: the definitions,
+theorem statements, interpretation of evidence, novelty claims and citations are
+the author's responsibility. The conference and publisher policy must be rechecked
+at submission.
 
 \bibliographystyle{plainurl}
 \bibliography{references}

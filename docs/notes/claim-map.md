@@ -52,7 +52,9 @@ allowlisted in the script and must carry the reason the last column records.
 | `HeapCompat Hc Ha` | expression | `Ownership.HeapCompat` | `Ownership/CountedNested.lean` | Compatibility and the boundary argument | applied form of the compatibility relation. |
 | `HeapCompat.eq_of_cursor_eq` | declaration | `Ownership.HeapCompat.eq_of_cursor_eq` | `Ownership/CountedNested.lean` | Compatibility and the boundary argument | — |
 | `IncomingCount` | declaration | `Ownership.IncomingCount` | `Ownership/Accounting.lean` | Proof sketch.; The pair and its boundary | — |
+| `IncomingCount_baseHeap` | declaration | `OwnershipTest.CountedFamily.IncomingCount_baseHeap` | `OwnershipTest/CountedFamily.lean` | A worked instance | — |
 | `IncomingCount_set_fill` | declaration | `Ownership.IncomingCount_set_fill` | `Ownership/CompleteAccounting.lean` | A worked instance | — |
+| `IncomingCount_set_fill_ne` | declaration | `Ownership.IncomingCount_set_fill_ne` | `Ownership/CompleteAccounting.lean` | A worked instance | — |
 | `Inv` | declaration | `Ownership.Inv` | `Ownership/Code.lean` | Complete ownership accounting; Compatibility and the boundary argument; Scope, conclusion and disclosure | — |
 | `Inv H env c` | expression | `Ownership.Inv` | `Ownership/Code.lean` | Complete ownership accounting | applied form of the raw invariant. |
 | `Inv.owned` | declaration | `Ownership.Inv.owned` | `Ownership/Code.lean` | Complete ownership accounting | — |
@@ -63,6 +65,7 @@ allowlisted in the script and must carry the reason the last column records.
 | `LetF` | declaration | `Ownership.LetF` | `Ownership/Code.lean` | Two languages, one accounted subset | — |
 | `NCode` | declaration | `Ownership.Nested.NCode` | `Ownership/Nested.lean` | Two languages, one accounted subset | the nested language lives in `Ownership.Nested`; `Ownership.Code` is the flat one |
 | `Nat` | declaration | `Nat` | `Init` | Two languages, one accounted subset | — |
+| `NestedAgrees` | declaration | `OwnershipLcnf.NestedAgrees` | `OwnershipLcnf/NestedSemantics.lean` | The finite path and the counted fragment | — |
 | `NestedOutcome` | declaration | `OwnershipLcnf.NestedOutcome` | `OwnershipLcnf/NestedSemantics.lean` | The finite path and the counted fragment | — |
 | `NestedOutcome.Compat` | declaration | `OwnershipLcnf.NestedOutcome.Compat` | `OwnershipLcnf/CountedTrace.lean` | The finite path and the counted fragment; Proof sketch. | — |
 | `OwnersAccounted` | declaration | `Ownership.OwnersAccounted` | `Ownership/Accounting.lean` | Complete ownership accounting; Recognition, and the flat guarantee; Scope, conclusion and disclosure | — |
@@ -93,7 +96,7 @@ allowlisted in the script and must carry the reason the last column records.
 | `\#print axioms` | concept | `\#print axioms` | — | A worked instance | Lean command that prints a declaration's axiom footprint; a command, not a declaration. |
 | `a` | expression | `Ownership.Nested.NCode.takeOut` | `Ownership/Nested.lean` | The judgement. | program variable: the array in the `takeOut` rule; a binder, not a declaration. |
 | `accounted` | declaration | `Ownership.CountedChildCall.accounted` | `Ownership/CountedNested.lean` | The counted call and restoration; Scope, conclusion and disclosure | the field, not a free-standing declaration; `Ownership.CountedChildCall.call` is its sibling |
-| `alias_not_accounted` | declaration | `Ownership.alias_not_accounted` | `Ownership/Accounting.lean` | Introduction; Complete ownership accounting | — |
+| `alias_not_accounted` | declaration | `Ownership.alias_not_accounted` | `Ownership/Accounting.lean` | Introduction; Complete ownership accounting; What the mechanisation taught | — |
 | `at_most_one_owner` | declaration | `Ownership.Accounted.at_most_one_owner` | `Ownership/CompleteAccounting.lean` | Complete ownership accounting | — |
 | `bindAlias` | declaration | `Ownership.Supported.bindAlias` | `Ownership/CompleteAccounting.lean` | Proof sketch. | constructor of `Ownership.Supported`, not `Ownership.Ctx.bindOwned` |
 | `bindLit` | declaration | `Ownership.Supported.bindLit` | `Ownership/CompleteAccounting.lean` | Proof sketch. | constructor of `Ownership.Supported` |
@@ -101,6 +104,8 @@ allowlisted in the script and must carry the reason the last column records.
 | `bindShared` | declaration | `Ownership.Supported.bindShared` | `Ownership/CompleteAccounting.lean` | Proof sketch. | constructor of `Ownership.Supported` |
 | `bindSize` | declaration | `Ownership.Supported.bindSize` | `Ownership/CompleteAccounting.lean` | Proof sketch. | constructor of `Ownership.Supported` |
 | `borrow` | declaration | `Ownership.Inv.borrow` | `Ownership/Code.lean` | Complete ownership accounting | field of `Ownership.Inv`; `Ownership.U.borrow` is the usage tag of the same name |
+| `boundary_accounted` | declaration | `OwnershipTest.CountedFamily.boundary_accounted` | `OwnershipTest/CountedFamily.lean` | A worked instance | — |
+| `boundary_cells` | declaration | `OwnershipTest.CountedFamily.boundary_cells` | `OwnershipTest/CountedFamily.lean` | A worked instance | — |
 | `c` | expression | `Ownership.Supported` | `Ownership/CompleteAccounting.lean` | The supported fragment | program variable: the pre-state context `Supported` is indexed at; a binder, not a declaration. |
 | `call` | declaration | `Ownership.CountedChildCall.call` | `Ownership/CountedNested.lean` | The counted call and restoration | the field, not `Ownership.PutBack.ChildCall` |
 | `callAt state path x result b` | expression | `Ownership.Nested.NCode.callAt` | `Ownership/Nested.lean` | The judgement. | displayed constructor pattern of the nested language. |
@@ -116,19 +121,21 @@ allowlisted in the script and must carry the reason the last column records.
 | `checkN_extraction_exclusive_of_entryInv` | declaration | `Ownership.Entry.checkN_extraction_exclusive_of_entryInv` | `Ownership/Entry.lean` | Scope, conclusion and disclosure | — |
 | `childContracts_of_path` | declaration | `OwnershipLcnf.childContracts_of_path` | `OwnershipLcnf/PathRecursion.lean` | The counted call and restoration; The finite path and the counted fragment | — |
 | `count_one_dichotomy` | declaration | `Ownership.Accounted.count_one_dichotomy` | `Ownership/CompleteAccounting.lean` | Complete ownership accounting | — |
+| `countedBoundaryCall` | declaration | `OwnershipTest.CountedFamily.countedBoundaryCall` | `OwnershipTest/CountedFamily.lean` | A worked instance | — |
 | `countedPrefix` | declaration | `OwnershipLcnf.countedPrefix` | `OwnershipLcnf/CountedTrace.lean` | Proof sketch. | — |
 | `countedSuffix` | declaration | `OwnershipLcnf.countedSuffix` | `OwnershipLcnf/CountedTrace.lean` | Proof sketch. | — |
 | `counted_fragment_instance` | declaration | `OwnershipTest.counted_fragment_instance` | `OwnershipTest/PrincipalCounted.lean` | A worked instance | — |
 | `counted_nested_chain` | declaration | `Ownership.counted_nested_chain` | `Ownership/CountedNested.lean` | Three contributions.; The counted call and restoration; Proof sketch.; A worked instance | — |
+| `counted_nested_chain_restoration` | declaration | `Ownership.counted_nested_chain_restoration` | `Ownership/CountedNested.lean` | The counted call and restoration | — |
 | `counted_restore` | declaration | `Ownership.counted_restore` | `Ownership/CountedNested.lean` | The counted call and restoration | — |
 | `counted_takeOut` | declaration | `Ownership.counted_takeOut` | `Ownership/CountedNested.lean` | The counted call and restoration | — |
-| `d330fa0` | concept | `d330fa0` | — | Evidence and artifact | git revision hash of the runtime observation the paper cites, not a Lean name. |
 | `dec` | declaration | `Ownership.Ctx.dec` | `Ownership/Code.lean` | The judgement. | the context update; `Ownership.Code.dec` is the constructor of the same name |
 | `dec x 1` | expression | `Ownership.Code.dec` | `Ownership/Code.lean` | The judgement. | displayed constructor pattern; the count-one form the fragment admits. |
 | `decOne` | declaration | `Ownership.Accounted.decOne` | `Ownership/CompleteAccounting.lean` | Proof sketch. | the accounting lemma; `Ownership.Supported.decOne` is the constructor of the same name |
 | `decTwo_rejected` | declaration | `Ownership.decTwo_rejected` | `Ownership/CompleteAccounting.lean` | Proof sketch. | — |
 | `dupSupport_witness` | declaration | `Ownership.dupSupport_witness` | `Ownership/CompleteAccounting.lean` | Complete ownership accounting; A worked instance | — |
 | `e` | expression | `Ownership.Nested.NCode.takeOut` | `Ownership/Nested.lean` | The judgement. | program variable: the fresh reference in the `takeOut` rule; a binder, not a declaration. |
+| `entryAccounted` | declaration | `OwnershipTest.CountedFamily.entryAccounted` | `OwnershipTest/CountedFamily.lean` | A worked instance | — |
 | `execAST` | declaration | `OwnershipLcnf.execAST` | `OwnershipLcnf/Semantics.lean` | Two languages, one accounted subset | — |
 | `execAST_recognized` | declaration | `OwnershipLcnf.execAST_recognized` | `OwnershipLcnf/Semantics.lean` | Recognition, and the flat guarantee | — |
 | `execCountedAST` | declaration | `OwnershipLcnf.execCountedAST` | `OwnershipLcnf/CountedTrace.lean` | The finite path and the counted fragment; Proof sketch. | — |
