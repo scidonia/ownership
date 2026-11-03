@@ -88,32 +88,33 @@ separation logic}
 \maketitle
 
 \begin{abstract}
-A reference-counted array update copies whenever the array is shared or persistent,
-decided at run time from heap state the source never mentions. We define a
-count-one ownership discipline for a fragment of Lean~4's compiler IR and mechanise
-it against model semantics. Its foundation is a
-complete accounting relation equating each count with the fields that reference the
-cell plus the owning variables that denote it, which at count one
-forces one owning root with no edge, or one edge with no root. Preservation is
-proved for a restricted flat fragment, and separately for the extraction, call and
-restoration protocol at its accounted boundaries, since the temporary pair the
-emitted code allocates makes the relation false between them. For the recognised
+Copy-on-write is what gives Lean~4 in-place array updates: a write mutates the
+existing storage exactly when the array is unshared---reference count one---and
+copies otherwise, a decision taken at run time from heap state the source never
+mentions. We turn that condition into a static guarantee for a fragment of the
+compiler IR, by a count-one ownership discipline mechanised against model
+semantics. Its foundation is a complete accounting relation equating each count
+with the fields that reference the cell plus the owning variables that denote it,
+which at count one forces one owning root with no edge, or one edge with no root.
+Preservation is proved for a restricted flat fragment, and separately for the
+extraction, call and restoration protocol at its accounted boundaries, since the
+emitted temporary pair makes the relation false between them. For the recognised
 fragment, the counted interpreter's whole run, through restoration and return, is
-proved to be heap-compatible with the model run and to agree with it in result,
-fault and trace under an explicit counted child-call contract. The result is a
-checked count one for that fragment, relative to recognition, layout, entry and
-the child-call contract.
+proved heap-compatible with the model run, and to agree with it in result, fault
+and trace, under an explicit counted child-call contract. The result is a checked
+count one for that fragment, relative to recognition, layout, entry and the
+child-call contract.
 \end{abstract}
 
 \section{Introduction}\label{sec:intro}
 
-An array update should cost the same whoever else holds the array. In Lean~4 it
-does not: arrays are reference counted, and a write mutates in place exactly when
-the array is uniquely referenced and not persistent, and otherwise copies the
-whole array \cite{lean4,perceus,countingbeans}. Lean's
-\lean{lean\_is\_exclusive} makes that decision at run time, from heap state the
-source never mentions, so $n$ updates over an $n$-element array can cost linear
-or quadratic time according to sharing alone. A static ownership discipline would
+Copy-on-write is what gives Lean~4 in-place array updates: a write mutates the
+existing storage exactly when the array is unshared---uniquely referenced and not
+persistent---and copies the whole array otherwise
+\cite{lean4,perceus,countingbeans}. Lean's \lean{lean\_is\_exclusive} makes that
+decision at run time, from heap state the source never mentions, so $n$ updates
+over an $n$-element array can cost linear or quadratic time according to sharing
+alone. A static ownership discipline would
 make the in-place branch a compile-time guarantee; Lean~4 has no ownership or
 linear types, and adding them would be a language change. This paper recovers the
 guarantee without one, for a fragment of the compiler's IR, by an external
