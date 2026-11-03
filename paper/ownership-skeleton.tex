@@ -89,9 +89,8 @@ separation logic}
 
 \begin{abstract}
 Copy-on-write is what gives Lean~4 in-place array updates: a write mutates the
-existing storage exactly when the array is unshared---reference count one---and
-copies otherwise, a decision taken at run time from heap state the source never
-mentions. We turn that condition into a static guarantee for a fragment of the
+existing storage when the array is unshared---reference count one---and copies
+otherwise, a decision taken at run time from heap state the source never mentions. We turn that condition into a static guarantee for a fragment of the
 compiler IR, by a count-one ownership discipline mechanised against model
 semantics. Its foundation is a complete accounting relation equating each count
 with the fields that reference the cell plus the owning variables that denote it,
@@ -109,7 +108,7 @@ child-call contract.
 \section{Introduction}\label{sec:intro}
 
 Copy-on-write is what gives Lean~4 in-place array updates: a write mutates the
-existing storage exactly when the array is unshared---uniquely referenced and not
+existing storage when the array is unshared---uniquely referenced and not
 persistent---and copies the whole array otherwise
 \cite{lean4,perceus,countingbeans}. Lean's \lean{lean\_is\_exclusive} makes that
 decision at run time, from heap state the source never mentions, so $n$ updates
