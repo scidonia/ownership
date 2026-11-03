@@ -68,6 +68,16 @@
   (ignored build outputs such as `.lake/` are excluded), and the flake's Lean;
   it then regenerates the `execP` and
   nested `setAt` captures and diffs them against `docs/notes/artifacts/`.
+- The claim census is gated by `scripts/check_claims.sh`: it extracts every
+  `\lean{…}` token from `paper/ownership-skeleton.tex`, requires each token to
+  have a row in `docs/notes/claim-map.md` and each row to be cited by a token,
+  runs `#check` for the declaration rows under `nix develop -c lake env lean`,
+  checks that module rows name paths that exist, and admits runtime-primitive,
+  concept and expression rows only through the classification the script carries,
+  with a reason per row. `--generate` rebuilds the map from that classification
+  and the checked-in copy is compared byte for byte; `--self-test` proves the
+  detector by failing an orphan token, an uncited row and a nonexistent
+  declaration each with its own diagnostic.
 - The pair projection check replays the private `setAt` and runs `projectPair` on
   its `Path.left`/`Path.right` arms:
   `(cd ../lean-examples && nix develop -c lake env bash -c 'export LEAN_PATH="../ownership/.lake/build/lib/lean:$LEAN_PATH"; lean ../ownership/scripts/check_pair_projection.lean')`.

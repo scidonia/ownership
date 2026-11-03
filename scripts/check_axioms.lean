@@ -13,6 +13,7 @@ import Ownership.Preservation
 import Ownership.CountedNested
 import OwnershipLcnf.CountedTrace
 import OwnershipTest.PrincipalCounted
+import OwnershipTest.CountedFamily
 
 #print axioms Ownership.check_sound
 #print axioms Ownership.Entry.checkN_sound_of_entryInv
@@ -208,6 +209,21 @@ import OwnershipTest.PrincipalCounted
 #print axioms OwnershipLcnf.principal_counted_fragment
 #print axioms OwnershipLcnf.NestedOutcome.Compat
 #print axioms OwnershipTest.counted_fragment_instance
+
+#print axioms OwnershipTest.CountedFamily.entryAccounted
+#print axioms OwnershipTest.CountedFamily.boundary_cells
+#print axioms OwnershipTest.CountedFamily.boundary_accounted
+#print axioms OwnershipTest.CountedFamily.calledAccounted
+#print axioms OwnershipTest.CountedFamily.countedBoundaryCall
+#print axioms OwnershipTest.CountedFamily.famChecked
+#print axioms OwnershipTest.CountedFamily.family_chain
+#print axioms OwnershipTest.CountedFamily.family_chain_two
+#print axioms OwnershipTest.CountedFamily.family_pair_cell_absent
+#print axioms OwnershipTest.CountedFamily.family_cursor
+#print axioms OwnershipTest.CountedFamily.family_extraction_exclusive
+#print axioms OwnershipTest.CountedFamily.family_child_exclusive
+#print axioms OwnershipTest.CountedFamily.family_restoration_mutate
+#print axioms OwnershipTest.CountedFamily.family_child_after
 
 #print axioms Ownership.counted_nested_chain_extraction
 #print axioms Ownership.counted_nested_chain_restoration
