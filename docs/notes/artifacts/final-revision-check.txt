@@ -1,17 +1,17 @@
 # Final revision check
 
 Record of what was run for the revised manuscript and its mechanisation, with the
-observed result of each command. Base revision `6fe7811` (2026-11-03); this record
+observed result of each command. Base revision `70b325b` (2026-11-03); this record
 is committed with the changes it describes, so the tree it verifies is that
-revision plus the review fixes committed alongside it. Nothing here is reported
-that was not observed in this session.
+revision plus this record's own commit. Nothing here is reported that was not
+observed in this session.
 
 ## Environment
 
 | Item | Value |
 | --- | --- |
 | Date | 2026-11-03 |
-| Base revision | `6fe7811df07f331d690e716dc10bcd89c411e679` |
+| Base revision | `70b325bc9e0916e61a2e9cdae0691d4b04205d3a` |
 | Manuscript revision model | `deepseek/deepseek-flash`, the model used to produce this revision; recorded here because the manuscript's disclosure cites this file |
 | Lean | 4.35.0-rc3 (from the flake dev shell) |
 | Nix | 2.31.2 |
