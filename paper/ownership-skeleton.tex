@@ -88,31 +88,33 @@ separation logic}
 \maketitle
 
 \begin{abstract}
-Copy-on-write is what gives Lean~4 in-place array updates: a write mutates the
-existing storage when the array is unshared---reference count one---and copies
-otherwise, a decision taken at run time from heap state. We turn that condition
+Copy-on-write gives Lean~4 in-place array updates unobservable in its pure
+semantics: when the array is unshared---reference count one---the write
+mutates existing storage, and otherwise it copies, so the meaning is that of
+immutable arrays and only the cost depends on sharing. We turn that condition
 into a static guarantee for a compiler-IR fragment, by a count-one
 ownership discipline mechanised against model semantics. Its foundation is an accounting relation equating each count
 with the fields that reference it plus the owning variables that denote it, which
 at count one forces one owning root with no edge, or one edge with no root.
-Preservation is proved for a restricted flat fragment, and for the extraction,
-call and restoration protocol at its accounted boundaries, where the temporary
+Preservation is proved for a restricted flat fragment, and for extraction, call
+and restoration at its accounted boundaries, where the temporary
 pair makes the relation false. For the recognised fragment, the counted
 interpreter's whole run is
-proved heap-compatible with the model run, and to agree with it in result, fault
-and trace, under an explicit counted child-call contract. The result is a checked
+proved heap-compatible with the model run and to agree on result, fault and trace,
+under an explicit counted child-call contract. The result is a checked
 count one relative to recognition, layout, entry and the child-call contract, and
-on the certified shapes the linked probe observes the emitted C deciding as the
-discipline predicts.
+on the certified shapes the linked probe observes the emitted C deciding as
+predicted.
 \end{abstract}
 
 \section{Introduction}\label{sec:intro}
 
-Copy-on-write is what gives Lean~4 in-place array updates: a write mutates the
-existing storage when the array is unshared---uniquely referenced and not
-persistent---and copies the whole array otherwise
-\cite{lean4,perceus,countingbeans}. Lean's \lean{lean\_is\_exclusive} makes that
-decision at run time, from heap state, so $n$ updates
+Lean~4 arrays are pure functional values, and copy-on-write updates them in place
+without that being observable: when the array is unshared---reference count one,
+and not persistent---a write mutates the existing storage, and otherwise it
+copies, so the result is always the value an immutable update would give
+\cite{lean4,perceus,countingbeans}. The cost is what is not invariant: Lean's
+\lean{lean\_is\_exclusive} decides at run time, from heap state, so $n$ updates
 over an $n$-element array can cost linear or quadratic time according to sharing
 alone. A static ownership discipline would
 make the in-place branch a compile-time guarantee; Lean~4 has no ownership or
