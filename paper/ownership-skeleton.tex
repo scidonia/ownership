@@ -90,9 +90,9 @@ separation logic}
 \begin{abstract}
 Copy-on-write is what gives Lean~4 in-place array updates: a write mutates the
 existing storage when the array is unshared---reference count one---and copies
-otherwise, a decision taken at run time from heap state the source never mentions. We turn that condition into a static guarantee for a fragment of the
-compiler IR, by a count-one ownership discipline mechanised against model
-semantics. Its foundation is a complete accounting relation equating each count
+otherwise, a decision taken at run time from heap state. We turn that condition
+into a static guarantee for a fragment of the compiler IR, by a count-one
+ownership discipline mechanised against model semantics. Its foundation is a complete accounting relation equating each count
 with the fields that reference the cell plus the owning variables that denote it,
 which at count one forces one owning root with no edge, or one edge with no root.
 Preservation is proved for a restricted flat fragment, and separately for the
@@ -111,7 +111,7 @@ Copy-on-write is what gives Lean~4 in-place array updates: a write mutates the
 existing storage when the array is unshared---uniquely referenced and not
 persistent---and copies the whole array otherwise
 \cite{lean4,perceus,countingbeans}. Lean's \lean{lean\_is\_exclusive} makes that
-decision at run time, from heap state the source never mentions, so $n$ updates
+decision at run time, from heap state, so $n$ updates
 over an $n$-element array can cost linear or quadratic time according to sharing
 alone. A static ownership discipline would
 make the in-place branch a compile-time guarantee; Lean~4 has no ownership or
