@@ -37,7 +37,7 @@ exact and to strengthen the two places it was thin.
 | --- | --- | --- |
 | M1 compiler connection exact | addressed | \S6 four-layer paragraph; intro says "a recognised emitted declaration's trace is interpreted and related to the model"; "connection checked" removed |
 | M1 separate recognition, decoding, correspondence, implementation | addressed | \S6 layer paragraph, same order |
-| M1 which instruction meanings defined / supplied | partial | the supplied meanings are named (take-out helper's store, child body, emitted callee, C primitives); the paper does not enumerate every modelled instruction meaning |
+| M1 which instruction meanings defined / supplied | addressed | `docs/notes/ownership-theorem-map.md`, "Modelled instruction meanings": every `NestedOp` with its `execCounted` meaning, and the three that stand in for the compiler (array read/write/allocation primitives, recursive callee) |
 | M2 deeper-index limitation | addressed | \S6.2 states the exclusion in the same terms as `PathRecursion`'s header |
 | M3 child contract specification | addressed | \S5.2 unfolds the contract and says which facts the path induction derives and which the counted contract adds |
 | M3 what is automatic vs manual | addressed | \S7 workflow paragraph: the client facts are the manual step |
@@ -64,7 +64,7 @@ exact and to strengthen the two places it was thin.
 | --- | --- | --- |
 | one clean-checkout entry command | addressed | `scripts/check_all.sh`, with `--require-sibling` and the pinned provisioning commands |
 | distinct scopes of the checks | addressed | the script prints the sibling-dependent gates as skipped rather than passing them off |
-| immutable release identifier | open | the record pins a commit hash; no tag has been created |
+| immutable release identifier | addressed | annotated tag `itp-submission` on the revision that contains this file |
 
 ## Presentation and minor corrections
 
@@ -105,8 +105,6 @@ exact and to strengthen the two places it was thin.
 
 ## Open items
 
-1. **Immutable release identifier.** The review asks for one; the record pins
-   `1320064` and later. A signed tag on the submission commit would close this.
-2. **Exhaustive instruction meanings.** A table mapping each modelled operation to
-   its defined meaning and its supplied part would close M1 completely; the paper
-   currently names the supplied parts without enumerating the defined ones.
+None. The two items recorded here previously are closed: the release identifier is
+the annotated tag `itp-submission`, and the instruction meanings are enumerated in
+`docs/notes/ownership-theorem-map.md` under "Modelled instruction meanings".

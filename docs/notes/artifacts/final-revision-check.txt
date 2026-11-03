@@ -16,6 +16,7 @@ observed in this session.
 | Lean | 4.35.0-rc3 (from the flake dev shell) |
 | Nix | 2.31.2 |
 | `flake.lock` SHA-256 | `f053eec0dda0cdcdc30d7ac5c1a09d8bbb294e2a2d5bb76930df85c3a06d1947` |
+| Release identifier | annotated tag `itp-submission` on the commit that contains this record |
 | Sibling checkout | `../lean-examples` at `66e64334a1c968d829903b8aec8d22f7e3b9fd3f`, working tree clean |
 | Paper | `lipics-v2021`, A4, built with `latexmk` |
 

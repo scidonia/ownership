@@ -53,3 +53,32 @@ Three boundaries the map must not blur when it is used to check a claim:
   heaps and tolerates one cursor step; `Corr` relates two models and binds no
   physical C object or address. Primitive fidelity, replay-to-backend identity and
   reference identity remain assumptions or observations.
+
+## Modelled instruction meanings
+
+The recognised fragment is a list of `OwnershipLcnf.NestedOp` values
+(`OwnershipLcnf/NestedProjection.lean`), and `execCounted`
+(`OwnershipLcnf/CountedTrace.lean`) gives each a meaning. This table states which
+meanings are defined by the development and which parts stand in for the compiler.
+
+| Recognised operation | Meaning in `execCounted` | Status |
+| --- | --- | --- |
+| `projArray`, `projIndex`, `projPath` | bind the path's array, selected index and continuation; the heap is unchanged | defined; bookkeeping only |
+| `incArray`, `incIndex`, `incPath` | no-op on the ownership heap | defined no-op: the emitted increments of the path projections are accounted at the counted boundary, not as heap effects |
+| `incParent`, `incChild` | `Heap.inc q 1` on the bound handle | defined |
+| `decNode`, `decIndex` | no-op | defined; bookkeeping only |
+| `decPair` | `CountedPair.decRef` at the pair's name | defined (restricted non-cascading release) |
+| `arraySize`, `decLt`, `boundsTrue`, `siteConst`, `stateDefault` | scalar bookkeeping, no heap effect | defined |
+| `checkArray` | bind the array check's result | defined |
+| `takeOut` | `CountedPair.takeOut`: allocate the pair, write the placeholder, record parent and child; fault `.noCell` when the cell is absent | defined on the model heap; the emitted `lean_array_fget`/`lean_array_fset` and the allocation are the supplied primitive meaning |
+| `projParent`, `projChild` | read the pair record | defined |
+| `checkChild` | exclusivity test; fault `.notExclusive` otherwise | defined |
+| `recurse` | run the supplied `Ownership.Nested.NCode` body on the call's isolated environment, appending its writes | **supplied**: a model body, not the emitted recursive callee (N10) |
+| `setArray` | `PutBack.putBack`: the restoration, with the disposition derived | defined; the emitted `lean_array_uset` is the supplied primitive meaning |
+| `retVar` | return the put-back result | defined |
+
+Three meanings therefore stand in for the compiler rather than being proved against
+it: the array read, write and allocation primitives at the take-out and the
+put-back, and the recursive callee, which enters as a body contract. Their
+correspondence to the linked runtime is observed by the probe and the artifact
+gate, not proved.
