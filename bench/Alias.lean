@@ -1,24 +1,24 @@
 /-
-A compile-time aliasing check for a surface of real Lean terms.
+A compile-time alias/linearity check for a surface of Lean terms.
 
-The discipline requires that an array be held by exactly one owning binding at a
-write. This analysis is the surface-level half: an array-typed binder introduced
-by a `let` or a `fun` may occur at most once in its term. That refuses
-duplication (`let b := a; … a … b`), capture (`fun _ => a` used beside `a`) and
-pairing (`(a, a)`), because each shows up as a second occurrence of the same
-owning variable. Arrays produced by an update are fresh binders, so the intended
-pattern `let b := a.set! …; b.set! …` passes.
+The discipline needs two things at a write: the array is held by exactly one
+owning binding, and that binding is not duplicated or captured. This is the
+surface-level half:
 
-It is deliberately conservative and small:
-* reads count as uses (the surface has no borrowing);
-* a loop is a single occurrence of the array, which is correct for ownership
-  across iterations, while duplication inside the loop body is still caught;
-* it checks one term, not a module; it does not know which functions are pure,
-  and it does not track arrays stored in structures or fields.
+* **borrow vs move.** A variable in a borrow position (receiver of a read:
+  `size`, `getD`, `get!`, …) may occur any number of times. A variable in a move
+  position (receiver of `set!`/`uset`/`swap`, argument to any other call, returned,
+  or rebound) is a use, at most one per path.
+* **path sensitivity.** An `if`/`ite` takes the maximum over its branches, not the
+  sum, so `if c then (x, a) else (x, a.set! …)` moves `a` once on each path.
+* **capture is an escape.** An owning array occurring under a `fun` is refused
+  outright: the closure keeps a reference and can be called repeatedly.
 
-The semantic half is `Ownership.Accounted`: multiplicity one at the write, and
-two owners at a count-one cell are refuted. This analysis is what discharges the
-surface premise that the model checker assumes.
+Array-typed `fun`/`let` binders are tracked by de Bruijn index. The analysis is
+deliberately small: only array-typed binders, no arrays in structures or fields,
+one term rather than a module, and unknown functions are treated as consuming
+(moves) because borrow inference is a backend property that the surface does not
+carry. The semantic half remains `Ownership.Accounted`.
 -/
 import Lean
 
@@ -26,37 +26,72 @@ open Lean Elab Command
 
 namespace Alias
 
-/-- Count occurrences of the de Bruijn index `k` in `e`. -/
-partial def countBVar (k : Nat) : Expr → Nat
-  | .bvar i => if i == k then 1 else 0
-  | .app f a => countBVar k f + countBVar k a
-  | .lam _ _ b _ => countBVar (k + 1) b
-  | .forallE _ _ b _ => countBVar (k + 1) b
-  | .letE _ _ v b _ => countBVar k v + countBVar (k + 1) b
-  | .mdata _ b => countBVar k b
-  | .proj _ _ b => countBVar k b
-  | _ => 0
-
 def isArrayTy (ty : Expr) : Bool :=
   ty.getAppFn.constName? == some ``Array
 
-/-- Every array-typed `fun` or `let` binder may occur at most once in its body. -/
+/-- Functions that read the array without consuming it. -/
+def borrowFns : List Name :=
+  [``Array.size, ``Array.getD, ``Array.uget, ``Array.back?]
+
+/-- Moves of the tracked variable `k` in `e`, at most one per path. -/
+partial def uses (k : Nat) (borrowed : Bool) (e : Expr) : Nat :=
+  if e.isApp then
+    let fn := e.getAppFn
+    let args := e.getAppArgs
+    if fn.isConstOf ``ite && args.size ≥ 2 then
+      let n := args.size
+      max (uses k borrowed args[n - 2]!) (uses k borrowed args[n - 1]!)
+    else
+      let argBorrowed :=
+        match fn.constName? with
+        | some nm => borrowFns.contains nm
+        | none => false
+      uses k false fn + args.foldl (fun s a => s + uses k argBorrowed a) 0
+  else
+    match e with
+    | .bvar i => if i == k && !borrowed then 1 else 0
+    | .lam _ _ b _ => uses (k + 1) false b
+    | .forallE _ _ b _ => uses (k + 1) false b
+    | .letE _ _ v b _ => uses k false v + uses (k + 1) false b
+    | .mdata _ b => uses k borrowed b
+    | .proj _ _ b => uses k borrowed b
+    | _ => 0
+
+/-- Does the tracked variable `k` occur in `e` while `underLam` is set? -/
+partial def capturedAt (k : Nat) (underLam : Bool) (e : Expr) : Bool :=
+  if e.isApp then
+    capturedAt k underLam e.getAppFn || e.getAppArgs.any (capturedAt k underLam)
+  else
+    match e with
+    | .bvar i => underLam && i == k
+    | .lam _ _ b _ => capturedAt (k + 1) true b
+    | .forallE _ _ b _ => capturedAt (k + 1) underLam b
+    | .letE _ _ v b _ => capturedAt k underLam v || capturedAt (k + 1) underLam b
+    | .mdata _ b => capturedAt k underLam b
+    | .proj _ _ b => capturedAt k underLam b
+    | _ => false
+
+/-- Skip the remaining parameters of the same `fun` chain, then look for a
+capture in the body: a lambda after the parameter spine is a closure. -/
+partial def captured (k : Nat) : Expr → Bool
+  | .lam _ _ b _ => captured (k + 1) b
+  | e => capturedAt k false e
+
+private def checkBinder (name : Name) (b : Expr) (bad : Array String) : Array String :=
+  if captured 0 b then
+    bad.push s!"'{name}' is captured in a closure"
+  else
+    let n := uses 0 false b
+    if n > 1 then bad.push s!"'{name}' is moved {n} times" else bad
+
 partial def checkTerm (e : Expr) (bad : Array String) : Array String :=
   match e with
   | .lam name ty b _ =>
-    let bad :=
-      if isArrayTy ty then
-        let n := countBVar 0 b
-        if n > 1 then bad.push s!"'{name}' occurs {n} times" else bad
-      else bad
+    let bad := if isArrayTy ty then checkBinder name b bad else bad
     checkTerm b bad
   | .letE name ty v b _ =>
     let bad := checkTerm v bad
-    let bad :=
-      if isArrayTy ty then
-        let n := countBVar 0 b
-        if n > 1 then bad.push s!"'{name}' occurs {n} times" else bad
-      else bad
+    let bad := if isArrayTy ty then checkBinder name b bad else bad
     checkTerm b bad
   | .app f a => checkTerm a (checkTerm f bad)
   | .forallE _ _ b _ => checkTerm b bad
@@ -73,6 +108,6 @@ elab_rules : command
       let e ← instantiateMVars e
       let bad := checkTerm e #[]
       unless bad.isEmpty do
-        throwError "aliasing check failed: {bad.toList}; an owning array may occur at most once"
+        throwError "aliasing check failed: {bad.toList}"
 
 end Alias

@@ -58,30 +58,41 @@ be raised for four thousand. Larger `m` needs a loop, which the model language
 does not have. So the generated path is a correctness connection at modest `m`,
 not a substitute for the loop benchmark.
 
-## A static aliasing check
+## A static alias/linearity check
 
-`bench/Alias.lean` provides `#alias_check term`: at elaboration time it walks the
-term's `fun` and `let` binders whose type is `Array`, counts each binder's
-occurrences (de Bruijn indices, so lambdas and shadowing are handled), and fails
-the elaboration when an owning array occurs more than once. Duplication, capture
-and pairing are all refused at compile time with a source position.
+`bench/Alias.lean` provides `#alias_check term`, an elaboration-time check over
+real Lean terms. It tracks array-typed `fun`/`let` binders by de Bruijn index and
+applies three rules:
+
+* a variable in a **borrow** position (receiver of `size`, `getD`, `uget`, `back?`)
+  may occur any number of times; a variable in a **move** position (receiver of a
+  write, argument to any other call, returned, or rebound) is a use, at most one
+  per path;
+* an `if` takes the **maximum** over branches, not the sum, so one move in each
+  branch is linear;
+* an owning array occurring under a lambda **past the parameter spine** is a
+  capture and is refused outright.
+
+| File | Shape | Verdict |
+| --- | --- | --- |
+| `AliasOk.lean` | transfer `let b := a.set! …; b.set! …`, and a `foldl` loop | accepted |
+| `AliasUfThread.lean` | union-find's `find`: two borrows, one move, return | accepted |
+| `AliasBad.lean` | `let b := a; … a … b` | rejected: `'a' is moved 2 times` |
+| `AliasBadCapture.lean` | `(fun _ => a) () … a` | rejected: `'a' is captured in a closure` |
+| `AliasBadShared.lean` | `snapshot` retained while `a` is updated | rejected: `'a' is moved 2 times` |
 
 ```
-cd bench && nix develop -c lake env lean AliasOk.lean          # accepted, exit 0
-cd bench && nix develop -c lake env lean AliasBad.lean         # rejected, exit 1
-cd bench && nix develop -c lake env lean AliasBadCapture.lean  # rejected, exit 1
+cd bench && nix develop -c lake env lean AliasOk.lean         # exit 0
+cd bench && nix develop -c lake env lean AliasUfThread.lean   # exit 0
+cd bench && nix develop -c lake env lean AliasBad.lean        # exit 1
 ```
 
-The accepted file has `let b := a.set! …; b.set! …` (ownership transferred) and a
-`List.foldl` loop (the owner occurs once); the rejected files duplicate a handle
-and capture one in a closure, and report `'a' occurs 2 times`.
-
-Scope and limits, deliberately small: reads count as uses (no borrowing in this
-surface); a loop is one occurrence, which is correct for ownership across
-iterations; only array-typed binders are tracked, not arrays inside structures or
-fields; and it checks one term, not a module. This is the surface half of the
-discipline — it discharges the multiplicity-one premise that the model's
-`setArr` rule assumes. The semantic half is `Ownership.Accounted`.
+Scope: only array-typed binders (no arrays in structures or fields); unknown
+functions count as consuming, since borrow inference is a backend property the
+surface does not carry; the `if` condition is not analysed for moves; and one term
+is checked at a time. This is the surface half of the discipline — it discharges
+the multiplicity-one premise of the model's `setArr` rule — while `Ownership.Accounted`
+is the semantic half.
 
 ## Build and run
 

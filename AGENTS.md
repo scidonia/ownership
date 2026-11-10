@@ -77,14 +77,18 @@
   real function (`setLeaf`), which is the point: reflection is general, the
   recogniser's fragment is not. A declaration whose mono body is not saved in the
   olean is reported as such rather than guessed.
-- `bench/Alias.lean` is the static aliasing check for a surface of Lean terms:
-  `#alias_check term` counts occurrences of each array-typed `fun`/`let` binder at
-  elaboration time and fails when an owning array occurs more than once.
-  `bench/AliasOk.lean` is accepted (transfer and a loop), `bench/AliasBad.lean`
-  and `bench/AliasBadCapture.lean` are rejected (duplication and closure capture).
-  It is conservative: reads count as uses, only array-typed binders are tracked,
-  and it checks one term. It discharges the multiplicity-one premise of the
-  model's write rule; `Ownership.Accounted` is the semantic half.
+- `bench/Alias.lean` is the static alias/linearity check for a surface of Lean
+  terms: `#alias_check term` tracks array-typed `fun`/`let` binders by de Bruijn
+  index, allowing any number of borrowed reads (`size`, `getD`, `uget`, `back?`),
+  at most one move per path (writes, other calls, returns, rebinds), taking the
+  maximum over `if` branches, and refusing a capture under a lambda past the
+  parameter spine. Accepted: `bench/AliasOk.lean` (transfer and a loop) and
+  `bench/AliasUfThread.lean` (union-find's `find` threading). Rejected:
+  `bench/AliasBad.lean` (duplication), `bench/AliasBadCapture.lean` (capture),
+  `bench/AliasBadShared.lean` (retained alias). Unknown functions count as
+  consuming; only array-typed binders are tracked; one term at a time. It
+  discharges the multiplicity-one premise of the model's write rule;
+  `Ownership.Accounted` is the semantic half.
 - `scripts/emit_program.lean` is the other direction of the bridge: it defines a
   program in the model language, has `check` accept it, and emits it as Lean into
   `bench/Generated.lean`, which the bench package's `generated` target builds into
