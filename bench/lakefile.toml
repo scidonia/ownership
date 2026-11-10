@@ -4,3 +4,7 @@ defaultTargets = ["unionfind"]
 [[lean_exe]]
 name = "unionfind"
 root = "UnionFind"
+
+[[lean_exe]]
+name = "generated"
+root = "Generated"

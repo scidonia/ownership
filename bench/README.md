@@ -22,6 +22,37 @@ The union-find state is checksummed and printed, so the two variants can be
 compared for functional equality; a separate `liveness_sum` keeps the snapshot
 used and is not part of the state.
 
+## A checked program, emitted and built
+
+The union-find program above is hand-written, and the discipline does not check it.
+The other direction is real, if smaller: `scripts/emit_program.lean` defines a
+program in the model language (`Ownership.Code`), has the discipline's checker
+accept it, and emits it as Lean into `bench/Generated.lean`. The bench package's
+`generated` target builds that emitted file into a binary.
+
+```
+nix develop -c lake env lean scripts/emit_program.lean   # checker + emitter
+cd bench && nix develop -c lake build generated
+./.lake/build/bin/generated                              # prints #[0, 7, 0, 9]
+```
+
+The program is two in-place writes into an owned array:
+
+```lean
+def program (v0 : Array Nat) (v1 v2 v3 v4 : Nat) : Array Nat :=
+  (let v0 := v0.set! v1 v2; (let v0 := v0.set! v3 v4; v0))
+```
+
+The checker accepts it under the accounted context, and the binary's output
+agrees with the model interpreter's result for the same inputs. `Generated.lean`
+is a generated artifact, not a hand-written program.
+
+What it shows is the discipline-driven path end to end inside the fragment:
+checked model program, emitted Lean, native binary, same result. It does not
+extend the fragment: the emitted code is straight-line array writes with the
+ownership operations dropped, because Lean's reference counting inserts those
+itself. A loop such as union-find's has no model-language counterpart to emit.
+
 ## Build and run
 
 ```sh
@@ -107,9 +138,10 @@ the array size when every update shares it. That is an observation about this
 binary and this machine, and the C inspection above shows the mechanism it
 exercises is Lean's copy-on-write array update.
 
-It does **not** certify the program. The development's checker runs on its model
-languages, and the recognised fragment is a `setAt` shape; union-find's
-data-dependent loop, computed indices and arithmetic are outside it. The step the
-model *can* certify — an owned array's scalar write, and its refusal when the
-handle is aliased — is exercised in `OwnershipTest/Array.lean` (`execSet`
-accepted, `aliasSet` refused).
+It does **not** certify the union-find program: that program is hand-written, and
+the recognised fragment is a `setAt` shape, so its data-dependent loop, computed
+indices and arithmetic are outside it. The discipline-driven binary is the
+emitted two-write program above, and its scope is the fragment's straight-line
+array code. The step the model certifies — an owned array's scalar write, and its
+refusal when the handle is aliased — is also exercised in `OwnershipTest/Array.lean`
+(`execSet` accepted, `aliasSet` refused).

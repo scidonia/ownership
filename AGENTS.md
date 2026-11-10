@@ -77,6 +77,14 @@
   real function (`setLeaf`), which is the point: reflection is general, the
   recogniser's fragment is not. A declaration whose mono body is not saved in the
   olean is reported as such rather than guessed.
+- `scripts/emit_program.lean` is the other direction of the bridge: it defines a
+  program in the model language, has `check` accept it, and emits it as Lean into
+  `bench/Generated.lean`, which the bench package's `generated` target builds into
+  a binary. Run `nix develop -c lake env lean scripts/emit_program.lean`, then
+  `(cd bench && nix develop -c lake build generated && ./.lake/build/bin/generated)`.
+  The emitted program's output agrees with the model interpreter's result. The
+  emitted code is the fragment's straight-line array writes; the ownership
+  operations are dropped because Lean's reference counting inserts them.
 - The claim census is gated by `scripts/check_claims.sh`: it extracts every
   `\lean{…}` token from `paper/ownership-skeleton.tex`, requires each token to
   have a row in `docs/notes/claim-map.md` and each row to be cited by a token,

@@ -1018,10 +1018,11 @@ The runtime mechanism is also observable on code outside the fragment: a
 hand-written union-find over \texttt{Array Nat}, checked by no rule here, costs a
 flat 66--75 ns per operation on an unshared parent array as it grows from 2\,000 to
 16\,000 elements, while a variant that keeps a snapshot live at the write costs
-559--5\,288 ns and doubles with each doubling of the array, with the same union-find
-results. The generated C calls the runtime's copy-on-write setter, whose branch is
-the reference-count test; the measurements and their caveats are in
-\texttt{bench/README.md}.
+559--5\,288 ns and doubles with each doubling of the array, and identical union-find results. The generated C
+calls the runtime's copy-on-write setter, whose branch is the reference-count test.
+In the other direction, a checker-accepted model program is emitted as Lean and
+built, and its printed array agrees with the model interpreter; the measurements,
+the emitted program and their caveats are in \texttt{bench/README.md}.
 
 Applying the development to a changed source update is four steps: pin the sibling
 and recapture, which fails if the recogniser's prefix changes; run
