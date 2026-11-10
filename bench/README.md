@@ -25,33 +25,38 @@ used and is not part of the state.
 ## A checked program, emitted and built
 
 The union-find program above is hand-written, and the discipline does not check it.
-The other direction is real, if smaller: `scripts/emit_program.lean` defines a
-program in the model language (`Ownership.Code`), has the discipline's checker
-accept it, and emits it as Lean into `bench/Generated.lean`. The bench package's
-`generated` target builds that emitted file into a binary.
+The other direction is real: `scripts/emit_program.lean` defines programs in the
+model language (`Ownership.Code`), has the discipline's checker accept them, and
+emits them as Lean into `bench/Generated.lean`. The bench package's `generated`
+target builds that emitted file into a binary.
 
 ```
 nix develop -c lake env lean scripts/emit_program.lean   # checker + emitter
 cd bench && nix develop -c lake build generated
-./.lake/build/bin/generated                              # prints #[0, 7, 0, 9]
+./.lake/build/bin/generated
 ```
 
-The program is two in-place writes into an owned array:
+The family is `m` sequential in-place writes into the owned array, alternating
+two scalar indices. The checker requires the array's multiplicity to be one at
+every write, so every emitted program is a certified in-place path; there is no
+certified shared variant to compare with.
 
-```lean
-def program (v0 : Array Nat) (v1 v2 v3 v4 : Nat) : Array Nat :=
-  (let v0 := v0.set! v1 v2; (let v0 := v0.set! v3 v4; v0))
-```
+| writes | ns per write | total ms |
+| ---: | ---: | ---: |
+| 200 | 7091 | 1.4 |
+| 1000 | 1452 | 1.5 |
+| 4000 | 337 | 1.3 |
 
-The checker accepts it under the accounted context, and the binary's output
-agrees with the model interpreter's result for the same inputs. `Generated.lean`
-is a generated artifact, not a hand-written program.
+Read this as a **flat total**: the three programs take about 1.4 ms each, so the
+per-write figure falls as `m` grows because a fixed setup cost dominates, not
+because writes get cheaper. A copying update would scale with the array, and a
+per-write loop would scale with `m`; neither appears.
 
-What it shows is the discipline-driven path end to end inside the fragment:
-checked model program, emitted Lean, native binary, same result. It does not
-extend the fragment: the emitted code is straight-line array writes with the
-ownership operations dropped, because Lean's reference counting inserts those
-itself. A loop such as union-find's has no model-language counterpart to emit.
+Two limits of the unrolled form, both measured: elaborating `m` nested lets costs
+compiler time (62 s for 4 000 writes), and Lean's default recursion depth has to
+be raised for four thousand. Larger `m` needs a loop, which the model language
+does not have. So the generated path is a correctness connection at modest `m`,
+not a substitute for the loop benchmark.
 
 ## Build and run
 
