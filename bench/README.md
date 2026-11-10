@@ -1,7 +1,10 @@
 # Union-find on the array write path
 
-This directory is a benchmark, not part of the proof development. It answers a
-runtime question the development is about but does not certify: Lean's array
+This directory is a benchmark, not part of the proof development. The program is
+hand-written Lean: it is not generated from the ownership discipline, and no rule
+in the development checks it. What it does is exercise the same runtime mechanism
+the discipline models — Lean's copy-on-write array update — on code outside the
+certified fragment, to answer a runtime question the development is about: Lean's array
 update mutates in place while the array is unshared, and copies when a second
 reference is live.
 

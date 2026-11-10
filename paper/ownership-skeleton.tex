@@ -1005,25 +1005,30 @@ roles and the paper-to-code entry points, are listed in the supplementary docume
 \texttt{docs/notes/ownership-theorem-map.md}, which is artifact documentation and
 not part of the argument.
 
-The evidence answers different questions.
-The parameterised family covers one model extraction/call/restoration level
-for arbitrary length, valid outer and leaf slots and any value, but it is not
-itself a parameterised application of the recognition theorem; the closed instance
-covers the whole counted-fragment theorem at the captured declaration with a
-supplied model child body; the structural controls reject the specified malformed
-traces without claiming that every malformed trace is rejected; the linked probes
-observe exclusivity, address and result behaviour on the recorded corpus; and the
-artifact gate checks the pinned sibling, its cleanliness and byte-identical
-regenerated captures.
+The evidence answers different questions. The parameterised family covers one
+model extraction/call/restoration level, but it is not itself a parameterised
+application of the recognition theorem; the closed instance covers the whole
+counted-fragment theorem at the captured declaration with a supplied model child
+body; the structural controls reject the specified malformed traces, without
+claiming that every malformed trace is rejected; the linked probes observe
+exclusivity, address and result behaviour on the recorded corpus; and the artifact
+gate checks the pinned sibling, its cleanliness and byte-identical captures.
 
-Applying the development to a changed source update is four steps. Pin the sibling
-and recapture, which fails visibly if the recogniser's prefix changes; run
-\lean{projectNested} on the new declaration; supply the client facts — the entry
-accounting, the layout, agreement and level data, the path contract, and the child
-call with its edge effect; then check the certificate with the axiom audit and the
-claim census. The manual work is the third step; recognition, the model
-correspondence, the boundary accounting and the post-call accounting are
-automatic.
+The runtime mechanism is also observable on code outside the fragment: a
+hand-written union-find over \texttt{Array Nat}, checked by no rule here, costs a
+flat 66--75 ns per operation on an unshared parent array as it grows from 2\,000 to
+16\,000 elements, while a variant that keeps a snapshot live at the write costs
+559--5\,288 ns and doubles with each doubling of the array, with the same union-find
+results. The generated C calls the runtime's copy-on-write setter, whose branch is
+the reference-count test; the measurements and their caveats are in
+\texttt{bench/README.md}.
+
+Applying the development to a changed source update is four steps: pin the sibling
+and recapture, which fails if the recogniser's prefix changes; run
+\lean{projectNested}; supply the client facts — entry accounting, layout, agreement
+and level data, the path contract, and the child call's edge effect; then check the
+certificate with the axiom audit and the claim census. The third step is the manual
+one; the rest is automatic.
 
 \section{Related work}\label{sec:related}
 
@@ -1068,18 +1073,15 @@ contract the caller discharges, changing nothing in the compiler.
 
 \section{Scope, conclusion and disclosure}\label{sec:limits}
 
-What is checked, proved, supplied and assumed is kept separate. Checked syntax ---
-the recogniser's grammar and the two model languages --- is established by
-elaborating \lean{\#guard} tests and by the recogniser itself. Model facts ---
-accounting and preservation, the protocol boundaries, the counted fragment run and
-the runtime model's in-place statements --- are theorems in \lean{Ownership} and
-\lean{OwnershipLcnf} with no axioms beyond Lean's. Client and call facts --- the
-entry invariant, agreement, layout and path contract, the leaf computation, and
-\lean{CountedChildCall}'s \lean{edges} effect, from which the post-call accounting
-is derived --- are hypotheses of the two principal theorems, discharged at the
-closed instance. Implementation assumptions --- primitive fidelity,
-replay-to-backend identity and reference identity --- are fixed by the runtime
-contract and observed by the linked gate.
+What is checked, proved, supplied and assumed is kept separate. Checked syntax is
+established by elaborating \lean{\#guard} tests and by the recogniser itself.
+Model facts are theorems in \lean{Ownership} and \lean{OwnershipLcnf} with no
+axioms beyond Lean's. Client and call facts --- the entry invariant, agreement,
+layout and path contract, the leaf computation, and \lean{CountedChildCall}'s
+\lean{edges} effect, from which the post-call accounting is derived --- are
+hypotheses of the two principal theorems, discharged at the closed instance.
+Implementation assumptions are fixed by the runtime contract and observed by the
+linked gate.
 
 \paragraph*{Conclusion.}
 A count-one discipline can be recovered for an existing compiler IR without
