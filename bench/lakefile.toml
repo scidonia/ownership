@@ -1,0 +1,6 @@
+name = "bench"
+defaultTargets = ["unionfind"]
+
+[[lean_exe]]
+name = "unionfind"
+root = "UnionFind"
