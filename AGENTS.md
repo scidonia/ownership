@@ -68,6 +68,15 @@
   (ignored build outputs such as `.lake/` are excluded), and the flake's Lean;
   it then regenerates the `execP` and
   nested `setAt` captures and diffs them against `docs/notes/artifacts/`.
+- `scripts/check_decl.lean` is the reflection bridge: it reads a declaration's
+  mono LCNF from the sibling's olean, replays the compiler pipeline to impure
+  LCNF, and reports whether `projectPrefix` and `projectNested` accept it. Run it
+  from the sibling:
+  `(cd ../lean-examples && nix develop -c lake env bash -c 'export LEAN_PATH="../ownership/.lake/build/lib/lean:$LEAN_PATH"; lean ../ownership/scripts/check_decl.lean')`.
+  It accepts the captured private `setAt` (25 operations) and rejects a different
+  real function (`setLeaf`), which is the point: reflection is general, the
+  recogniser's fragment is not. A declaration whose mono body is not saved in the
+  olean is reported as such rather than guessed.
 - The claim census is gated by `scripts/check_claims.sh`: it extracts every
   `\lean{…}` token from `paper/ownership-skeleton.tex`, requires each token to
   have a row in `docs/notes/claim-map.md` and each row to be cited by a token,
