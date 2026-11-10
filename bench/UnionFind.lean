@@ -76,24 +76,43 @@ partial def loop (parent sizes : Arr) (fuel : Nat) (seed : Nat) (share : Bool) :
         let (acc, parent, sizes) := loop parent sizes f s2 share
         (acc, parent, sizes)
 
-def run (n m : Nat) (share : Bool) : Nat :=
+/-- The union-find state's checksum, and the liveness device's accumulator,
+separately: the first must agree between the two variants, the second keeps the
+snapshot used so the copy branch is taken. -/
+def run (n m : Nat) (share : Bool) : Nat × Nat :=
   let (acc, parent, sizes) := loop (ids n) (ones n) m 12345 share
-  acc + parent.getD 0 0 + sizes.getD 0 0
+  (parent.foldl (fun a x => a + x) 0 + sizes.foldl (fun a x => a + x) 0, acc)
 
 def main : IO Unit := do
+  -- The first block compares the two variants at the same n and m, which is the
+  -- only like-for-like comparison: same array sizes, same operation count.
+  -- The second block grows n for the unique variant to show how the total
+  -- scales with the operation count.
   let cases : List (String × Nat × Nat × Bool) :=
-    [ ("unique", 100000, 400000, false)
-    , ("unique", 400000, 1600000, false)
-    , ("unique", 1600000, 6400000, false)
+    [ ("unique", 2000, 8000, false)
     , ("shared", 2000, 8000, true)
+    , ("unique", 4000, 16000, false)
     , ("shared", 4000, 16000, true)
-    , ("shared", 8000, 32000, true) ]
-  IO.println "mode,n,m,milliseconds,checksum"
+    , ("unique", 8000, 32000, false)
+    , ("shared", 8000, 32000, true)
+    , ("unique", 16000, 64000, false)
+    , ("shared", 16000, 64000, true)
+    , ("unique", 100000, 400000, false)
+    , ("unique", 400000, 1600000, false)
+    , ("unique", 1600000, 6400000, false) ]
+  IO.println "mode,n,m,milliseconds,nanoseconds_per_op,uf_checksum,liveness_sum"
   for (mode, n, m, share) in cases do
-    let t0 ← IO.monoMsNow
-    let r := run n m share
-    let t1 ← IO.monoMsNow
-    IO.println s!"{mode},{n},{m},{t1 - t0},{r}"
+    -- three repetitions, minimum; the small cases are sub-millisecond otherwise
+    let mut best := 18446744073709551615
+    let mut uf := 0
+    let mut extra := 0
+    for _ in [0:3] do
+      let t0 ← IO.monoNanosNow
+      let (u, e) := run n m share
+      let t1 ← IO.monoNanosNow
+      uf := u; extra := e
+      if t1 - t0 < best then best := t1 - t0
+    IO.println s!"{mode},{n},{m},{best / 1000000},{best / m},{uf},{extra}"
 
 end UnionFindBench
 
