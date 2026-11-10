@@ -42,7 +42,7 @@ allowlisted in the script and must carry the reason the last column records.
 | `CountFidelity` | declaration | `Ownership.CountFidelity` | `Ownership/Accounting.lean` | Complete ownership accounting; Recognition, and the flat guarantee | — |
 | `CountFree b` | expression | `Ownership.Nested.CountFree` | `Ownership/Nested.lean` | The judgement. | applied form of the body predicate used as a checker premise. |
 | `CountedChildCall` | declaration | `Ownership.CountedChildCall` | `Ownership/CountedNested.lean` | The pair and its boundary; The counted call and restoration; Scope, conclusion and disclosure | — |
-| `EdgePreserved` | declaration | `Ownership.EdgePreserved` | `Ownership/CountedNested.lean` | Introduction; The counted call and restoration; The finite path and the counted fragment | the call-effect relation; `Ownership.HeapCompat` is the boundary relation |
+| `EdgePreserved` | declaration | `Ownership.EdgePreserved` | `Ownership/CountedNested.lean` | The counted call and restoration; The finite path and the counted fragment | the call-effect relation; `Ownership.HeapCompat` is the boundary relation |
 | `EntryInv H env (Runner.initCtx root) root client` | expression | `Ownership.Entry.EntryInv` | `Ownership/Entry.lean` | Recognition, and the flat guarantee | applied form of the entry invariant at the initializer's context. |
 | `EnvOwnerCount` | declaration | `Ownership.EnvOwnerCount` | `Ownership/Accounting.lean` | Proof sketch.; The pair and its boundary | — |
 | `Exclusive H r` | expression | `Ownership.Heap.Exclusive` | `Ownership/Heap.lean` | Complete ownership accounting | applied form; `Ownership.Heap.Exclusive` is the predicate it spells. |
@@ -115,7 +115,6 @@ allowlisted in the script and must carry the reason the last column records.
 | `counted_nested_chain` | declaration | `Ownership.counted_nested_chain` | `Ownership/CountedNested.lean` | Three contributions.; The counted call and restoration; Proof sketch. | — |
 | `counted_nested_chain_edges` | declaration | `Ownership.counted_nested_chain_edges` | `Ownership/CountedNested.lean` | Introduction; The counted call and restoration | — |
 | `counted_nested_chain_restoration` | declaration | `Ownership.counted_nested_chain_restoration` | `Ownership/CountedNested.lean` | The counted call and restoration | — |
-| `counted_nested_chain_two_levels` | declaration | `Ownership.counted_nested_chain_two_levels` | `Ownership/CountedNested.lean` | Introduction; The counted call and restoration | — |
 | `counted_restore` | declaration | `Ownership.counted_restore` | `Ownership/CountedNested.lean` | The counted call and restoration | — |
 | `counted_takeOut` | declaration | `Ownership.counted_takeOut` | `Ownership/CountedNested.lean` | The counted call and restoration | — |
 | `dec` | declaration | `Ownership.Ctx.dec` | `Ownership/Code.lean` | The judgement. | the context update; `Ownership.Code.dec` is the constructor of the same name |
@@ -142,6 +141,7 @@ allowlisted in the script and must carry the reason the last column records.
 | `initCtx` | declaration | `Ownership.Runner.initCtx` | `Ownership/Runner.lean` | Complete ownership accounting | the initializer; `Ownership.Accounted.initCtx` is a different declaration of the same name |
 | `initCtx_accounted` | declaration | `Ownership.initCtx_accounted` | `Ownership/Accounting.lean` | Complete ownership accounting | — |
 | `isShared x` | expression | `Ownership.LetF.isShared` | `Ownership/Code.lean` | Two languages, one accounted subset | displayed right-hand side: the `isShared` constructor of `Ownership.LetF`. |
+| `isolated_accounting_impossible` | declaration | `isolated_accounting_impossible` | `OwnershipTest/IsolatedAccounting.lean` | Introduction; The counted call and restoration | — |
 | `lean_array_fget` | runtime-primitive | `lean_array_fget` | `docs/notes/artifacts/backend-binding.txt` | The update and its ownership traffic | Lean runtime C primitive that reads an array element into the unboxed exchange; it appears in the pinned backend artifact and has no Lean declaration in this repository. |
 | `lean_array_fset` | runtime-primitive | `lean_array_fset` | `docs/notes/artifacts/backend-binding.txt` | The update and its ownership traffic | Lean runtime C primitive that writes an array element in the unboxed exchange; it appears in the pinned backend artifact and has no Lean declaration in this repository. |
 | `lean_is_exclusive` | runtime-primitive | `lean_is_exclusive` | `OwnershipLcnf/RuntimeModel.lean` | Introduction; The running example and the semantic setting; The update and its ownership traffic; Evidence and artifact | Lean 4's runtime test of whether a heap object's reference count is one; a C primitive of the Lean runtime, not a declaration of this development. `OwnershipLcnf.Runtime.RHeap.isExclusive` is the model written from its documented meaning. |

@@ -14,6 +14,7 @@ import Ownership.CountedNested
 import OwnershipLcnf.CountedTrace
 import OwnershipTest.PrincipalCounted
 import OwnershipTest.CountedFamily
+import OwnershipTest.IsolatedAccounting
 
 #print axioms Ownership.check_sound
 #print axioms Ownership.Entry.checkN_sound_of_entryInv
@@ -247,5 +248,8 @@ import OwnershipTest.CountedFamily
 #print axioms Ownership.counted_nested_chain_extraction
 #print axioms Ownership.counted_nested_chain_restoration
 
+
+#print axioms isolated_accounting_impossible
+#print axioms two_level_isolated_entry_impossible
 
 #print axioms OwnershipLcnf.principal_supported_path

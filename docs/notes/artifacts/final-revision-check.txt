@@ -1,7 +1,7 @@
 # Final revision check
 
 Record of what was run for the revised manuscript and its mechanisation, with the
-observed result of each command. Base revision `70b325b` (2026-11-03); this record
+observed result of each command. Base revision `aaaa0aa` (2026-11-10); this record
 is committed with the changes it describes, so the tree it verifies is that
 revision plus this record's own commit. Nothing here is reported that was not
 observed in this session.
@@ -10,8 +10,8 @@ observed in this session.
 
 | Item | Value |
 | --- | --- |
-| Date | 2026-11-03 |
-| Base revision | `70b325bc9e0916e61a2e9cdae0691d4b04205d3a` |
+| Date | 2026-11-10 |
+| Base revision | `aaaa0aa9becdc9db4c41386fa3e129b93c48d68c` |
 | Manuscript revision model | `deepseek/deepseek-flash`, the model used to produce this revision; recorded here because the manuscript's disclosure cites this file |
 | Lean | 4.35.0-rc3 (from the flake dev shell) |
 | Nix | 2.31.2 |
@@ -30,13 +30,14 @@ command's own.
 | `nix develop -c lake build Ownership` | 0 | `Build completed successfully (20 jobs).` |
 | `nix develop -c lake build OwnershipLcnf` | 0 | `Build completed successfully (28 jobs).` |
 | `nix develop -c lake build OwnershipTest` | 0 | `Build completed successfully (51 jobs).` |
-| `nix develop -c lake env lean scripts/check_axioms.lean` | 0 | 464 `depends on axioms` lines; zero occurrences of `sorryAx` or `Lean.ofReduceBool`; every listed declaration prints only `propext`, `Classical.choice`, `Quot.sound` (or a subset). Includes `execCounted_full_fragment`, `principal_counted_fragment`, `counted_fragment_instance`, the fourteen `OwnershipTest.CountedFamily` declarations, `NestedOutcome.Compat`, its two observation lemmas, `EdgePreserved` with `accounted_of_edges`, the chain net effect `counted_nested_chain_edges`, `counted_nested_chain_two_levels`, and both `counted_nested_chain` consumers. |
+| `nix develop -c lake env lean scripts/check_axioms.lean` | 0 | 190 `depends on axioms` lines; zero occurrences of `sorryAx` or `Lean.ofReduceBool`; every listed declaration prints only `propext`, `Classical.choice`, `Quot.sound` (or a subset). Includes `execCounted_full_fragment`, `principal_counted_fragment`, `counted_fragment_instance`, the fourteen `OwnershipTest.CountedFamily` declarations, `NestedOutcome.Compat`, its two observation lemmas, `EdgePreserved` with `accounted_of_edges`, the chain net effect `counted_nested_chain_edges`, both `counted_nested_chain` consumers, and the two isolated-accounting regression theorems `isolated_accounting_impossible` and `two_level_isolated_entry_impossible`. |
 | `nix develop -c bash scripts/check_claims.sh` | 0 | `claim census: OK: 185 distinct tokens, 185 rows (declaration 124, module 4, runtime-primitive 4, concept 3, expression 50)`; the declaration rows were `#check`ed with `nix develop -c lake env lean <tmp>/ClaimCheck.lean`. |
 | `nix develop -c bash scripts/check_claims.sh --self-test` | 0 | `self-test (a) … orphanTokenForSelfTest`, `(b) … ghostTokenForSelfTest`, `(c) … Unknown identifier 'Ownership.thisDeclarationDoesNotExist'`; `self-test OK`, unmodified inputs pass. |
 | `cd paper && latexmk -pdf -interaction=nonstopmode ownership-skeleton.tex` | 0 | build succeeds; `grep -cE '^!|Overfull \\hbox|undefined'` on the log reports `0`. |
 | `pdfinfo paper/ownership-skeleton.pdf` | 0 | `Pages: 17`, `Page size: 595.276 x 841.89 pts (A4)`, abstract 179 words. The body ends at the foot of page 16; the references occupy page 17 and are additional. |
 | `pdffonts paper/ownership-skeleton.pdf` | 0 | 33 embedded fonts, all Type 1/Custom, none reported as not embedded; no missing-glyph warnings in the log. |
 | `bash scripts/build_anonymous.sh` | 0 | anonymous derivative builds from the same source: 17 pages, no name, affiliation or address in the text, anonymous author marker present, acknowledgements blanked |
+| `nix develop -c bash scripts/check_all.sh` | 0 | the entry point ran the three builds, the axiom audit, the census with its self-test, the artifact and runtime gates, and the paper build; final line `check_all: OK`. |
 | `nix develop -c bash scripts/check_artifacts.sh` | 0 | sibling revision and cleanliness checks pass; the `execP` and nested `setAt` captures regenerate and diff clean against `docs/notes/artifacts/`. |
 | `nix develop -c bash scripts/check_runtime_binding.sh` | 0 | artifact gate, sibling IR-shape build, generated C and runtime-header primitive checks, and the linked probe modes with the check off and on all pass. |
 

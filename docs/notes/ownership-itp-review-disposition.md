@@ -42,7 +42,7 @@ exact and to strengthen the two places it was thin.
 | M3 child contract specification | addressed | \S5.2 unfolds the contract and says which facts the path induction derives and which the counted contract adds |
 | M3 what is automatic vs manual | addressed | \S7 workflow paragraph: the client facts are the manual step |
 | M3 model body, callee obligation | addressed | \S5.2 and the trust-boundary paragraph |
-| M3 counted composition lemma, two levels | addressed | `counted_nested_chain_edges`, `counted_nested_chain_two_levels`; the outer ordinary call contract for the compound body stays supplied and is stated |
+| M3 counted composition lemma, two levels | withdrawn | `counted_nested_chain_edges` stands; `counted_nested_chain_two_levels` was shown to have an inconsistent isolated-accounting premise by the review at `aaaa0aa`, and `OwnershipTest/IsolatedAccounting.lean` proves the impossibility |
 | M4 pair-live live owners | addressed | \S5.3 names the interpretation, the take-out's obligations, the pair as an unowned heap cell, and the finer relation that was not taken |
 | M5 novelty comparison | addressed | \S8 item-by-item comparison plus the reusable-insight sentence |
 | M6 evidence coverage explicit | addressed | \S7 prose coverage of the five evidence layers, each with its scope |
@@ -86,7 +86,7 @@ exact and to strengthen the two places it was thin.
 | 1. semantic claim beyond recognition | answered in \S6 (four layers) |
 | 2. pair-live actual vs abstract roots | answered in \S5.3 |
 | 3. generic condition for caller accounting | answered: `EdgePreserved`, with the counterexample that shows the boundary alone is insufficient |
-| 4. two levels without instance-specific reconstruction | answered: `counted_nested_chain_two_levels` |
+| 4. two levels without instance-specific reconstruction | withdrawn: the two-level statement's premise is inconsistent; only the net edge effect is claimed |
 | 5. theorem behind unobservability | answered: `Observed`/`observed_iff` at the stated boundary |
 | 6. automation and manual work | answered in \S7 (client facts are manual) |
 
@@ -99,7 +99,7 @@ exact and to strengthen the two places it was thin.
 | P0 | child contract exposed | done |
 | P0 | intermediate-root explanation | done |
 | P1 | technical novelty | done (comparison + insight) |
-| P1 | compositional demonstration | done (two levels) |
+| P1 | compositional demonstration | net edge effect only; the two-level composition is recorded as a regression |
 | P1 | usable certificate workflow | done |
 | P2 | compress and polish | done (body 16 pages, references additional) |
 

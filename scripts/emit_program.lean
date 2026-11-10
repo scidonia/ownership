@@ -58,7 +58,7 @@ def sizes : List Nat := [200, 1000, 4000]
 def timingMain : String :=
   "def main : IO Unit := do\n" ++
   "  let n := 1 <<< 20\n" ++
-  "  let mk : IO (Array Nat) := pure ((List.replicate n 0).toArray)\n" ++
+  "  let mk (n : Nat) : Array Nat := (List.replicate n 0).toArray\n" ++
   "  let cases : List (String × Nat × (Array Nat → Nat → Nat → Nat → Nat → Array Nat)) :=\n" ++
   "    [ " ++
     String.intercalate ",\n      "
@@ -68,7 +68,7 @@ def timingMain : String :=
   "    let mut best := 18446744073709551615\n" ++
   "    let mut size_ok := true\n" ++
   "    for _ in [0:3] do\n" ++
-  "      let a ← mk\n" ++
+  "      let a := mk n\n" ++
   "      let t0 ← IO.monoNanosNow\n" ++
   "      let b := f a 1 7 3 9\n" ++
   "      let t1 ← IO.monoNanosNow\n" ++

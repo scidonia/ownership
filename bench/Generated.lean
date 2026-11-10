@@ -9,7 +9,7 @@ def program4000 (v0 : Array Nat) (v1 v2 v3 v4 : Nat) : Array Nat :=
 
 def main : IO Unit := do
   let n := 1 <<< 20
-  let mk : IO (Array Nat) := pure ((List.replicate n 0).toArray)
+  let mk (n : Nat) : Array Nat := (List.replicate n 0).toArray
   let cases : List (String × Nat × (Array Nat → Nat → Nat → Nat → Nat → Array Nat)) :=
     [ ("200", 200, program200),
       ("1000", 1000, program1000),
@@ -19,7 +19,7 @@ def main : IO Unit := do
     let mut best := 18446744073709551615
     let mut size_ok := true
     for _ in [0:3] do
-      let a ← mk
+      let a := mk n
       let t0 ← IO.monoNanosNow
       let b := f a 1 7 3 9
       let t1 ← IO.monoNanosNow

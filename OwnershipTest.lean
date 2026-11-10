@@ -1,3 +1,4 @@
+import OwnershipTest.IsolatedAccounting
 import OwnershipTest.Array
 import OwnershipTest.Nested
 import OwnershipTest.NestedEmitted

@@ -153,13 +153,14 @@ the call's effect on the caller's incoming edges; from that effect and the
 caller's accounting at the call, the accounting at the body's return is derived.
 The finite-path induction over model paths does not construct that edge effect.
 For a body that is itself the take-out/call/restoration chain it is no longer a
-premise: the chain is not edge-preserving step by step, because the take-out
-removes one edge and the restoration adds one back, but its net run is, and
+premise: the chain is not edge-preserving step by step, but its net run is, and
 \lean{counted\_nested\_chain\_edges} proves that the entry and the restored
-counted heap have the same incoming-edge count at every name.
-\lean{counted\_nested\_chain\_two\_levels} spends that net effect as the
-enclosing call's \lean{EdgePreserved} field, with the inner chain as the outer
-call's body; the outer model boundary for the compound body remains supplied.
+counted heap have the same incoming-edge count at every name. Composing that
+effect at a second level is not claimed: the inner call's isolated accounting
+would drop the suspended parent's owning root while its count-one cell remains in
+the heap, which is inconsistent (\lean{isolated\_accounting\_impossible}), so the
+composition statement is recorded as a regression and the net effect stands on its
+own.
 
 We prove, for one level of a finite supported path under that contract, that the
 counted interpreter's run over the whole recognised fragment---extraction, child
@@ -338,13 +339,12 @@ value, the mapping reads a program off the recognised operands, and the executor
 runs the recognised trace.
 
 The two languages play different roles. \lean{Code} and \lean{NCode} are the
-checker's \emph{general} language: it contains increments, multi-count decrements
-and arbitrary nesting, and accepts programs that carry no accounting.
+checker's \emph{general} language, with increments, multi-count decrements and
+arbitrary nesting, accepting programs that carry no accounting.
 The theorem-bearing fragment is \lean{Supported} (\Cref{sec:supported}), an
 inductively defined subset of \lean{Code} with extra certificates. Checker
 acceptance, supported certification, state validity and the child-call
-specification are separate notions; accounting is proved for the certified fragment, not for
-checker acceptance alone.
+specification are separate notions; accounting is proved for the certified fragment only.
 
 \section{Complete ownership accounting}\label{sec:accounting}
 
@@ -676,11 +676,11 @@ and \lean{HeapCompat} to \lean{runN}'s state; the restored slot's own equation i
 step by step, but its net run is: \lean{counted\_nested\_chain\_edges} concludes
 \lean{EdgePreserved} between the entry and the restored counted heap, which is the
 entry-to-output effect that \lean{counted\_nested\_chain}'s final-state
-\lean{HeapCompat} does not give. An enclosing call therefore takes the inner chain
-as its body with that net effect as its \lean{edges} field
-(\lean{counted\_nested\_chain\_two\_levels}); its own model boundary for the
-compound body is still supplied, since the finite-path induction derives the
-child-call contract for a recursive body, not for a chain term.
+\lean{HeapCompat} does not give. Composing the effect at a second level is not
+claimed: the inner call's isolated accounting would drop the suspended parent's
+owning root while retaining its count-one cell, which is inconsistent
+(\lean{isolated\_accounting\_impossible}); the composition statement is recorded
+as a regression, and the net effect stands.
 \end{theorem}
 
 \subsection{Compatibility and the boundary argument}
@@ -706,8 +706,8 @@ second by the derived disposition and its target's exclusivity — rather than b
 appearing in that list, so trace equality is evidence about recorded events and the
 store coverage comes from those statements.
 
-The pair-live window is a deliberate boundary abstraction, and it is worth naming
-the interpretation it refuses. During the window we use the context the abstract
+The pair-live window is a boundary abstraction, and it is worth naming the
+interpretation it refuses. During the window we use the context the abstract
 take-out returns, whose two owning variables are the take-out's obligations for
 the parent and the extracted child; the pair itself is the fresh heap cell and is
 owned by no variable of that context. At the take-out state of
@@ -821,8 +821,8 @@ cell; only the allocator cursor differs.
 
 The connection has four layers, and they are separate claims. Structural
 recognition pins operation order, arities, operands and branch constructors. Decoding consistency makes the
-recognised trace decode to the expected prefix, so the recogniser's verdict is
-spent by the execution theorem rather than assumed by it. Interpreter
+trace decode to the expected prefix, so the recogniser's verdict is spent by the
+execution theorem rather than assumed. Interpreter
 correspondence relates the counted run of that trace to the model's run of the
 built path: same cells, result, fault and trace. Supplied meanings name the
 modelling boundary --- the take-out store, the child body and the recursive callee
@@ -1014,10 +1014,11 @@ with count one forces the exclusive, in-place disposition (\lean{setArrInPlace},
 \lean{inPlace\_of\_exclusive}), so a certified write should take the
 constant-cost branch and a shared one the copying branch. On a hand-written
 union-find over \texttt{Array Nat} --- outside the fragment, checked by no rule
-here --- the unshared parent array costs a flat 66--75 ns per update as it grows
-from 2\,000 to 16\,000 elements, while a variant that keeps a snapshot live at the
-write costs $70\,\mathrm{ns} + 0.3\,\mathrm{ns}\cdot n$: 559 to 5\,288 ns over the
-same growth, a ratio of 73 at 16\,000 and a crossover near 230 elements. The
+here --- the unshared workload costs a flat 66--75 ns per iteration as the array
+grows from 2\,000 to 16\,000 elements, while a variant that keeps a snapshot live
+at the write costs 559--5\,288 ns per iteration over the same growth: the shared
+workload grows with the array size while the unshared one stays flat over the
+measured range. These are whole-iteration figures, not per-store latencies. The
 union-find results are identical, so sharing changes the cost and not the value;
 the emitted C calls the runtime's copy-on-write setter, whose branch is the
 reference-count test itself. This observes the predicted branch; it is not a cost
@@ -1032,8 +1033,10 @@ and recapture, which fails if the recogniser's prefix changes; run
 and level data, the path contract, and the child call's edge effect; then check the
 certificate with the axiom audit and the claim census. The third step is the manual
 one; the rest is automatic. The same condition can be checked on a surface of Lean terms
-before compilation: a borrow/move analysis accepts union-find's threading and
-refuses a retained alias or a capture; \lean{Accounted} remains the semantic half.
+before compilation: an experimental borrow/move analysis accepts union-find's
+threading and refuses a retained alias or a capture, but it tracks binders rather
+than owners and is not a sound usage checker; \lean{Accounted} remains the
+semantic half.
 
 \section{Related work}\label{sec:related}
 
@@ -1064,9 +1067,9 @@ checks one compiler run, and verified compilation \cite{compcert,cakeml} proves 
 compiler correct for its source language; both differ in kind from a checker over
 a fragment of an existing backend's input. The reusable insight is that count-one
 reasoning is a boundary discipline: a count of one is not one owner, so the
-accounting needs a support of owning variables and a live-cell domain, and a
-correct temporary-alias protocol is not an invariant, so the pair-live window is
-covered by count identities with accounting asserted at its boundaries.
+accounting needs a support and a live-cell domain; a correct temporary-alias
+protocol is not an invariant, so the pair-live window is covered by count
+identities with accounting at its boundaries.
 
 The five differ on every axis: Huisinga certifies an analysis over a Lean IR
 model, without soundness proof or compiler link; Perceus and Counting Immutable
@@ -1096,9 +1099,9 @@ That is what this paper establishes: a proved relation between owning roots and
 incoming edges, preservation for a restricted flat fragment, a counted extraction,
 call and restoration protocol proved at its accounted boundaries, and --- for one
 level of a finite supported path --- a checked correspondence to the model's run
-under a child-call contract that the closed instance discharges. The result buys a checked count one at the level of the
-model heap and the recognised trace; on the certified shapes the linked probe
-observes the emitted C deciding as predicted. Next come the C semantics, replay and
+under a child-call contract that the closed instance discharges. The result buys a checked count one at the model heap and the
+recognised trace; on certified shapes the linked probe observes the emitted C
+deciding as predicted. Next come the C semantics, replay and
 address identity, free and cascade, and the emitted callee.
 
 \section*{Acknowledgements}

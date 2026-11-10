@@ -100,7 +100,7 @@ def main : IO Unit := do
     , ("unique", 100000, 400000, false)
     , ("unique", 400000, 1600000, false)
     , ("unique", 1600000, 6400000, false) ]
-  IO.println "mode,n,m,milliseconds,nanoseconds_per_op,uf_checksum,liveness_sum"
+  IO.println "mode,n,m,milliseconds,nanoseconds_per_iteration,uf_checksum,liveness_sum"
   for (mode, n, m, share) in cases do
     -- three repetitions, minimum; the small cases are sub-millisecond otherwise
     let mut best := 18446744073709551615

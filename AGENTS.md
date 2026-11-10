@@ -77,18 +77,25 @@
   real function (`setLeaf`), which is the point: reflection is general, the
   recogniser's fragment is not. A declaration whose mono body is not saved in the
   olean is reported as such rather than guessed.
-- `bench/Alias.lean` is the static alias/linearity check for a surface of Lean
-  terms: `#alias_check term` tracks array-typed `fun`/`let` binders by de Bruijn
-  index, allowing any number of borrowed reads (`size`, `getD`, `uget`, `back?`),
-  at most one move per path (writes, other calls, returns, rebinds), taking the
-  maximum over `if` branches, and refusing a capture under a lambda past the
-  parameter spine. Accepted: `bench/AliasOk.lean` (transfer and a loop) and
-  `bench/AliasUfThread.lean` (union-find's `find` threading). Rejected:
-  `bench/AliasBad.lean` (duplication), `bench/AliasBadCapture.lean` (capture),
-  `bench/AliasBadShared.lean` (retained alias). Unknown functions count as
-  consuming; only array-typed binders are tracked; one term at a time. It
-  discharges the multiplicity-one premise of the model's write rule;
+- `bench/Alias.lean` is an **experimental** alias/linearity check for a surface of
+  Lean terms: `#alias_check term` tracks array-typed binders by de Bruijn index,
+  allows borrowed reads (`size`, `getD`, `uget`, `back?`), at most one move per
+  path, takes the maximum over `if` branches, and refuses a capture past the
+  parameter spine. Accepted: `bench/AliasOk.lean` and `bench/AliasUfThread.lean`
+  (union-find's `find` threading). Rejected: `bench/AliasBad.lean`,
+  `bench/AliasBadCapture.lean`, `bench/AliasBadShared.lean`. It is not sound as a
+  usage checker: it tracks binders rather than owners, does not record a consumed
+  owner, ignores moves in conditions, and treats two reads of a container as two
+  independent owners. `bench/AliasKnownGaps.lean` records three violating programs
+  it currently accepts; closing them needs an ordered ownership-state analysis. It
+  therefore does not discharge the model's multiplicity-one premise;
   `Ownership.Accounted` is the semantic half.
+- `bench/UnionFind.lean` is a hand-written union-find benchmark on `Array Nat`,
+  outside the certified fragment. It compares an unshared and a shared variant at
+  equal `n` and `m`; the printed figure is nanoseconds per outer iteration (two
+  finds, and a union store only where one is taken), not per store, and the
+  generated family's flat total does not establish an in-place timing result.
+  `bench/README.md` carries the numbers, the method and the limitations.
 - `scripts/emit_program.lean` is the other direction of the bridge: it defines a
   program in the model language, has `check` accept it, and emits it as Lean into
   `bench/Generated.lean`, which the bench package's `generated` target builds into
@@ -96,7 +103,9 @@
   `(cd bench && nix develop -c lake build generated && ./.lake/build/bin/generated)`.
   The emitted program's output agrees with the model interpreter's result. The
   emitted code is the fragment's straight-line array writes; the ownership
-  operations are dropped because Lean's reference counting inserts them.
+  operations are dropped because Lean's reference counting inserts them. The
+  timing harness builds a fresh input per trial but does not verify the consuming
+  write's disposition.
 - The claim census is gated by `scripts/check_claims.sh`: it extracts every
   `\lean{…}` token from `paper/ownership-skeleton.tex`, requires each token to
   have a row in `docs/notes/claim-map.md` and each row to be cited by a token,
@@ -368,9 +377,10 @@
   accounting at the body's return is *derived* from that effect and the caller's
   accounting at the call (`CountedChildCall.accounted_of`); the instance supplies
   the effect from the leaf rewrite (`B_edges`). A body that is itself the counted
-  chain is the exception: `Ownership.counted_nested_chain_edges` derives its net
-  effect, so `counted_nested_chain_two_levels` constructs the enclosing
-  `CountedChildCall` rather than assuming its `edges`. The leaf contract and N10
+  chain has a *net* edge effect (`Ownership.counted_nested_chain_edges`), but
+  composing it at a second level is not usable: the isolated-accounting premise is
+  inconsistent (`OwnershipTest/IsolatedAccounting.lean`), so
+  `counted_nested_chain_two_levels` is recorded as a regression, not a result. The leaf contract and N10
   remain; the module records that the model's flat environment cannot express the
   emitted per-invocation path re-projection.
 - `OwnershipLcnf/RuntimeModel.lean` is the concrete runtime state for the
@@ -452,15 +462,15 @@
   output by the child's `edges`, call output → final by the restoration's slot
   fill), and `OwnershipTest/CountedFamily.lean` instantiates it as
   `family_chain_edges` with `IncomingCount_fam_final_one` reading the identity
-  off at the extracted child. That net effect is what an enclosing call needs,
-  so `counted_nested_chain_two_levels_call` constructs the outer
-  `CountedChildCall` with the inner chain as its body and the inner net effect as
-  its `edges`, and `counted_nested_chain_two_levels` applies the chain theorem at
-  the outer level. The outer *model* boundary of the compound body stays a
-  hypothesis: the finite-path induction derives `PutBack.ChildCall` for a
-  recursive body, not yet for a `chain` term, so the two-level statement is
-  composed from that boundary and the inner level's accounting rather than from a
-  `Path` instantiation. The child call stays contractual and
+  off at the extracted child. That net effect stands on its own.
+  Composing it at a second level is not claimed: the inner call's isolated
+  accounting would drop the suspended parent's owning root while its count-one cell
+  remains in the heap, so the two-level statement's premise is inconsistent.
+  `OwnershipTest/IsolatedAccounting.lean` proves the general impossibility
+  (`isolated_accounting_impossible`) and instantiates it on the outer entry and the
+  isolated assumption (`two_level_isolated_entry_impossible`); kernel acceptance of
+  the implication therefore says nothing about an instance, and the composition is
+  withdrawn. The child call stays contractual and
   the emitted callee is not captured (N10); the mid-pair state is not `Accounted`
   and its refusal is proved, so the relation is a boundary relation rather than an
   every-instruction one. `OwnershipTest/CountedNested.lean` carries the boundary
