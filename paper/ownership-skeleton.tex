@@ -1024,8 +1024,9 @@ the emitted C calls the runtime's copy-on-write setter, whose branch is the
 reference-count test itself. This observes the predicted branch; it is not a cost
 theorem, because the refinement from the model heap to the runtime is the contract
 above. In the other direction, a checker-accepted model program is emitted as Lean
-and built, and its printed array agrees with the model interpreter; measurements
-and caveats are in \texttt{bench/README.md}.
+and built, and its printed array agrees with the model interpreter --- a
+correctness observation, not a proof that compilation preserves exclusivity;
+measurements and caveats are in \texttt{bench/README.md}.
 
 Applying the development to a changed source update is four steps: pin the sibling
 and recapture, which fails if the recogniser's prefix changes; run

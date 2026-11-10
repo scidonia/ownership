@@ -3,7 +3,7 @@
 Record of what was run for the revised manuscript and its mechanisation, with the
 observed result of each command. Base revision `aaaa0aa` (2026-11-10); this record
 is committed with the changes it describes, so the tree it verifies is that
-revision plus this record's own commit. Nothing here is reported that was not
+revision plus the changes committed alongside it. Nothing here is reported that was not
 observed in this session.
 
 ## Environment

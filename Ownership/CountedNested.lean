@@ -45,11 +45,12 @@ child's incoming-edge count by one and the restoration raises it by one.
 `counted_nested_chain_edges` proves the **net** statement — the chain's entry and
 its restored counted heap have the same incoming-edge count at every name, the
 cursor does not go backwards and no cell appears — and that is what an enclosing
-call consumes as its `edges` field. `counted_nested_chain_two_levels_call`
-constructs the outer `CountedChildCall` from the inner chain's net effect, with
-the inner chain itself as the body, and `counted_nested_chain_two_levels` applies
-the chain theorem at the outer level, so the two-level term's model run and final
-accounting are derived from the same composition. The outer *model* boundary of
+call consumes as its `edges` field. The two-level composition below is **not a
+usable result**: its premise asks for the inner call's accounting under
+`Nested.isolatedCtx`, which makes the suspended parent's owning variable dead while
+the parent's count-one cell stays in the heap, so the premise is inconsistent.
+`OwnershipTest/IsolatedAccounting.lean` proves that impossibility; the two-level
+theorems are regression targets, not claims. The outer *model* boundary of
 the compound body stays a hypothesis: `PutBack.ChildCall` is stated for the
 admitted model body, and the finite-path induction derives it for a recursive
 body, not yet for a `chain` term. `counted_nested_chain`'s `HeapCompat` is still
@@ -1420,14 +1421,17 @@ theorem counted_nested_chain_edges {support : List Var} {H : Heap} {env : Env} {
       rw [Heap.set_other _ _ _ _ hqr] at hoq'
       exact hoq'
 
-/-! ## The two-level chain
+/-! ## The two-level chain (regression target, not a result)
 
-The enclosing call's `edges` field is exactly the net effect above: when the
-outer level's body is the inner chain, the outer `CountedChildCall` is
-`⟨the outer boundary, the inner chain's net effect⟩`. The outer chain theorem
-then applies unchanged, so the two-level chain's model run, trace, `HeapCompat`
-and final accounting follow from the same composition, and its own net effect is
-`counted_nested_chain_edges` again one level up.
+The construction below forms the outer `CountedChildCall` from the inner chain's
+net effect and applies the outer chain theorem, but its `haccIn` premise is
+inconsistent with the outer accounting: the isolated context drops the suspended
+parent's owning root while the parent's count-one cell remains, so no state
+inhabits the premise. `OwnershipTest/IsolatedAccounting.lean` proves this
+(`isolated_accounting_impossible`, `two_level_isolated_entry_impossible`). The
+theorems are kept as a target for a repair that carries suspended caller roots —
+a frame component or a global ledger — not as a claim that the two-level term is
+certified.
 
 The inner level's entry is the outer boundary's *isolated* state: the outer call
 hands its extracted child (`snd`) as the inner parent, so `rIn` is the outer
