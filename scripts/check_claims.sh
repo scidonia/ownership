@@ -68,6 +68,8 @@ DECLARATIONS = {
     "Accounted.decOne": ("Ownership.Accounted.decOne", "Ownership/CompleteAccounting.lean"),
     "Accounted.move": ("Ownership.Accounted.move", "Ownership/CompleteAccounting.lean"),
     "Accounted.setArrInPlace": ("Ownership.Accounted.setArrInPlace", "Ownership/CompleteAccounting.lean"),
+    "setArrInPlace": ("Ownership.Accounted.setArrInPlace", "Ownership/CompleteAccounting.lean"),
+    "inPlace_of_exclusive": ("Ownership.PutBack.inPlace_of_exclusive", "Ownership/PutBack.lean"),
     "Accounted.setScalar": ("Ownership.Accounted.setScalar", "Ownership/CompleteAccounting.lean"),
     "AccountedAlong": ("Ownership.AccountedAlong", "Ownership/Preservation.lean"),
     "AnnotationsIn": ("Ownership.Entry.AnnotationsIn", "Ownership/Entry.lean"),

@@ -339,12 +339,12 @@ runs the recognised trace.
 
 The two languages play different roles. \lean{Code} and \lean{NCode} are the
 checker's \emph{general} language: it contains increments, multi-count decrements
-and arbitrary nesting, and the checker accepts programs that carry no accounting.
+and arbitrary nesting, and accepts programs that carry no accounting.
 The theorem-bearing fragment is \lean{Supported} (\Cref{sec:supported}), an
 inductively defined subset of \lean{Code} with extra certificates. Checker
 acceptance, supported certification, state validity and the child-call
-specification are separate notions; accounting is proved for the fragment that
-carries its certificates, not for checker acceptance alone.
+specification are separate notions; accounting is proved for the certified fragment, not for
+checker acceptance alone.
 
 \section{Complete ownership accounting}\label{sec:accounting}
 
@@ -715,8 +715,7 @@ owned by no variable of that context. At the take-out state of
 \lean{Accounted} (\lean{pairPhase\_refused}), because the count equation reads one
 $=$ one plus one. A finer intermediate relation could root the pair and treat its
 projections as borrowed; the boundary relation instead keeps one invariant at the
-entry, the release and the restoration, which is where the caller's code observes
-the array. Three facts make the window safe. The projections' effect
+entry, the release and the restoration. Three facts make the window safe. The projections' effect
 is exactly the pair's component increment (\lean{incPairComponents\_eq}). The
 release is boundary-neutral (\lean{pair\_traffic\_neutral}): the parent's and
 child's counts are their entry counts, the child's cell is the entry's, and the
@@ -821,16 +820,14 @@ cell; only the allocator cursor differs.
 \end{claim}
 
 The connection has four layers, and they are separate claims. Structural
-recognition walks the compiled declaration and pins operation order, arities,
-operand identities and branch constructors. Decoding consistency makes the
+recognition pins operation order, arities, operands and branch constructors. Decoding consistency makes the
 recognised trace decode to the expected prefix, so the recogniser's verdict is
 spent by the execution theorem rather than assumed by it. Interpreter
 correspondence relates the counted run of that trace to the model's run of the
 built path: same cells, result, fault and trace. Supplied meanings name the
-modelling boundary --- the take-out helper's store, the child body and the emitted
-recursive callee enter as contracts, and the runtime's C primitives are observed,
-not proved --- so recognition is not mistaken for execution adequacy of the emitted
-LCNF or C.
+modelling boundary --- the take-out store, the child body and the recursive callee
+enter as contracts, and the C primitives are observed, not proved --- so recognition
+is not execution adequacy of the LCNF or C.
 
 \begin{theorem}[Counted fragment correspondence]\label{thm:principal-fragment}
 Let the recogniser accept the declared shape (\lean{projectNested} yielding $p$),
@@ -1005,31 +1002,38 @@ roles and the paper-to-code entry points, are listed in the supplementary docume
 \texttt{docs/notes/ownership-theorem-map.md}, which is artifact documentation and
 not part of the argument.
 
-The evidence answers different questions. The parameterised family covers one
-model extraction/call/restoration level, but it is not itself a parameterised
-application of the recognition theorem; the closed instance covers the whole
-counted-fragment theorem at the captured declaration with a supplied model child
-body; the structural controls reject the specified malformed traces, without
-claiming that every malformed trace is rejected; the linked probes observe
-exclusivity, address and result behaviour on the recorded corpus; and the artifact
-gate checks the pinned sibling, its cleanliness and byte-identical captures.
+The evidence answers different questions: the parameterised family covers one
+model level but is not an application of the recognition theorem; the closed
+instance covers the whole counted-fragment theorem with a supplied model child; the
+structural controls reject the specified malformed traces only; the linked probes
+observe exclusivity, address and results on the recorded corpus; and the artifact
+gate checks the pinned sibling and its captures.
 
-The runtime mechanism is also observable on code outside the fragment: a
-hand-written union-find over \texttt{Array Nat}, checked by no rule here, costs a
-flat 66--75 ns per operation on an unshared parent array as it grows from 2\,000 to
-16\,000 elements, while a variant that keeps a snapshot live at the write costs
-559--5\,288 ns and doubles with each doubling of the array, and identical union-find results. The generated C
-calls the runtime's copy-on-write setter, whose branch is the reference-count test.
-In the other direction, a checker-accepted model program is emitted as Lean and
-built, and its printed array agrees with the model interpreter; the measurements,
-the emitted program and their caveats are in \texttt{bench/README.md}.
+The discipline makes a cost prediction, and it is observable. \lean{Accounted}
+with count one forces the exclusive, in-place disposition (\lean{setArrInPlace},
+\lean{inPlace\_of\_exclusive}), so a certified write should take the
+constant-cost branch and a shared one the copying branch. On a hand-written
+union-find over \texttt{Array Nat} --- outside the fragment, checked by no rule
+here --- the unshared parent array costs a flat 66--75 ns per update as it grows
+from 2\,000 to 16\,000 elements, while a variant that keeps a snapshot live at the
+write costs $70\,\mathrm{ns} + 0.3\,\mathrm{ns}\cdot n$: 559 to 5\,288 ns over the
+same growth, a ratio of 73 at 16\,000 and a crossover near 230 elements. The
+union-find results are identical, so sharing changes the cost and not the value;
+the emitted C calls the runtime's copy-on-write setter, whose branch is the
+reference-count test itself. This observes the predicted branch; it is not a cost
+theorem, because the refinement from the model heap to the runtime is the contract
+above. In the other direction, a checker-accepted model program is emitted as Lean
+and built, and its printed array agrees with the model interpreter; measurements
+and caveats are in \texttt{bench/README.md}.
 
 Applying the development to a changed source update is four steps: pin the sibling
 and recapture, which fails if the recogniser's prefix changes; run
 \lean{projectNested}; supply the client facts — entry accounting, layout, agreement
 and level data, the path contract, and the child call's edge effect; then check the
 certificate with the axiom audit and the claim census. The third step is the manual
-one; the rest is automatic.
+one; the rest is automatic. The same condition can be checked on a surface of Lean terms
+before compilation: a borrow/move analysis accepts union-find's threading and
+refuses a retained alias or a capture; \lean{Accounted} remains the semantic half.
 
 \section{Related work}\label{sec:related}
 
@@ -1064,10 +1068,10 @@ accounting needs a support of owning variables and a live-cell domain, and a
 correct temporary-alias protocol is not an invariant, so the pair-live window is
 covered by count identities with accounting asserted at its boundaries.
 
-The five works differ on every axis that matters: Huisinga certifies an analysis
-over a Lean IR model, with no soundness proof and no compiler link; Perceus and
-Counting Immutable Beans certify transformations with a resource calculus, over
-their own semantics; Linear Haskell and Clean certify source-level type properties.
+The five differ on every axis: Huisinga certifies an analysis over a Lean IR
+model, without soundness proof or compiler link; Perceus and Counting Immutable
+Beans certify transformations with a resource calculus; Linear Haskell and Clean
+certify source-level type properties.
 This paper certifies a recognised fragment of emitted code, with roots-and-edges
 accounting, a proved correspondence to the model, and an explicit child-call
 contract the caller discharges, changing nothing in the compiler.
@@ -1075,7 +1079,7 @@ contract the caller discharges, changing nothing in the compiler.
 \section{Scope, conclusion and disclosure}\label{sec:limits}
 
 What is checked, proved, supplied and assumed is kept separate. Checked syntax is
-established by elaborating \lean{\#guard} tests and by the recogniser itself.
+established by \lean{\#guard} tests and the recogniser.
 Model facts are theorems in \lean{Ownership} and \lean{OwnershipLcnf} with no
 axioms beyond Lean's. Client and call facts --- the entry invariant, agreement,
 layout and path contract, the leaf computation, and \lean{CountedChildCall}'s
@@ -1089,12 +1093,10 @@ A count-one discipline can be recovered for an existing compiler IR without
 changing the language, provided the accounting is complete rather than local and
 the emitted protocol is treated as a boundary phenomenon rather than an invariant.
 That is what this paper establishes: a proved relation between owning roots and
-incoming edges whose count-one consequence makes a stored count one meaningful,
-preservation for a restricted flat fragment, a counted extraction, call and
-restoration protocol proved at its accounted boundaries, and --- for the full
-counted fragment at one level of a finite supported path --- a checked
-correspondence to the model's run under an explicit child-call contract that the
-closed instance discharges. The result buys a checked count one at the level of the
+incoming edges, preservation for a restricted flat fragment, a counted extraction,
+call and restoration protocol proved at its accounted boundaries, and --- for one
+level of a finite supported path --- a checked correspondence to the model's run
+under a child-call contract that the closed instance discharges. The result buys a checked count one at the level of the
 model heap and the recognised trace; on the certified shapes the linked probe
 observes the emitted C deciding as predicted. Next come the C semantics, replay and
 address identity, free and cascade, and the emitted callee.

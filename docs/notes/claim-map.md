@@ -21,7 +21,7 @@ allowlisted in the script and must carry the reason the last column records.
 | `.scalar 0` | expression | `Ownership.Val.scalar` | `Ownership/Heap.lean` | A worked instance | displayed heap value: the `scalar` constructor of `Ownership.Val` holding 0. |
 | `.scalar 7` | expression | `Ownership.Val.scalar` | `Ownership/Heap.lean` | A worked instance | displayed heap value: the `scalar` constructor of `Ownership.Val` holding 7. |
 | `1 < c.mult r` | expression | `Ownership.Supported.decOne` | `Ownership/CompleteAccounting.lean` | The supported fragment | displayed premise of the `decOne` constructor: the checker's `n < c.mult r` at n = 1, with `c.mult` being `Ownership.Ctx.mult`. |
-| `Accounted` | declaration | `Ownership.Accounted` | `Ownership/CompleteAccounting.lean` | The pair and its boundary; Compatibility and the boundary argument; Proof sketch.; Recognition, and the flat guarantee; The finite path and the counted fragment; Related work | — |
+| `Accounted` | declaration | `Ownership.Accounted` | `Ownership/CompleteAccounting.lean` | The pair and its boundary; Compatibility and the boundary argument; Proof sketch.; Recognition, and the flat guarantee; The finite path and the counted fragment; Evidence and artifact; Related work | — |
 | `Accounted (resultSupport s support) H' env' c'` | expression | `Ownership.Accounted` | `Ownership/CompleteAccounting.lean` | Preservation | applied conclusion of the preservation theorem; `Ownership.resultSupport` supplies the extended support. |
 | `Accounted support H env c` | expression | `Ownership.Accounted` | `Ownership/CompleteAccounting.lean` | Complete ownership accounting; Preservation | applied form of the relation, not a second declaration. |
 | `Accounted support H mEnv c` | expression | `Ownership.Accounted` | `Ownership/CompleteAccounting.lean` | The finite path and the counted fragment | applied form of the relation at the model environment. |
@@ -135,6 +135,7 @@ allowlisted in the script and must carry the reason the last column records.
 | `fst` | expression | `Ownership.Nested.NCode.takeOut` | `Ownership/Nested.lean` | The judgement. | program variable: the parent binder of the take-out; a binder, not a declaration. |
 | `i` | expression | `Ownership.Code.setArr` | `Ownership/Code.lean` | The judgement. | program variable: the index in the `setArr` and `takeOut` rules; a binder, not a declaration. |
 | `inPlaceOutcome root i v o H` | expression | `OwnershipLcnf.inPlaceOutcome` | `OwnershipLcnf/Semantics.lean` | Recognition, and the flat guarantee | applied form of the outcome the executed prefix and the model run must both equal. |
+| `inPlace_of_exclusive` | declaration | `Ownership.PutBack.inPlace_of_exclusive` | `Ownership/PutBack.lean` | Evidence and artifact | — |
 | `inc` | declaration | `Ownership.Ctx.inc` | `Ownership/Code.lean` | The judgement. | the context update; `Ownership.Code.inc` is the constructor of the same name |
 | `incPairComponents_eq` | declaration | `Ownership.CountedPair.incPairComponents_eq` | `Ownership/CountedPair.lean` | The pair and its boundary; Compatibility and the boundary argument | — |
 | `index_path_simulates_model` | declaration | `OwnershipLcnf.index_path_simulates_model` | `OwnershipLcnf/PathRecursion.lean` | The finite path and the counted fragment | — |
@@ -179,6 +180,7 @@ allowlisted in the script and must carry the reason the last column records.
 | `set` | declaration | `Ownership.Heap.set` | `Ownership/Heap.lean` | A worked instance | the heap update; `Ownership.Env.set` and `OwnershipLcnf.Runtime.Corr.set` carry the same local name |
 | `setArr` | declaration | `Ownership.Code.setArr` | `Ownership/Code.lean` | Proof sketch. | constructor of `Ownership.Code`; the paper drops its leading dot here |
 | `setArr x i v` | expression | `Ownership.Code.setArr` | `Ownership/Code.lean` | The judgement. | displayed constructor pattern of the flat language. |
+| `setArrInPlace` | declaration | `Ownership.Accounted.setArrInPlace` | `Ownership/CompleteAccounting.lean` | Evidence and artifact | — |
 | `setAt` | declaration | `OwnershipLcnf.Runtime.setAt` | `OwnershipLcnf/RuntimeModel.lean` | Recognition, and the flat guarantee | the runtime model's write; the paper names it inside `Runtime.setAt_inPlace_of_entryInv` |
 | `setUs` | declaration | `Ownership.Ctx.setUs` | `Ownership/Code.lean` | The judgement. | — |
 | `size a` | expression | `Ownership.LetF.size` | `Ownership/Code.lean` | Two languages, one accounted subset | displayed right-hand side: the `size` constructor of `Ownership.LetF`. |
