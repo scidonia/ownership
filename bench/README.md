@@ -154,6 +154,27 @@ The second block grows `n` for the unique variant, where `m` grows with `n`.
 | unique | 400000 | 1600000 | 139 | 87 |
 | unique | 1600000 | 6400000 | 1079 | 168 |
 
+## Cost model from these numbers
+
+The shared block is linear in the array size: per update 559, 1142, 2174, 5288 ns
+at n = 2000, 4000, 8000, 16000, i.e. about **0.3 ns per element** (≈ 27 GB/s of
+copy traffic on this machine). The unique block is flat at **≈ 70 ns per update**
+regardless of n. So, roughly,
+
+    update cost ≈ 70 ns            if the array is unique
+    update cost ≈ 70 ns + 0.3 ns × n   if it is shared
+
+with a crossover near n ≈ 230 and a ratio of ≈ 73× at n = 16 000. These are
+least-squares-free single-machine numbers from four points, not a benchmark suite;
+the constants are this allocator, this cache hierarchy and this copying loop.
+
+The important pairing is with the model: `Accounted` plus count one implies the
+exclusive, in-place disposition (`Accounted.setArrInPlace`,
+`PutBack.inPlace_of_exclusive`, and the runtime model's `setAt_inPlace_of_entryInv`).
+So the discipline predicts the α-only branch, the measurement observes that branch
+on real code, and the missing link — a refinement from the model's heap to Lean's
+`Array`/runtime — is the contract the paper states rather than a theorem.
+
 ## Reading it
 
 At fixed `n`, the two variants differ only in whether a second reference is live
