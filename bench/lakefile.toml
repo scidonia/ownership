@@ -8,3 +8,7 @@ root = "UnionFind"
 [[lean_exe]]
 name = "generated"
 root = "Generated"
+
+[[lean_lib]]
+name = "Alias"
+root = "Alias"

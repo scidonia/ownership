@@ -58,6 +58,31 @@ be raised for four thousand. Larger `m` needs a loop, which the model language
 does not have. So the generated path is a correctness connection at modest `m`,
 not a substitute for the loop benchmark.
 
+## A static aliasing check
+
+`bench/Alias.lean` provides `#alias_check term`: at elaboration time it walks the
+term's `fun` and `let` binders whose type is `Array`, counts each binder's
+occurrences (de Bruijn indices, so lambdas and shadowing are handled), and fails
+the elaboration when an owning array occurs more than once. Duplication, capture
+and pairing are all refused at compile time with a source position.
+
+```
+cd bench && nix develop -c lake env lean AliasOk.lean          # accepted, exit 0
+cd bench && nix develop -c lake env lean AliasBad.lean         # rejected, exit 1
+cd bench && nix develop -c lake env lean AliasBadCapture.lean  # rejected, exit 1
+```
+
+The accepted file has `let b := a.set! …; b.set! …` (ownership transferred) and a
+`List.foldl` loop (the owner occurs once); the rejected files duplicate a handle
+and capture one in a closure, and report `'a' occurs 2 times`.
+
+Scope and limits, deliberately small: reads count as uses (no borrowing in this
+surface); a loop is one occurrence, which is correct for ownership across
+iterations; only array-typed binders are tracked, not arrays inside structures or
+fields; and it checks one term, not a module. This is the surface half of the
+discipline — it discharges the multiplicity-one premise that the model's
+`setArr` rule assumes. The semantic half is `Ownership.Accounted`.
+
 ## Build and run
 
 ```sh
