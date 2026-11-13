@@ -1,2 +1,5 @@
 /.lake
 .direnv/
+
+# Build output of the bench ownership surface
+/bench/OwnedStatic.olean

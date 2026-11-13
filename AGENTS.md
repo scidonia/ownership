@@ -90,6 +90,21 @@
   it currently accepts; closing them needs an ordered ownership-state analysis. It
   therefore does not discharge the model's multiplicity-one premise;
   `Ownership.Accounted` is the semantic half.
+- `bench/OwnedStatic.lean` is an **experimental** statically checked ownership
+  surface: `Owned` hides its payload behind a private constructor and field, the
+  only operations are `new`, `write` and `read?`, and `#own_check` reflects an
+  elaborated definition and rejects a handle used more than once in its scope.
+  Accepted `bench/OwnedAccept.lean`; rejected `bench/OwnedReject.lean` (the same
+  handle used twice) and `bench/OwnedNoAccess.lean` (the payload field is
+  private). Run from `bench/`:
+  `nix develop -c bash -c 'export LEAN_PATH=.:$LEAN_PATH; lean -o OwnedStatic.olean OwnedStatic.lean && lean OwnedAccept.lean'`.
+  It is a usage check over the reflected term, not a linear type: Lean permits
+  duplication, which the check refuses. `bench/OwnedDemo.lean` is the
+  runtime-guarded counterpart, where a shared flag refuses the second use.
+  `bench/OwnedTyping.lean` states the fractional context transition: `Split Γ Γ₁
+  Γ₂` at a common denominator, `Writable`/`Readable`, `no_two_writes` (a unit
+  context cannot split into two writable halves), `one_write` and `two_reads`.
+  It is the arithmetic account of the one-transfer rule, not a typed calculus.
 - `bench/UnionFind.lean` is a hand-written union-find benchmark on `Array Nat`,
   outside the certified fragment. It compares an unshared and a shared variant at
   equal `n` and `m`; the printed figure is nanoseconds per outer iteration (two
