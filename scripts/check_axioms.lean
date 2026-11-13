@@ -9,6 +9,7 @@ import OwnershipLcnf.RuntimeModel
 import OwnershipLcnf.NoAbort
 import OwnershipLcnf.Principal
 import Ownership.CompleteAccounting
+import Ownership.Fractional
 import Ownership.Preservation
 import Ownership.CountedNested
 import OwnershipLcnf.CountedTrace
@@ -251,5 +252,9 @@ import OwnershipTest.IsolatedAccounting
 
 #print axioms isolated_accounting_impossible
 #print axioms two_level_isolated_entry_impossible
+
+#print axioms Ownership.fractional_accounting
+#print axioms Ownership.unique_whole_permission
+#print axioms Ownership.shared_share
 
 #print axioms OwnershipLcnf.principal_supported_path

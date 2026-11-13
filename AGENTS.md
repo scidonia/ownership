@@ -429,6 +429,16 @@
   four `Supported` controls (affirmative first) and the axiom prints;
   `scripts/check_axioms.lean` audits every declaration of the new module.
 
+- `Ownership/Fractional.lean` reads that accounting as a fractional permission:
+  `Share n = 1/n`, `fractional_accounting` states that the owning variables and
+  incoming edges together hold the whole permission, `unique_whole_permission`
+  identifies uniqueness with the whole permission in one holder, and `shared_share`
+  is the graded case of `n` holders at `1/n`. This is the correspondence to
+  fractional-uniqueness type systems, whose fractions are our multiplicities; their
+  grades are erased at runtime, and so are ours — the model's counts are read from
+  the heap, and a token argument in `Prop` would be erased too, so it could justify
+  the compiler's decision but not replace the check that takes it.
+
 - `Ownership/CountedNested.lean` joins the counted protocol to the complete
   accounting. `HeapCompat Hc Ha` is the boundary relation: the two heaps agree on
   every cell and the counted cursor is no lower, with

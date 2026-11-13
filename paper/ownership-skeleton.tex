@@ -961,35 +961,30 @@ run's heap are related by \lean{HeapCompat}, not equality: the counted run's
 cursor is one higher, the residue of the temporary pair.
 
 Both composed theorems are instantiated, closed, at the captured declaration's
-data: every premise is supplied at the recogniser's layout, and the instances'
-axiom footprint is the trusted one. The counted instance discharges the child-call
-contract's accounting field from the caller's own accounting at the body's return,
-so the contract is met at the instance rather than assumed by it.
+data, with the trusted axiom footprint. The counted instance discharges the
+child-call contract's accounting field from the caller's own accounting at the
+body's return, so the contract is met rather than assumed.
 
-Five controls probe distinct mechanisms, and they are not interchangeable. A
-retained parent of count two makes the restoration copy rather than mutate, the
+Five controls probe distinct mechanisms. A retained parent of count two makes the restoration copy rather than mutate, the
 relation exposing the extra allocation through the cursor; an omitted pair release
 leaves both component counts elevated with no exclusivity; the pair-live state has
 no accounting at the take-out context. In those three the relation refuses. A
 duplicated, omitted or unbound owner entry shows another face --- a duplicate
 double-counts a root, an omitted owner still satisfies the equation, an unbound
 entry counts nothing --- so each support field is load-bearing. A persistent parent
-is refused by the checker instead: the check aborts and no write is reported, which
-is a different mechanism from a refusal by the relation, and a copy branch in the
-model is not an allocation claim about the executable. Each witness is named in the
-artifact documentation.
+is refused by the checker instead: the check aborts and no write is reported, a
+different mechanism from a refusal by the relation; a copy branch is not an
+allocation claim. Each witness is named in the artifact documentation.
 
 
 
 \subsection{Evidence and artifact}\label{sec:map}
 The proof checks are kernel builds of \lean{Ownership}, \lean{OwnershipTest} and
 \lean{OwnershipLcnf}, an axiom audit over the headline theorems, and the artifact
-gate that binds the pinned LCNF, C and header. They are separate categories from
-the structural recogniser controls (the near-miss counts and the control fixtures
-described above) and from the linked runtime observations. A compiled probe
+gate that binds the pinned LCNF, C and header. They are separate from the recogniser controls and the linked observations. A compiled probe
 compares the model's predicates with \lean{lean\_is\_exclusive} and address
-identity on a corpus including a unique array, a live alias, the alias dropped
-back to one, a persistent literal and a closure-held array; its differential mode
+identity on a corpus including a unique array, a live alias, a persistent literal
+and a closure-held array; its differential mode
 compares recorded expectations rather than executing the \lean{Ownership} model,
 and its closed-pure-array case is an unchecked observation recorded in
 \texttt{docs/notes/OWNERSHIP\_RUNTIME\_EVIDENCE.md}. On the shapes the discipline certifies, the probe observes the alignment
@@ -997,17 +992,13 @@ directly: the unique and nested cases keep the buffer and the written index at
 the same address and the write lands, while a live second reference changes the
 address and leaves the outside reference's values intact; with the check armed
 the harness reports instead of writing. The theorems are the proof and the probe
-is observation. The declarations behind every claim, with their
-roles and the paper-to-code entry points, are listed in the supplementary document
-\texttt{docs/notes/ownership-theorem-map.md}, which is artifact documentation and
-not part of the argument.
+is observation. The declarations behind every claim are listed in
+\texttt{docs/notes/ownership-theorem-map.md}, artifact documentation rather than
+argument.
 
-The evidence answers different questions: the parameterised family covers one
-model level but is not an application of the recognition theorem; the closed
-instance covers the whole counted-fragment theorem with a supplied model child; the
-structural controls reject the specified malformed traces only; the linked probes
-observe exclusivity, address and results on the recorded corpus; and the artifact
-gate checks the pinned sibling and its captures.
+The evidence answers different questions: the family covers one model level without
+applying the recognition theorem, and the probes observe exclusivity, address and
+results.
 
 The discipline makes a cost prediction, and it is observable. \lean{Accounted}
 with count one forces the exclusive, in-place disposition (\lean{setArrInPlace},
@@ -1059,9 +1050,16 @@ programs by inserting counts and reuse tokens and prove the transformation
 preserves semantics; neither asks when a count of one is justified at a write in
 existing code, which is what \lean{Accounted} specifies and what this paper proves
 for a fragment. Linear Haskell \cite{linearhaskell} makes linearity a source-level
-type property and Clean's uniqueness typing \cite{uniqueness} is uniqueness rather
-than linearity; neither checks an existing compiler IR or connects to emitted
-code. Lean's \lean{Array.markLinear} \cite{marklinear} is dynamic: it can copy an
+type property; Clean's uniqueness typing \cite{uniqueness} is uniqueness rather
+than linearity. Neither checks an existing compiler IR or connects to emitted
+code.
+
+Closer in spirit is fractional uniqueness \cite{marshall2024fractional}, where
+ownership and borrowing form a graded generalisation of uniqueness in a type
+system. Its fractions are what our multiplicity counts: a cell's unit permission
+split between owning variables and incoming edges is the count equation. The
+difference is where the discipline lives --- a source-level type system for Granule
+there, a checker over emitted IR here, proved against a model. Lean's \lean{Array.markLinear} \cite{marklinear} is dynamic: it can copy an
 array to establish uniqueness and, with \lean{LEAN\_ABORT\_ON\_NONLINEAR}, abort
 on a later nonlinear use. Translation validation \cite{translationvalidation}
 checks one compiler run, and verified compilation \cite{compcert,cakeml} proves a
@@ -1072,30 +1070,28 @@ accounting needs a support and a live-cell domain; a correct temporary-alias
 protocol is not an invariant, so the pair-live window is covered by count
 identities with accounting at its boundaries.
 
-The five differ on every axis: Huisinga certifies an analysis over a Lean IR
-model, without soundness proof or compiler link; Perceus and Counting Immutable
-Beans certify transformations with a resource calculus; Linear Haskell and Clean
-certify source-level type properties.
+The six differ on every axis: Huisinga certifies an analysis over a Lean IR model
+without soundness proof or link; Perceus and Counting Immutable Beans certify
+transformations; the rest certify source-level type properties.
 This paper certifies a recognised fragment of emitted code, with roots-and-edges
 accounting, a proved correspondence to the model, and an explicit child-call
 contract the caller discharges, changing nothing in the compiler.
 
 \section{Scope, conclusion and disclosure}\label{sec:limits}
 
-What is checked, proved, supplied and assumed is kept separate. Checked syntax is
-established by \lean{\#guard} tests and the recogniser.
-Model facts are theorems in \lean{Ownership} and \lean{OwnershipLcnf} with no
-axioms beyond Lean's. Client and call facts --- the entry invariant, agreement,
-layout and path contract, the leaf computation, and \lean{CountedChildCall}'s
-\lean{edges} effect, from which the post-call accounting is derived --- are
-hypotheses of the two principal theorems, discharged at the closed instance.
-Implementation assumptions are fixed by the runtime contract and observed by the
-linked gate.
+What is checked, proved, supplied and assumed is kept separate: syntax by
+\lean{\#guard} tests and the recogniser; model facts as theorems in \lean{Ownership}
+and \lean{OwnershipLcnf} with no axioms beyond Lean's; client and call facts --- the
+entry invariant, agreement, layout and path contract, the leaf computation, and
+\lean{CountedChildCall}'s \lean{edges} effect, from which the post-call accounting is
+derived --- as hypotheses of the two principal theorems, discharged at the closed
+instance; implementation assumptions fixed by the runtime contract and observed by
+the linked gate.
 
 \paragraph*{Conclusion.}
 A count-one discipline can be recovered for an existing compiler IR without
-changing the language, provided the accounting is complete rather than local and
-the emitted protocol is treated as a boundary phenomenon rather than an invariant.
+changing the language, provided the accounting is complete and the emitted protocol
+is treated as a boundary phenomenon.
 That is what this paper establishes: a proved relation between owning roots and
 incoming edges, preservation for a restricted flat fragment, a counted extraction,
 call and restoration protocol proved at its accounted boundaries, and --- for one
@@ -1111,13 +1107,11 @@ The development and this manuscript were produced with substantial AI assistance
 Tools and model versions used across the development were not recorded. The model
 identifier \texttt{deepseek/deepseek-flash} is recorded for this manuscript revision
 in \texttt{docs/notes/artifacts/final-revision-check.txt}. Categories of assistance:
-prose, Lean proofs, code, analysis and literature search. The division of labour
-between the author and these tools is not recorded. Outputs were checked by the
-pinned kernel build and the axiom audit, and a declaration census checks each
-displayed name against the development; no line-by-line human review of the proof
-scripts is recorded. The author exercised editorial control over the submitted text
-and evidence; kernel checking is not human validation, and the definitions,
-theorem statements, interpretation of evidence, novelty claims and citations are
+prose, Lean proofs, code, analysis and literature search; the division of labour is
+not recorded. Outputs were checked by the pinned kernel build, the axiom audit and a
+declaration census; no line-by-line review of the proof scripts is recorded. The
+author exercised editorial control over the text and evidence; kernel checking is not
+human validation, and the definitions, theorem statements, evidence and citations are
 the author's responsibility.
 
 \bibliographystyle{plainurl}
