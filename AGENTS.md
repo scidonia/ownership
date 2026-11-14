@@ -195,6 +195,12 @@
   `empty_rel`, `read_refines`, `write_refines`, `write_preserves_len` and
   `write_then_read`. It is a state-machine refinement, not an FFI or compiler
   guarantee.
+- `bench/CapTiming.lean` times the pure backend and the reference heap on the
+  64-byte fill/snapshot pattern. Observed at this revision: 47,643 ns per
+  repetition for the backend model and 32,648 ns for the reference model, equal
+  checksums, interpreted evaluation. These are measurements of the two models'
+  operation sequences, not of an interpreter, an optimised backend, FFI or
+  allocation/GC, and they are environment-dependent.
 - `bench/CapNegative.lean` holds the checked negative controls: a read-only, a
   consumed and a half-share leaf cannot authorise a write, and one identifier is
   not a join pair.

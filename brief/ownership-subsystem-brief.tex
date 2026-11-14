@@ -768,6 +768,16 @@ closed runner; (7) hidden-index elaborator; (8) optional retirement and scope
 recovery; (9) mutable interpreter; (10) specialisation and integrations. The
 first useful milestone is stage 4; the first programmer-facing one is stage 7.
 
+\section{Observed model timings}
+
+\file{bench/CapTiming.lean} times the two pure models on the 64-byte
+fill/snapshot pattern. At this revision, 10,000 repetitions gave 47,643 ns per
+repetition for the backend model and 32,648 ns for the reference model, with equal
+checksums. The evaluation is interpreted; these figures cover the models'
+operation sequences, not an interpreter, an optimised backend, FFI, or
+allocation and GC, and they are environment-dependent. They are recorded as a
+measurement, not as a performance claim.
+
 \section{What is deliberately not claimed}
 
 The subsystem is an interpreter with a checked access discipline over its own
