@@ -148,8 +148,10 @@
   `update_preserves_other`, `update_covered` and `update_nodup`;
   `splitAtOwner?`/`splitFractionOwner?` dispatch a split to an owner and preserve
   `Realizes`; `freeWith?` requires the recorded disposal capability and refuses a
-  wrong one (`freeWith?_wrong`). Capability-identifier freshness across owners, the
-  loan threading of the session and the remaining disposal checks are next.
+  wrong one (`freeWith?_wrong`). Capability identifiers are collected by
+  `Tree.ids`/`Owner.ids`/`Ctx.ids`, with `Ctx.Fresh`; `alloc_ids_nodup` shows a
+  fresh root and disposal identifier keep the identifiers distinct. The loan
+  threading of the session and the freshness-preserving disposal proof are next.
 - `Cap/Policy.lean` combines the owner write guard with loan liveness:
   `Policy.Writable` is the owner guard and `LoanCtx.live` of the named lifetime;
   `writable_owner`/`writable_live` project, `not_writable_of_dead` refuses a dead
@@ -157,6 +159,10 @@
   and to ending a loan, and `not_writable_after_endLoan` is the policy corollary.
   It is a predicate combination, not an executable checker, and the session does
   not thread a loan context yet.
+- `Cap/BackendRun.lean` runs the 64-byte example on that backend: fills `[0,32)`
+  with 1 and `[32,64)` with 2, and proves the snapshot is the reference heap's
+  (`exampleBackend_snapshot`, `exampleBackend_rel`, both by `decide`). It is a
+  concrete run, not the interpreter, an FFI claim or a performance result.
 - `Cap/Backend.lean` is the pure mutable-backend model for one allocation:
   `Backend` with a buffer and length proof, `Rel` to the reference heap,
   `empty_rel`, `read_refines`, `write_refines`, `write_preserves_len` and

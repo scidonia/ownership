@@ -24,16 +24,16 @@ structure Session where
 def Session.Realizes (s : Session) : Prop :=
   s.owner.Covered s.D
 
-def Session.create (a : AllocId) (n D : Nat) (pos : 0 < D) (disposal : CapId) :
+def Session.create (a : AllocId) (n D : Nat) (pos : 0 < D) (rootId disposal : CapId) :
     Session :=
-  { owner := Owner.init a n D pos disposal,
+  { owner := Owner.init a n D pos rootId disposal,
     heap := Heap.empty.alloc a n,
     D := D }
 
 theorem Session.create_realizes (a : AllocId) (n D : Nat) (pos : 0 < D)
-    (disposal : CapId) : (Session.create a n D pos disposal).Realizes := by
+    (rootId disposal : CapId) : (Session.create a n D pos rootId disposal).Realizes := by
   unfold Session.create Session.Realizes
-  exact Owner.init_covered a n D pos disposal
+  exact Owner.init_covered a n D pos rootId disposal
 
 def Session.splitAt? (s : Session) (id id1 id2 : CapId) (k : Nat) : Option Session :=
   (s.owner.splitAt? id id1 id2 k).map (fun o => { s with owner := o })

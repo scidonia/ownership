@@ -217,14 +217,14 @@ theorem Owner.split_covered {o o' : Owner} {D : Nat} {id : CapId} {f : Leaf → 
 
 /-- Allocation: a zeroed buffer of `n` bytes, one root leaf of share `D`, and the
 disposal capability. -/
-def Owner.init (a : AllocId) (n D : Nat) (pos : 0 < D) (disposal : CapId) : Owner :=
+def Owner.init (a : AllocId) (n D : Nat) (pos : 0 < D) (rootId disposal : CapId) : Owner :=
   { alloc := a, len := n, disposal := disposal,
     root := .leaf
-      { id := disposal, alloc := a, lo := 0, hi := n, ordered := Nat.zero_le n,
+      { id := rootId, alloc := a, lo := 0, hi := n, ordered := Nat.zero_le n,
         q := D, pos := pos, ceiling := .readWrite, state := .active } }
 
-theorem Owner.init_covered (a : AllocId) (n D : Nat) (pos : 0 < D) (disposal : CapId) :
-    (Owner.init a n D pos disposal).Covered D := by
+theorem Owner.init_covered (a : AllocId) (n D : Nat) (pos : 0 < D) (rootId disposal : CapId) :
+    (Owner.init a n D pos rootId disposal).Covered D := by
   intro x hx
   have hx' : 0 ≤ x ∧ x < n := ⟨Nat.zero_le x, hx⟩
   simp [Owner.init, Tree.budget, Leaf.budget, hx']

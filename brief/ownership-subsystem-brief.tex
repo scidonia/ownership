@@ -633,7 +633,11 @@ lifetime liveness, with \texttt{not\_writable\_of\_dead},
 \texttt{live\_of\_find} and \texttt{live\_false\_of\_endLoan} connecting the
 loan context to the guard. \file{Cap/Backend.lean} is a pure mutable-backend
 model for one allocation with a refinement relation to the reference heap
-(\texttt{read\_refines}, \texttt{write\_refines}, \texttt{write\_then\_read}).
+(\texttt{read\_refines}, \texttt{write\_refines}, \texttt{write\_then\_read}),
+and \file{Cap/BackendRun.lean} runs the 64-byte example on it, proving the
+snapshot equals the reference heap's. Capability identifiers are collected by
+\texttt{Ctx.ids}, with \texttt{Ctx.Fresh} and \texttt{alloc\_ids\_nodup} keeping
+them distinct at allocation.
 
 A reference byte heap is implemented in \file{Cap/Bytes.lean}: \texttt{read?}, \texttt{write?},
 \texttt{fill?}, \texttt{snapshot?} and \texttt{alloc}, with \texttt{write\_get}, \texttt{write\_preserves\_length},
@@ -799,6 +803,7 @@ File & Role \\
 \file{Cap/Context.lean} & multi-owner context, dispatch and disposal \\
 \file{Cap/Policy.lean} & write guard with lifetime liveness \\
 \file{Cap/Backend.lean} & mutable-backend refinement for one allocation \\
+\file{Cap/BackendRun.lean} & the 64-byte run on the backend \\
 \file{Cap/Code.lean} & the code universe and \texttt{El} \\
 \file{Cap/Admission.lean} & \texttt{Bij}, \texttt{SafeValue}, \texttt{SafeType}, the gate \\
 \file{bench/Admission*.lean} & accepted, refused, recursive and axiomatic controls \\

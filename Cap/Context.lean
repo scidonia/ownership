@@ -26,27 +26,40 @@ def Ctx.Realizes (C : Ctx) : Prop :=
 def Ctx.update (C : Ctx) (a : AllocId) (o' : Owner) : Ctx :=
   { C with owners := C.owners.map (fun x => if x.alloc = a then o' else x) }
 
+/-- Capability identifiers occurring in a tree. -/
+def Tree.ids : Tree → List CapId
+  | .leaf c => [c.id]
+  | .frac id l r => id :: (l.ids ++ r.ids)
+  | .spatial id l r => id :: (l.ids ++ r.ids)
+
+def Owner.ids (o : Owner) : List CapId := o.disposal :: o.root.ids
+
+def Ctx.ids (C : Ctx) : List CapId := C.owners.flatMap Owner.ids
+
+/-- A capability identifier does not occur in the context. -/
+def Ctx.Fresh (C : Ctx) (c : CapId) : Prop := c ∉ C.ids
+
 /-- The owner recorded for an allocation, if any. -/
 def Ctx.findOwner? (C : Ctx) (a : AllocId) : Option Owner :=
   C.owners.find? (fun o => o.alloc = a)
 
-def Ctx.alloc (C : Ctx) (a : AllocId) (n : Nat) (pos : 0 < C.D) (disposal : CapId)
+def Ctx.alloc (C : Ctx) (a : AllocId) (n : Nat) (pos : 0 < C.D) (rootId disposal : CapId)
     (hfresh : a ∉ C.owners.map (·.alloc)) : Ctx :=
-  { owners := Owner.init a n C.D pos disposal :: C.owners,
+  { owners := Owner.init a n C.D pos rootId disposal :: C.owners,
     D := C.D,
     nextAlloc := C.nextAlloc + 1 }
 
 theorem Ctx.alloc_realizes {C : Ctx} {a : AllocId} {n : Nat} {pos : 0 < C.D}
-    {disposal : CapId} {hfresh : a ∉ C.owners.map (·.alloc)}
-    (hr : C.Realizes) : (C.alloc a n pos disposal hfresh).Realizes := by
+    {rootId disposal : CapId} {hfresh : a ∉ C.owners.map (·.alloc)}
+    (hr : C.Realizes) : (C.alloc a n pos rootId disposal hfresh).Realizes := by
   refine ⟨?_, ?_⟩
   · intro o ho
     simp [Ctx.alloc] at ho
     rcases ho with rfl | ho
-    · exact Owner.init_covered a n C.D pos disposal
+    · exact Owner.init_covered a n C.D pos rootId disposal
     · exact hr.1 o ho
   · dsimp [Ctx.alloc]
-    have hmap : (Owner.init a n C.D pos disposal :: C.owners).map (·.alloc)
+    have hmap : (Owner.init a n C.D pos rootId disposal :: C.owners).map (·.alloc)
         = a :: C.owners.map (·.alloc) := by
       simp [Owner.init]
     rw [hmap]
@@ -182,5 +195,26 @@ theorem Ctx.splitFractionOwner_realizes {C C' : Ctx} {o : Owner} {id id1 id2 : C
       · intro x hx _
         exact hr.1 x hx
     · exact Ctx.update_nodup (Owner.splitFraction?_alloc ho) hr.2
+
+/-- Allocation of a fresh root and disposal identifier keeps the capability
+identifiers distinct. -/
+theorem Ctx.alloc_ids_nodup {C : Ctx} {a : AllocId} {n : Nat} {pos : 0 < C.D}
+    {rootId disposal : CapId} {hfresh : a ∉ C.owners.map (·.alloc)}
+    (hroot : rootId ∉ C.ids) (hdisp : disposal ∉ C.ids) (hne : rootId ≠ disposal)
+    (hnd : C.ids.Nodup) :
+    (C.alloc a n pos rootId disposal hfresh).ids.Nodup := by
+  have hshape : (C.alloc a n pos rootId disposal hfresh).ids
+      = [disposal, rootId] ++ C.ids := by
+    simp [Ctx.alloc, Ctx.ids, Owner.ids, Owner.init, Tree.ids]
+  rw [hshape, List.nodup_append]
+  refine ⟨?_, hnd, ?_⟩
+  · simp [hne, Ne.symm hne]
+  · intro x hx y hy
+    simp at hx
+    rcases hx with rfl | rfl
+    · intro hxy
+      exact hdisp (hxy ▸ hy)
+    · intro hxy
+      exact hroot (hxy ▸ hy)
 
 end Cap
