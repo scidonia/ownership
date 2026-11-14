@@ -138,6 +138,12 @@
   representation — so they certify storage shape, not that the type carries no
   live resource; a handler-generated instance from the declaration, or a
   definitional representation, is what would close that gap.
+  `Cap.Universe` adds the definitional route: codes for `Nat`, `Bool`, `UInt8`,
+  `Unit`, products, sums and lists, `El` denoting each, and `repCode` placing
+  every coded type in `SafeRep`, so `SafeValue (El c)` holds by `rfl` with
+  `Rep := El c`. It admits coded types without a search and stays closed against
+  references, functions and closures; a user structure still needs an alias or a
+  proved bijection. `bench/UniverseDemo.lean` is the control.
 - `bench/UnionFind.lean` is a hand-written union-find benchmark on `Array Nat`,
   outside the certified fragment. It compares an unshared and a shared variant at
   equal `n` and `m`; the printed figure is nanoseconds per outer iteration (two

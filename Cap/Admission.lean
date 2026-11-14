@@ -29,7 +29,10 @@ inductive SafeRep : Type → Prop where
   | nat : SafeRep Nat
   | bool : SafeRep Bool
   | uint8 : SafeRep UInt8
+  | unit : SafeRep Unit
   | prod {A B : Type} : SafeRep A → SafeRep B → SafeRep (A × B)
+  | sum {A B : Type} : SafeRep A → SafeRep B → SafeRep (Sum A B)
+  | list {A : Type} : SafeRep A → SafeRep (List A)
 
 /-- A type with a proved bijection to an allowed representation. -/
 class SafeValue (T : Type) where
