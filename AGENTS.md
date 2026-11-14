@@ -140,6 +140,14 @@
   `endLoan` removes a present loan whose lifetime is live
   (`endLoan_removes_loan`). It has no heap and no capability ledger, and the loans
   are not yet consulted by `Cap.Ledger`'s guards.
+- `Cap/Session.lean` is the single-owner end-to-end state: an owner, the reference
+  heap and the denominator. `Session.Realizes` is the owner's coverage;
+  `create_realizes`, `splitAt_realizes` and `fill_realizes` preserve it. `fill?`
+  takes the ledger's `Writable` guard for every byte it writes. The 64-byte
+  acceptance run is concrete: a spatial split tree over `[0,32)` and `[32,64)`,
+  fills of 1 and 2 through the guards, and `exampleRun_snapshot` proves the
+  snapshot is 32 ones followed by 32 twos. The run builds the split tree by hand;
+  the dynamic split transitions are covered by the `Cap.Ledger` theorems.
 - `Cap/Bytes.lean` is the reference byte heap: buffers as `List UInt8` keyed by
   `AllocId`, with `read?`, `write?`, `fill?`, `snapshot?` and `alloc`. Proved:
   `write_get`, `write_preserves_length`, `write_ne`, the 64-byte example

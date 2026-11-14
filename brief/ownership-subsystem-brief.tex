@@ -609,6 +609,13 @@ live loan. It is pure bookkeeping and is not yet consulted by the ledger guards.
 The multi-owner context, disposal entitlements across owners and the remaining
 lifecycle transitions are proposed.
 
+A single-owner session is implemented in \file{Cap/Session.lean}: it carries the
+owner, the reference heap and the denominator, with \texttt{Session.Realizes} as the
+coverage invariant; \texttt{create\_realizes}, \texttt{splitAt\_realizes} and \texttt{fill\_realizes}
+preserve it, and \texttt{fill?} takes the ledger's \texttt{Writable} guard for every byte it
+writes. The 64-byte acceptance run is concrete and checked: \texttt{exampleRun\_snapshot}
+proves the snapshot is 32 ones followed by 32 twos.
+
 A reference byte heap is implemented in \file{Cap/Bytes.lean}: \texttt{read?}, \texttt{write?},
 \texttt{fill?}, \texttt{snapshot?} and \texttt{alloc}, with \texttt{write\_get}, \texttt{write\_preserves\_length},
 \texttt{write\_ne}, the 64-byte example (left sum 32, right sum 64), two readers of the
@@ -769,6 +776,7 @@ File & Role \\
 \file{Cap/Ledger.lean} & decomposition tree, owners, coverage and guards \\
 \file{Cap/Bytes.lean} & reference byte heap and the 64-byte example \\
 \file{Cap/Loans.lean} & lifetime and loan bookkeeping \\
+\file{Cap/Session.lean} & single-owner session and the 64-byte run \\
 \file{Cap/Code.lean} & the code universe and \texttt{El} \\
 \file{Cap/Admission.lean} & \texttt{Bij}, \texttt{SafeValue}, \texttt{SafeType}, the gate \\
 \file{bench/Admission*.lean} & accepted, refused, recursive and axiomatic controls \\

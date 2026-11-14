@@ -319,6 +319,61 @@ theorem Owner.writeByte_sound {o o' : Owner} {h h' : Heap} {D : Nat} {id : CapId
     obtain ⟨rfl, rfl⟩ := hr
     exact ⟨rfl, Heap.write_get hb⟩
 
+/-- The tree produced by splitting `c` spatially at `k`, when `k` lies in range. -/
+def Leaf.splitSpatial? (c : Leaf) (id1 id2 : CapId) (k : Nat) : Option Tree :=
+  if h : c.lo ≤ k ∧ k ≤ c.hi then
+    some (.spatial id1
+      (.leaf { c with id := id1, hi := k, ordered := h.1 })
+      (.leaf { c with id := id2, lo := k, ordered := h.2 }))
+  else none
+
+theorem Leaf.splitSpatial?_some {c : Leaf} {id1 id2 : CapId} {k : Nat} {t : Tree}
+    (h : c.splitSpatial? id1 id2 k = some t) :
+    ∃ (h1 : c.lo ≤ k) (h2 : k ≤ c.hi),
+      t = .spatial id1
+        (.leaf { c with id := id1, hi := k, ordered := h1 })
+        (.leaf { c with id := id2, lo := k, ordered := h2 }) := by
+  unfold Leaf.splitSpatial? at h
+  split at h
+  · rename_i hk
+    exact ⟨hk.1, hk.2, by simp at h; subst h; rfl⟩
+  · simp at h
+
+/-- Spatially split the owner's leaf `id` at `k`. -/
+def Owner.splitAt? (o : Owner) (id id1 id2 : CapId) (k : Nat) : Option Owner :=
+  match o.root.find? id with
+  | none => none
+  | some c =>
+    (c.splitSpatial? id1 id2 k).map
+      (fun t => { o with root := o.root.replace id (fun _ => t) })
+
+theorem Owner.splitAt_covered {o o' : Owner} {D : Nat} {id id1 id2 : CapId} {k : Nat}
+    (hs : o.splitAt? id id1 id2 k = some o') (hcov : o.Covered D) : o'.Covered D := by
+  unfold Owner.splitAt? at hs
+  cases hf : o.root.find? id with
+  | none => simp [hf] at hs
+  | some c =>
+    cases hsp : c.splitSpatial? id1 id2 k with
+    | none => simp [hf, hsp] at hs
+    | some t =>
+      obtain ⟨h1, h2, ht⟩ := Leaf.splitSpatial?_some hsp
+      simp [hf, hsp] at hs
+      cases hs
+      subst ht
+      apply Owner.split_covered (o := o) (id := id)
+        (f := fun _ => .spatial id1
+          (.leaf { c with id := id1, hi := k, ordered := h1 })
+          (.leaf { c with id := id2, lo := k, ordered := h2 }))
+      · simp [Owner.split?, hf]
+      · intro c' hc' x
+        have hc'c : c' = c := by
+          rw [hf] at hc'
+          cases hc'
+          rfl
+        subst hc'c
+        exact spatial_split_budget rfl rfl rfl rfl rfl rfl rfl rfl h1 h2
+      · exact hcov
+
 -- Concrete checks: a whole-capability read budget and a spatial split.
 namespace LedgerExamples
 
