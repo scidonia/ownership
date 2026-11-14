@@ -448,6 +448,72 @@ containers, which need a \texttt{SafeRep} extension before any handler can help.
 A type that cannot be admitted is simply not storable: that is a usability limit,
 not an unsoundness.
 
+\subsection*{Universe coding, and what it does not automate}
+
+A universe of codes makes the representation uniform and removes the isomorphism
+obligation for coded types: \texttt{El c} is its own representation, so both
+inverse laws are \texttt{rfl} and no search takes place.
+
+\begin{lstlisting}[caption={\file{Cap/Universe.lean}: codes denote first-order value types by construction.}]
+inductive Code where
+  | nat | bool | uint8 | unit
+  | prod (a b : Code)
+  | sum (a b : Code)
+  | list (a : Code)
+
+def El : Code → Type
+  | .nat => Nat
+  | .bool => Bool
+  | .uint8 => UInt8
+  | .unit => Unit
+  | .prod a b => El a × El b
+  | .sum a b => Sum (El a) (El b)
+  | .list a => List (El a)
+
+def repCode : (c : Code) → SafeRep (El c)
+  | .nat => SafeRep.nat
+  | .prod a b => SafeRep.prod (repCode a) (repCode b)
+  | .list a => SafeRep.list (repCode a)
+  -- the remaining cases are the same shape
+
+instance (c : Code) : SafeValue (El c) where
+  Rep := El c
+  rep := repCode c
+  toRep := id
+  ofRep := id
+  left := by intro t; rfl
+  right := by intro r; rfl
+\end{lstlisting}
+
+\begin{lstlisting}[style=out]
+example : SafeValue (El (.list (.prod .nat .bool))) := inferInstance
+def listTy : SafeType := ⟨El (.list .nat), inferInstance, fun _ => []⟩
+example : listTy.init #[] = ([] : List Nat) := rfl
+\end{lstlisting}
+
+The coding does not, however, automate the cases the brief lists:
+
+\begin{itemize}[itemsep=2pt,topsep=2pt]
+\item It does not find a code for an arbitrary \texttt{T} or prove
+\texttt{T} $\simeq$ \texttt{El c}. That is the same mathematical obligation as before; coding
+changes the representation, not the proof search.
+\item It cannot code ``everything''. A code universe with \texttt{El : Code} $\to$ \texttt{Type}
+is a small universe by construction and contains no code for \texttt{Type}
+itself; and it is closed against references, functions and closures on purpose,
+which is what keeps resource-bearing types out.
+\item Cardinality coding is the trap. Any countable type is classically
+equinumerous with \texttt{Nat}, so a Gödel-style coding would admit a type that
+hides a reference as readily as \texttt{Nat} itself. A noncomputable bijection
+cannot be run by the allocator, and a computable one needs a table from codes to
+live references, which is the resource the discipline was meant to exclude.
+\end{itemize}
+
+The universe therefore extends the \emph{definitional} route: a type is admitted
+automatically when it is an alias of a code, and a new shape is admitted by
+adding a constructor to \texttt{Code} and \texttt{SafeRep} (a library extension
+with a safety argument). A user-defined structure still needs either such an
+alias or a proved bijection, exactly as before.
+
 \section{Allocation, freshness and the seal}\label{sec:seal}
 
 Allocation is an instruction of the object language, not a function the client
