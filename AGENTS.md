@@ -117,6 +117,13 @@
   `nix develop -c lake build Cap`; `scripts/check_all.sh` includes it. The
   remaining stages are the context ledger and transitions, the typed core and
   semantics, then the elaborator, runner and backend refinement.
+- `Cap/Ledger.lean` is stage 2a of the ledger: `Leaf` carries a footprint, share,
+  ceiling and state; `Tree` has fractional and spatial nodes; `budget` is the
+  frontier sum at a byte; `frac_split_budget` and `spatial_split_budget` state that
+  a split preserves the budget and the sibling joins restore it. This is the
+  arithmetic the `Realizes` invariant will be stated over; the context (forest,
+  disposal entitlement, lifetimes, loans) and the executable transitions are the
+  next slice.
 - `Cap/Code.lean` is the closed value universe: codes for `Nat`, `Bool`,
   `UInt8`, `Unit`, products, sums and lists, with `El` denoting each. There is no
   code for a reference, a function or a closure. That closure does not make every

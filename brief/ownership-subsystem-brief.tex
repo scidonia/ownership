@@ -591,6 +591,13 @@ For each allocated byte $x$, the terminal holders' shares must sum to one:
 = 1.
 \]
 
+The arithmetic part is implemented (\file{Cap/Ledger.lean}): a leaf carries its
+footprint, share, ceiling and state, internal nodes are fractional and spatial
+splits, and the budget is the frontier sum at a byte. \texttt{frac\_split\_budget}
+and \texttt{spatial\_split\_budget} prove that a split preserves the budget at
+every byte, with the sibling joins as their converses. The context, disposal
+entitlement, lifetimes and executable transitions are proposed, not implemented.
+
 Spatial splits preserve the equation because each byte is in exactly one child;
 fractional splits preserve it because the children sum to the parent; retirement
 keeps the contribution but removes access. The equation is necessary and not
@@ -742,6 +749,7 @@ File & Role \\
 \file{Cap/Id.lean} & allocation, capability, loan, lifetime identities \\
 \file{Cap/Share.lean} & shares, splits, the one-transfer theorem \\
 \file{Cap/Footprint.lean} & intervals, views, split facts \\
+\file{Cap/Ledger.lean} & decomposition tree and the budget preservation facts \\
 \file{Cap/Code.lean} & the code universe and \texttt{El} \\
 \file{Cap/Admission.lean} & \texttt{Bij}, \texttt{SafeValue}, \texttt{SafeType}, the gate \\
 \file{bench/Admission*.lean} & accepted, refused, recursive and axiomatic controls \\
