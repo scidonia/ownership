@@ -624,6 +624,17 @@ requires every owner to be covered and the allocations to be distinct,
 the list, recorded disposal entitlements, capability-identifier freshness and the
 loan lifecycle wiring remain proposed.
 
+The owner transitions are dispatched over the context: \texttt{Ctx.update}
+replaces an owner with the coverage and distinctness frame facts,
+\texttt{splitAtOwner?} and \texttt{splitFractionOwner?} preserve
+\texttt{Realizes}, and \texttt{freeWith?} frees only through the recorded
+disposal capability. \file{Cap/Policy.lean} combines the owner write guard with
+lifetime liveness, with \texttt{not\_writable\_of\_dead},
+\texttt{live\_of\_find} and \texttt{live\_false\_of\_endLoan} connecting the
+loan context to the guard. \file{Cap/Backend.lean} is a pure mutable-backend
+model for one allocation with a refinement relation to the reference heap
+(\texttt{read\_refines}, \texttt{write\_refines}, \texttt{write\_then\_read}).
+
 A reference byte heap is implemented in \file{Cap/Bytes.lean}: \texttt{read?}, \texttt{write?},
 \texttt{fill?}, \texttt{snapshot?} and \texttt{alloc}, with \texttt{write\_get}, \texttt{write\_preserves\_length},
 \texttt{write\_ne}, the 64-byte example (left sum 32, right sum 64), two readers of the
@@ -785,7 +796,9 @@ File & Role \\
 \file{Cap/Bytes.lean} & reference byte heap and the 64-byte example \\
 \file{Cap/Loans.lean} & lifetime and loan bookkeeping \\
 \file{Cap/Session.lean} & single-owner session and the 64-byte run \\
-\file{Cap/Context.lean} & multi-owner context, allocation and disposal \\
+\file{Cap/Context.lean} & multi-owner context, dispatch and disposal \\
+\file{Cap/Policy.lean} & write guard with lifetime liveness \\
+\file{Cap/Backend.lean} & mutable-backend refinement for one allocation \\
 \file{Cap/Code.lean} & the code universe and \texttt{El} \\
 \file{Cap/Admission.lean} & \texttt{Bij}, \texttt{SafeValue}, \texttt{SafeType}, the gate \\
 \file{bench/Admission*.lean} & accepted, refused, recursive and axiomatic controls \\

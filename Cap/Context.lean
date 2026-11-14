@@ -22,6 +22,14 @@ structure Ctx where
 def Ctx.Realizes (C : Ctx) : Prop :=
   (∀ o ∈ C.owners, o.Covered C.D) ∧ (C.owners.map (·.alloc)).Nodup
 
+/-- Replace the owner for allocation `a` by `o'`. -/
+def Ctx.update (C : Ctx) (a : AllocId) (o' : Owner) : Ctx :=
+  { C with owners := C.owners.map (fun x => if x.alloc = a then o' else x) }
+
+/-- The owner recorded for an allocation, if any. -/
+def Ctx.findOwner? (C : Ctx) (a : AllocId) : Option Owner :=
+  C.owners.find? (fun o => o.alloc = a)
+
 def Ctx.alloc (C : Ctx) (a : AllocId) (n : Nat) (pos : 0 < C.D) (disposal : CapId)
     (hfresh : a ∉ C.owners.map (·.alloc)) : Ctx :=
   { owners := Owner.init a n C.D pos disposal :: C.owners,
@@ -59,5 +67,120 @@ theorem Ctx.free_realizes {C : Ctx} {a : AllocId} (hr : C.Realizes) :
       rfl
     rw [hmap]
     exact List.Nodup.sublist List.filter_sublist hr.2
+
+private theorem update_alloc_map (l : List Owner) (a : AllocId) (o' : Owner)
+    (halloc : o'.alloc = a) :
+    (l.map (fun x => if x.alloc = a then o' else x)).map (·.alloc)
+      = l.map (·.alloc) := by
+  induction l with
+  | nil => rfl
+  | cons y ys ih =>
+    simp only [List.map_cons]
+    rw [ih]
+    by_cases hy : y.alloc = a
+    · simp [hy, halloc]
+    · simp [hy]
+
+/-- Coverage of an owner other than the updated allocation is untouched. -/
+theorem Ctx.update_preserves_other {C : Ctx} {a b : AllocId} {o o' : Owner}
+    (hb : b ≠ a) (ho : o ∈ C.owners) (hcov : o.Covered C.D) :
+    o.Covered (C.update a o').D := by
+  have _ := hb
+  have _ := ho
+  simpa only [Ctx.update] using hcov
+
+/-- If the replacement is covered and all other owners are covered, the updated
+context is covered. -/
+theorem Ctx.update_covered {C : Ctx} {a : AllocId} {o' : Owner}
+    (ho' : o'.Covered C.D) (hr : ∀ o ∈ C.owners, o.alloc ≠ a → o.Covered C.D) :
+    (∀ o ∈ (C.update a o').owners, o.Covered (C.update a o').D) := by
+  intro o ho
+  dsimp only [Ctx.update] at ho
+  rw [List.mem_map] at ho
+  obtain ⟨x, hx, rfl⟩ := ho
+  show (if x.alloc = a then o' else x).Covered C.D
+  split
+  · exact ho'
+  · rename_i hxa
+    exact hr x hx hxa
+
+/-- Allocation identifiers remain distinct when the replacement has the same
+allocation identifier as the owner it replaces. -/
+theorem Ctx.update_nodup {C : Ctx} {a : AllocId} {o' : Owner}
+    (halloc : o'.alloc = a) (hnd : (C.owners.map (·.alloc)).Nodup) :
+    ((C.update a o').owners.map (·.alloc)).Nodup := by
+  rw [show (C.update a o').owners.map (·.alloc) = C.owners.map (·.alloc) from
+    update_alloc_map C.owners a o' halloc]
+  exact hnd
+
+/-- Free an allocation only through its recorded disposal capability. -/
+def Ctx.freeWith? (C : Ctx) (a : AllocId) (d : CapId) : Option Ctx :=
+  match C.findOwner? a with
+  | some o => if o.disposal = d then some (C.free a) else none
+  | none => none
+
+theorem Ctx.freeWith?_realizes {C C' : Ctx} {a : AllocId} {d : CapId}
+    (h : C.freeWith? a d = some C') (hr : C.Realizes) : C'.Realizes := by
+  unfold Ctx.freeWith? at h
+  cases hf : C.findOwner? a with
+  | none => simp [hf] at h
+  | some o =>
+    by_cases hd : o.disposal = d
+    · simp [hf, hd] at h
+      cases h
+      exact Ctx.free_realizes hr
+    · simp [hf, hd] at h
+
+/-- A wrong disposal capability is refused. -/
+theorem Ctx.freeWith?_wrong {C : Ctx} {a : AllocId} {d : CapId} {o : Owner}
+    (hf : C.findOwner? a = some o) (hd : o.disposal ≠ d) : C.freeWith? a d = none := by
+  unfold Ctx.freeWith?
+  rw [hf]
+  simp [hd]
+
+/-- Dispatch a spatial split to the owner of an allocation, replacing that owner
+and leaving the other owners alone. -/
+def Ctx.splitAtOwner? (C : Ctx) (o : Owner) (id id1 id2 : CapId) (k : Nat) :
+    Option Ctx :=
+  (o.splitAt? id id1 id2 k).map (fun o' => C.update o.alloc o')
+
+theorem Ctx.splitAtOwner_realizes {C C' : Ctx} {o : Owner} {id id1 id2 : CapId}
+    {k : Nat} (hmem : o ∈ C.owners) (hs : C.splitAtOwner? o id id1 id2 k = some C')
+    (hr : C.Realizes) : C'.Realizes := by
+  unfold Ctx.splitAtOwner? at hs
+  cases ho : o.splitAt? id id1 id2 k with
+  | none => simp [ho] at hs
+  | some o' =>
+    simp [ho] at hs
+    cases hs
+    refine ⟨?_, ?_⟩
+    · apply Ctx.update_covered
+      · exact Owner.splitAt_covered ho (hr.1 o hmem)
+      · intro x hx _
+        exact hr.1 x hx
+    · exact Ctx.update_nodup (Owner.splitAt?_alloc ho) hr.2
+
+/-- Dispatch a fractional split to the owner of an allocation. -/
+def Ctx.splitFractionOwner? (C : Ctx) (o : Owner) (id id1 id2 : CapId) (q1 q2 : Nat)
+    (p1 : 0 < q1) (p2 : 0 < q2) : Option Ctx :=
+  (o.splitFraction? id id1 id2 q1 q2 p1 p2).map (fun o' => C.update o.alloc o')
+
+theorem Ctx.splitFractionOwner_realizes {C C' : Ctx} {o : Owner} {id id1 id2 : CapId}
+    {q1 q2 : Nat} {p1 : 0 < q1} {p2 : 0 < q2}
+    (hmem : o ∈ C.owners)
+    (hs : C.splitFractionOwner? o id id1 id2 q1 q2 p1 p2 = some C')
+    (hr : C.Realizes) : C'.Realizes := by
+  unfold Ctx.splitFractionOwner? at hs
+  cases ho : o.splitFraction? id id1 id2 q1 q2 p1 p2 with
+  | none => simp [ho] at hs
+  | some o' =>
+    simp [ho] at hs
+    cases hs
+    refine ⟨?_, ?_⟩
+    · apply Ctx.update_covered
+      · exact Owner.splitFraction_covered ho (hr.1 o hmem)
+      · intro x hx _
+        exact hr.1 x hx
+    · exact Ctx.update_nodup (Owner.splitFraction?_alloc ho) hr.2
 
 end Cap

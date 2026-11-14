@@ -144,9 +144,27 @@
   denominator and a fresh-allocation counter. `Ctx.Realizes` requires every owner to
   be covered and the allocation identifiers to be distinct; `Ctx.alloc` appends a
   fresh, fully covered owner (`alloc_realizes`) and `Ctx.free` removes one by
-  allocation (`free_realizes`). Capability-identifier freshness across owners,
-  recorded disposal entitlements, loans and dispatch of the owner-level transitions
-  over the list remain the next slice.
+  allocation (`free_realizes`). `Ctx.update` replaces an owner, with
+  `update_preserves_other`, `update_covered` and `update_nodup`;
+  `splitAtOwner?`/`splitFractionOwner?` dispatch a split to an owner and preserve
+  `Realizes`; `freeWith?` requires the recorded disposal capability and refuses a
+  wrong one (`freeWith?_wrong`). Capability-identifier freshness across owners, the
+  loan threading of the session and the remaining disposal checks are next.
+- `Cap/Policy.lean` combines the owner write guard with loan liveness:
+  `Policy.Writable` is the owner guard and `LoanCtx.live` of the named lifetime;
+  `writable_owner`/`writable_live` project, `not_writable_of_dead` refuses a dead
+  lifetime, `live_of_find` and `live_false_of_endLoan` connect liveness to lookups
+  and to ending a loan, and `not_writable_after_endLoan` is the policy corollary.
+  It is a predicate combination, not an executable checker, and the session does
+  not thread a loan context yet.
+- `Cap/Backend.lean` is the pure mutable-backend model for one allocation:
+  `Backend` with a buffer and length proof, `Rel` to the reference heap,
+  `empty_rel`, `read_refines`, `write_refines`, `write_preserves_len` and
+  `write_then_read`. It is a state-machine refinement, not an FFI or compiler
+  guarantee.
+- `bench/CapNegative.lean` holds the checked negative controls: a read-only, a
+  consumed and a half-share leaf cannot authorise a write, and one identifier is
+  not a join pair.
 - `Cap/Session.lean` is the single-owner end-to-end state: an owner, the reference
   heap and the denominator. `Session.Realizes` is the owner's coverage;
   `create_realizes`, `splitAt_realizes` and `fill_realizes` preserve it. `fill?`

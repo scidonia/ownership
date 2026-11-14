@@ -374,6 +374,35 @@ theorem Owner.splitAt_covered {o o' : Owner} {D : Nat} {id id1 id2 : CapId} {k :
         exact spatial_split_budget rfl rfl rfl rfl rfl rfl rfl rfl h1 h2
       · exact hcov
 
+/-- A spatial split keeps the owner's allocation identifier. -/
+theorem Owner.splitAt?_alloc {o o' : Owner} {id id1 id2 : CapId} {k : Nat}
+    (h : o.splitAt? id id1 id2 k = some o') : o'.alloc = o.alloc := by
+  unfold Owner.splitAt? at h
+  cases hf : o.root.find? id with
+  | none => simp [hf] at h
+  | some c =>
+    cases hs : c.splitSpatial? id1 id2 k with
+    | none => simp [hf, hs] at h
+    | some t =>
+      simp [hf, hs] at h
+      cases h
+      rfl
+
+/-- A fractional split keeps the owner's allocation identifier. -/
+theorem Owner.splitFraction?_alloc {o o' : Owner} {id id1 id2 : CapId} {q1 q2 : Nat}
+    {p1 : 0 < q1} {p2 : 0 < q2}
+    (h : o.splitFraction? id id1 id2 q1 q2 p1 p2 = some o') : o'.alloc = o.alloc := by
+  unfold Owner.splitFraction? at h
+  cases hf : o.root.find? id with
+  | none => simp [hf] at h
+  | some c =>
+    cases hs : c.splitFractionTree id1 id2 q1 q2 p1 p2 with
+    | none => simp [hf, hs] at h
+    | some t =>
+      simp [hf, hs] at h
+      cases h
+      rfl
+
 /-- A writable leaf must be active. -/
 theorem Owner.writable_active {o : Owner} {D : Nat} {id : CapId} {i : Nat}
     (h : o.Writable D id i) : ∃ c, o.root.find? id = some c ∧ c.state = .active := by
@@ -402,6 +431,23 @@ theorem Owner.consumed_not_writable {o : Owner} {D : Nat} {id : CapId} {i : Nat}
   obtain ⟨c, hfind, hstate, _, _, _, _⟩ := h
   rw [hc c hfind] at hstate
   cases hstate
+
+/-- The sibling-join precondition, as a decision procedure: the two capability
+identifiers must be distinct and both must name leaves. The actual join transition
+is not implemented yet; this records which pairs it would accept. -/
+def Owner.canJoin (o : Owner) (id1 id2 : CapId) : Bool :=
+  (id1 != id2) && (o.root.find? id1).isSome && (o.root.find? id2).isSome
+
+/-- An alias of one capability is never a join pair, even when the leaf exists. -/
+theorem Owner.canJoin_self_false (o : Owner) (id : CapId) : o.canJoin id id = false := by
+  simp [Owner.canJoin]
+
+/-- A successful join check names two distinct leaves. -/
+theorem Owner.canJoin_sound {o : Owner} {id1 id2 : CapId} (h : o.canJoin id1 id2 = true) :
+    id1 ≠ id2 ∧ (o.root.find? id1).isSome = true ∧ (o.root.find? id2).isSome = true := by
+  unfold Owner.canJoin at h
+  simp only [Bool.and_eq_true] at h
+  exact ⟨by simpa using h.1.1, h.1.2, h.2⟩
 
 -- Concrete checks: a whole-capability read budget and a spatial split.
 namespace LedgerExamples
