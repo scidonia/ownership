@@ -639,6 +639,14 @@ snapshot equals the reference heap's. Capability identifiers are collected by
 \texttt{Ctx.ids}, with \texttt{Ctx.Fresh} and \texttt{alloc\_ids\_nodup} keeping
 them distinct at allocation.
 
+A deep command language with an executable checker is implemented in
+\file{Cap/Core.lean}: writes, spatial and fractional splits and no-ops; the checker
+returns \texttt{Except String Owner}; an accepted write carries the owner's
+\texttt{Writable} guard (\texttt{write\_checked}), accepted splits invoke
+succeeding transitions, \texttt{check\_covered} carries coverage through a run,
+and a read-only write is refused. This is a deep syntax and checker, not the
+hidden-index surface elaborator and not a heap semantics.
+
 A reference byte heap is implemented in \file{Cap/Bytes.lean}: \texttt{read?}, \texttt{write?},
 \texttt{fill?}, \texttt{snapshot?} and \texttt{alloc}, with \texttt{write\_get}, \texttt{write\_preserves\_length},
 \texttt{write\_ne}, the 64-byte example (left sum 32, right sum 64), two readers of the
@@ -804,6 +812,7 @@ File & Role \\
 \file{Cap/Policy.lean} & write guard with lifetime liveness \\
 \file{Cap/Backend.lean} & mutable-backend refinement for one allocation \\
 \file{Cap/BackendRun.lean} & the 64-byte run on the backend \\
+\file{Cap/Core.lean} & deep command language and executable checker \\
 \file{Cap/Code.lean} & the code universe and \texttt{El} \\
 \file{Cap/Admission.lean} & \texttt{Bij}, \texttt{SafeValue}, \texttt{SafeType}, the gate \\
 \file{bench/Admission*.lean} & accepted, refused, recursive and axiomatic controls \\

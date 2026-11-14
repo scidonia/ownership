@@ -152,6 +152,15 @@
   `Tree.ids`/`Owner.ids`/`Ctx.ids`, with `Ctx.Fresh`; `alloc_ids_nodup` shows a
   fresh root and disposal identifier keep the identifiers distinct. The loan
   threading of the session and the freshness-preserving disposal proof are next.
+- `Cap/Core.lean` is the deep command language and its executable checker:
+  `Cmd` for write, spatial split, fractional split and no-op; `Owner.writableB` with
+  `writableB_sound`; `check` returning `Except String Owner`; and `Checked` as its
+  success predicate. Proved: the empty program is accepted, a failing guard is an
+  error, an accepted write carries `o.Writable` (`write_checked`), accepted splits
+  invoke succeeding transitions and name a leaf with the required bounds/shares,
+  `check_covered` carries coverage through a whole run, and the read-only write is
+  refused (`readOnly_write_not_accepted`). It is a deep syntax and checker for the
+  owner layer only, not the surface elaborator and not a heap semantics.
 - `Cap/Policy.lean` combines the owner write guard with loan liveness:
   `Policy.Writable` is the owner guard and `LoanCtx.live` of the named lifetime;
   `writable_owner`/`writable_live` project, `not_writable_of_dead` refuses a dead

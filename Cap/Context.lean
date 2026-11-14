@@ -217,4 +217,23 @@ theorem Ctx.alloc_ids_nodup {C : Ctx} {a : AllocId} {n : Nat} {pos : 0 < C.D}
     · intro hxy
       exact hroot (hxy ▸ hy)
 
+/-- Filtering owners can only shorten the flattened identifier list. -/
+theorem flatMap_filter_sublist (l : List Owner) (p : Owner → Bool) :
+    ((l.filter p).flatMap Owner.ids).Sublist (l.flatMap Owner.ids) := by
+  induction l with
+  | nil => simp
+  | cons x xs ih =>
+    by_cases hx : p x
+    · simp only [List.filter, hx, if_true, List.flatMap_cons]
+      exact List.Sublist.append (List.Sublist.refl _) ih
+    · simp only [List.filter, hx, if_false, List.flatMap_cons]
+      exact List.Sublist.cons _
+        (List.Sublist.trans ih
+          (List.sublist_append_right x.root.ids (List.flatMap Owner.ids xs)))
+
+theorem Ctx.free_ids_nodup {C : Ctx} {a : AllocId} (h : C.ids.Nodup) :
+    (C.free a).ids.Nodup := by
+  dsimp [Ctx.free, Ctx.ids]
+  exact List.Nodup.sublist (flatMap_filter_sublist C.owners (fun o => o.alloc ≠ a)) h
+
 end Cap
