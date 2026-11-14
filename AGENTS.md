@@ -117,6 +117,16 @@
   `nix develop -c lake build Cap`; `scripts/check_all.sh` includes it. The
   remaining stages are the context ledger and transitions, the typed core and
   semantics, then the elaborator, runner and backend refinement.
+- `Cap/Admission.lean` admits a value type by instance rather than by reflection.
+  `SafeRep` is the closed allowlist (`Nat`, `Bool`, `UInt8`, products);
+  `SafeValue T` is a proved bijection to an allowed representation; `SafeType`
+  carries the instance and the initialiser `new`, and `SafeType.init` applies it to
+  the bytes of a fresh allocation. `#admit_type` synthesises `SafeValue T` and
+  refuses when there is none. Accepted `bench/AdmissionAccept.lean` (`Pair`,
+  admitted through `Nat × Nat`); refused `bench/AdmissionReject.lean` (an
+  `IO.Ref` field has no `SafeRep` path). The intended automation is a deriving
+  handler, which proposes the instance the kernel then checks; reflection cannot
+  authorise one.
 - `bench/UnionFind.lean` is a hand-written union-find benchmark on `Array Nat`,
   outside the certified fragment. It compares an unshared and a shared variant at
   equal `n` and `m`; the printed figure is nanoseconds per outer iteration (two
