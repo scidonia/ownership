@@ -3,3 +3,9 @@
 
 # Build output of the bench ownership surface
 /bench/OwnedStatic.olean
+# LaTeX intermediates of the brief
+/brief/*.aux
+/brief/*.fdb_latexmk
+/brief/*.fls
+/brief/*.log
+/brief/*.out

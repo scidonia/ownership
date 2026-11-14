@@ -52,6 +52,12 @@ if ! ( cd paper && latexmk -pdf -interaction=nonstopmode ownership-skeleton.tex 
   fail=1
 fi
 
+echo "== brief =="
+if ! ( cd brief && latexmk -pdf -interaction=nonstopmode ownership-subsystem-brief.tex ); then
+  echo "FAILED: brief build" >&2
+  fail=1
+fi
+
 if [ "$fail" -ne 0 ]; then
   echo "check_all: FAILED" >&2
   exit 1
