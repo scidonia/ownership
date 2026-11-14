@@ -40,6 +40,30 @@ class SafeValue (T : Type) where
   left : ∀ t, ofRep (toRep t) = t
   right : ∀ r, toRep (ofRep r) = r
 
+instance : SafeValue Nat where
+  Rep := Nat
+  rep := SafeRep.nat
+  toRep := id
+  ofRep := id
+  left := by intro t; rfl
+  right := by intro r; rfl
+
+instance : SafeValue Bool where
+  Rep := Bool
+  rep := SafeRep.bool
+  toRep := id
+  ofRep := id
+  left := by intro t; rfl
+  right := by intro r; rfl
+
+instance : SafeValue UInt8 where
+  Rep := UInt8
+  rep := SafeRep.uint8
+  toRep := id
+  ofRep := id
+  left := by intro t; rfl
+  right := by intro r; rfl
+
 /-- A type admitted to the subsystem, with the initialiser used by allocation. -/
 structure SafeType where
   T : Type

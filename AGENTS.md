@@ -124,7 +124,11 @@
   the bytes of a fresh allocation. `#admit_type` synthesises `SafeValue T` and
   refuses when there is none. Accepted `bench/AdmissionAccept.lean` (`Pair`,
   admitted through `Nat × Nat`); refused `bench/AdmissionReject.lean` (an
-  `IO.Ref` field has no `SafeRep` path). The intended automation is a deriving
+  `IO.Ref` field has no `SafeRep` path). Recursion is the instance premise:
+  `[SafeValue α] → SafeValue (Wrap α)` and `[SafeValue α] [SafeValue β] →
+  SafeValue (Both α β)` in `bench/AdmissionParam.lean`, with `Nat`, `Bool` and
+  `UInt8` as the base instances, and `bench/AdmissionParamReject.lean` shows the
+  refusal propagating to `Wrap Bad`. The intended automation is a deriving
   handler, which proposes the instance the kernel then checks; reflection cannot
   authorise one.
 - `bench/UnionFind.lean` is a hand-written union-find benchmark on `Array Nat`,
