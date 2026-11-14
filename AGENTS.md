@@ -101,10 +101,22 @@
   It is a usage check over the reflected term, not a linear type: Lean permits
   duplication, which the check refuses. `bench/OwnedDemo.lean` is the
   runtime-guarded counterpart, where a shared flag refuses the second use.
-  `bench/OwnedTyping.lean` states the fractional context transition: `Split Γ Γ₁
-  Γ₂` at a common denominator, `Writable`/`Readable`, `no_two_writes` (a unit
-  context cannot split into two writable halves), `one_write` and `two_reads`.
-  It is the arithmetic account of the one-transfer rule, not a typed calculus.
+  The fractional context algebra is now the subsystem's `Cap.Share`
+  (`ShareWf`, `Splits`, `Writable`, `no_two_writes`); the earlier
+  `bench/OwnedTyping.lean` prototype is removed rather than kept beside it.
+- `Cap/` is stage 1 of `docs/lean-fractional-ownership-design.md`, the proposed
+  ownership and borrowing subsystem with fractional uniqueness. It is a separate
+  root and namespace from `Ownership/`, because the paper's model owns
+  `Ownership.Ctx`, `Ownership.Heap` and the count-share `Ownership.Share`.
+  `Cap.Id` gives allocation, capability, loan and lifetime identities distinct
+  types; `Cap.Share` gives exact shares over a context denominator (`ShareWf`,
+  `Splits`, `Writable`, `no_two_writes`, `join_le`, `split_whole`, with the
+  parent-bound side condition stated rather than derived); `Cap.Footprint` gives
+  half-open intervals, views, `Within`, and `splitAt` with disjointness,
+  adjacency, coverage and the within-preservation proof. Build with
+  `nix develop -c lake build Cap`; `scripts/check_all.sh` includes it. The
+  remaining stages are the context ledger and transitions, the typed core and
+  semantics, then the elaborator, runner and backend refinement.
 - `bench/UnionFind.lean` is a hand-written union-find benchmark on `Array Nat`,
   outside the certified fragment. It compares an unshared and a shared variant at
   equal `n` and `m`; the printed figure is nanoseconds per outer iteration (two

@@ -29,6 +29,7 @@ run() {
 run nix develop -c lake build Ownership
 run nix develop -c lake build OwnershipLcnf
 run nix develop -c lake build OwnershipTest
+run nix develop -c lake build Cap
 run nix develop -c lake env lean scripts/check_axioms.lean
 run nix develop -c bash scripts/check_claims.sh
 run nix develop -c bash scripts/check_claims.sh --self-test
