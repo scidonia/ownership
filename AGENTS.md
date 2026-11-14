@@ -152,6 +152,16 @@
   `Tree.ids`/`Owner.ids`/`Ctx.ids`, with `Ctx.Fresh`; `alloc_ids_nodup` shows a
   fresh root and disposal identifier keep the identifiers distinct. The loan
   threading of the session and the freshness-preserving disposal proof are next.
+- `Cap/Join.lean` is the sibling-only fractional join: `Tree.findFrac?` and
+  `Tree.replaceNode` locate and replace a fractional node, `budget_replaceNode`
+  preserves the budget when the replacement matches, `joinChildren?` merges two
+  leaf children that agree on allocation, footprint, ceiling and state into one
+  leaf of summed share (positivity by `omega`), and `Owner.joinFraction?` preserves
+  coverage (`joinFraction_covered`) and the allocation identifier
+  (`joinFraction_alloc`). A join whose children carry the same capability id is
+  refused (`joinChildren?_alias_none`, `Owner.joinFraction_alias_none`). Arbitrary
+  same-resource recombination, the common-partition normaliser and provenance beyond
+  node shape are not implemented.
 - `Cap/Core.lean` is the deep command language and its executable checker:
   `Cmd` for write, spatial split, fractional split and no-op; `Owner.writableB` with
   `writableB_sound`; `check` returning `Except String Owner`; and `Checked` as its

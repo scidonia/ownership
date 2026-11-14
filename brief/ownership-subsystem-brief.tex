@@ -639,6 +639,13 @@ snapshot equals the reference heap's. Capability identifiers are collected by
 \texttt{Ctx.ids}, with \texttt{Ctx.Fresh} and \texttt{alloc\_ids\_nodup} keeping
 them distinct at allocation.
 
+A sibling-only fractional join is implemented in \file{Cap/Join.lean}:
+fractional nodes are found and replaced, the replacement preserves the byte budget,
+the two leaf children must agree on allocation, footprint, ceiling and state and
+are merged into one leaf of summed share, coverage and the allocation identifier are
+preserved, and an alias join is refused. Arbitrary recombination and the
+common-partition normaliser are not implemented.
+
 A deep command language with an executable checker is implemented in
 \file{Cap/Core.lean}: writes, spatial and fractional splits and no-ops; the checker
 returns \texttt{Except String Owner}; an accepted write carries the owner's
@@ -813,6 +820,7 @@ File & Role \\
 \file{Cap/Backend.lean} & mutable-backend refinement for one allocation \\
 \file{Cap/BackendRun.lean} & the 64-byte run on the backend \\
 \file{Cap/Core.lean} & deep command language and executable checker \\
+\file{Cap/Join.lean} & sibling-only fractional join \\
 \file{Cap/Code.lean} & the code universe and \texttt{El} \\
 \file{Cap/Admission.lean} & \texttt{Bij}, \texttt{SafeValue}, \texttt{SafeType}, the gate \\
 \file{bench/Admission*.lean} & accepted, refused, recursive and axiomatic controls \\

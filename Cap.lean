@@ -11,3 +11,4 @@ import Cap.Policy
 import Cap.Backend
 import Cap.BackendRun
 import Cap.Core
+import Cap.Join
