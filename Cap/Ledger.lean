@@ -374,6 +374,35 @@ theorem Owner.splitAt_covered {o o' : Owner} {D : Nat} {id id1 id2 : CapId} {k :
         exact spatial_split_budget rfl rfl rfl rfl rfl rfl rfl rfl h1 h2
       · exact hcov
 
+/-- A writable leaf must be active. -/
+theorem Owner.writable_active {o : Owner} {D : Nat} {id : CapId} {i : Nat}
+    (h : o.Writable D id i) : ∃ c, o.root.find? id = some c ∧ c.state = .active := by
+  obtain ⟨c, hc, hstate, _, _, _, _⟩ := h
+  exact ⟨c, hc, hstate⟩
+
+/-- A writable leaf must have a read--write ceiling. -/
+theorem Owner.writable_readWrite {o : Owner} {D : Nat} {id : CapId} {i : Nat}
+    (h : o.Writable D id i) :
+    ∃ c, o.root.find? id = some c ∧ c.ceiling = .readWrite := by
+  obtain ⟨c, hc, _, _, hceil, _, _⟩ := h
+  exact ⟨c, hc, hceil⟩
+
+/-- A read-only leaf cannot authorise a write. -/
+theorem Owner.readOnly_not_writable {o : Owner} {D : Nat} {id : CapId} {i : Nat}
+    (h : o.Writable D id i)
+    (hro : ∀ c, o.root.find? id = some c → c.ceiling = .readOnly) : False := by
+  obtain ⟨c, hc, _, _, hceil, _, _⟩ := h
+  rw [hro c hc] at hceil
+  cases hceil
+
+/-- A consumed leaf cannot authorise a write. -/
+theorem Owner.consumed_not_writable {o : Owner} {D : Nat} {id : CapId} {i : Nat}
+    (h : o.Writable D id i)
+    (hc : ∀ c, o.root.find? id = some c → c.state = .consumed) : False := by
+  obtain ⟨c, hfind, hstate, _, _, _, _⟩ := h
+  rw [hc c hfind] at hstate
+  cases hstate
+
 -- Concrete checks: a whole-capability read budget and a spatial split.
 namespace LedgerExamples
 
