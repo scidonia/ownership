@@ -599,9 +599,15 @@ every byte, with the sibling joins as their converses. At the owner level, \text
 invariant; \texttt{Owner.split\_covered} composes a split with leaf replacement
 preservation; \texttt{Owner.init\_covered} establishes it at allocation; and
 \texttt{Owner.Writable}/\texttt{Owner.Readable} are the guards (a write needs an active leaf of
-the whole share with a read--write ceiling; a read needs a positive share). The
-multi-owner context, disposal entitlements across owners, lifetimes, loans and the
-executable transitions are proposed.
+the whole share with a read--write ceiling; a read needs a positive share). \texttt{Owner.splitFraction?} splits a leaf into two shares that add to
+its own, with \texttt{splitFraction\_covered} preserving coverage, and \texttt{Owner.writeByte?}
+takes the write guard as a proof and performs the heap write, with
+\texttt{writeByte\_sound} returning the guard and the read-back byte. A lifetime and loan
+model is implemented in \file{Cap/Loans.lean}: \texttt{BeginOK} collects freshness and
+parent liveness, \texttt{begin} appends the lifetime and loan, and \texttt{endLoan} removes a
+live loan. It is pure bookkeeping and is not yet consulted by the ledger guards.
+The multi-owner context, disposal entitlements across owners and the remaining
+lifecycle transitions are proposed.
 
 A reference byte heap is implemented in \file{Cap/Bytes.lean}: \texttt{read?}, \texttt{write?},
 \texttt{fill?}, \texttt{snapshot?} and \texttt{alloc}, with \texttt{write\_get}, \texttt{write\_preserves\_length},
@@ -762,6 +768,7 @@ File & Role \\
 \file{Cap/Footprint.lean} & intervals, views, split facts \\
 \file{Cap/Ledger.lean} & decomposition tree, owners, coverage and guards \\
 \file{Cap/Bytes.lean} & reference byte heap and the 64-byte example \\
+\file{Cap/Loans.lean} & lifetime and loan bookkeeping \\
 \file{Cap/Code.lean} & the code universe and \texttt{El} \\
 \file{Cap/Admission.lean} & \texttt{Bij}, \texttt{SafeValue}, \texttt{SafeType}, the gate \\
 \file{bench/Admission*.lean} & accepted, refused, recursive and axiomatic controls \\

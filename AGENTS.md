@@ -128,8 +128,18 @@
   `budget_replace`; `Owner.init_covered` establishes coverage at allocation; and
   `Owner.Writable`/`Owner.Readable` are the write and read guards (active, whole
   share and read--write ceiling for a write; positive share and active for a read).
-  The multi-owner context, disposal entitlements across owners, lifetimes, loans and
-  executable transitions remain the next slice.
+  `Owner.splitFraction?` splits a leaf into two shares adding to its own and
+  `splitFraction_covered` preserves coverage; `Owner.writeByte?` takes the write
+  guard as a proof and performs the heap write, with `writeByte_sound` returning the
+  guard and the read-back byte. The multi-owner context, disposal entitlements
+  across owners, lifetimes and the lifecycle transitions remain the next slice.
+- `Cap/Loans.lean` is the pure lifetime and loan bookkeeping: `LifeState`,
+  `Lifetime`, `Loan`, `LoanCtx`, `findLifetime?`, `findLoan?`, `parent`, `live`;
+  `BeginOK` collects the freshness, liveness and parent-liveness conditions and
+  `begin` appends the lifetime and loan (`begin_mem_lifetime`, `begin_mem_loan`);
+  `endLoan` removes a present loan whose lifetime is live
+  (`endLoan_removes_loan`). It has no heap and no capability ledger, and the loans
+  are not yet consulted by `Cap.Ledger`'s guards.
 - `Cap/Bytes.lean` is the reference byte heap: buffers as `List UInt8` keyed by
   `AllocId`, with `read?`, `write?`, `fill?`, `snapshot?` and `alloc`. Proved:
   `write_get`, `write_preserves_length`, `write_ne`, the 64-byte example

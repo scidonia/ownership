@@ -15,6 +15,7 @@ Theorems:
   join preserve the budget; the children partition the parent's range.
 -/
 import Cap.Id
+import Cap.Bytes
 
 namespace Cap
 
@@ -252,6 +253,71 @@ theorem Owner.writable_not_shared {o : Owner} {D : Nat} {id : CapId} {i : Nat}
   rw [hc] at hc'
   cases hc'
   omega
+
+/-- The tree produced by splitting `c` into two shares that add to its own. -/
+def Leaf.splitFractionTree (c : Leaf) (id1 id2 : CapId) (q1 q2 : Nat)
+    (p1 : 0 < q1) (p2 : 0 < q2) : Option Tree :=
+  if q1 + q2 = c.q then
+    some (.frac id1
+      (.leaf { c with id := id1, q := q1, pos := p1 })
+      (.leaf { c with id := id2, q := q2, pos := p2 }))
+  else none
+
+/-- Fractionally split the owner's leaf `id` into two leaves of shares `q1` and
+`q2`, provided they add to the leaf's share. -/
+def Owner.splitFraction? (o : Owner) (id id1 id2 : CapId) (q1 q2 : Nat)
+    (p1 : 0 < q1) (p2 : 0 < q2) : Option Owner :=
+  match o.root.find? id with
+  | none => none
+  | some c =>
+    (c.splitFractionTree id1 id2 q1 q2 p1 p2).map
+      (fun t => { o with root := o.root.replace id (fun _ => t) })
+
+theorem Owner.splitFraction_covered {o o' : Owner} {D : Nat} {id id1 id2 : CapId}
+    {q1 q2 : Nat} {p1 : 0 < q1} {p2 : 0 < q2}
+    (hs : o.splitFraction? id id1 id2 q1 q2 p1 p2 = some o')
+    (hcov : o.Covered D) : o'.Covered D := by
+  unfold Owner.splitFraction? at hs
+  cases hf : o.root.find? id with
+  | none => simp [hf] at hs
+  | some c =>
+    by_cases hq : q1 + q2 = c.q
+    · simp [hf, hq, Leaf.splitFractionTree] at hs
+      cases hs
+      apply Owner.split_covered (o := o) (id := id)
+        (f := fun _ => .frac id1
+          (.leaf { c with id := id1, q := q1, pos := p1 })
+          (.leaf { c with id := id2, q := q2, pos := p2 }))
+      · simp [Owner.split?, hf]
+      · intro c' hc' x
+        have hc'c : c' = c := by
+          rw [hf] at hc'
+          cases hc'
+          rfl
+        subst hc'c
+        exact frac_split_budget rfl rfl rfl rfl rfl rfl hq
+      · exact hcov
+    · simp [hf, hq, Leaf.splitFractionTree] at hs
+
+/-- Write a byte through the owner's guard: the caller supplies the guard proof,
+and the write is performed on the reference heap at the owner's allocation. -/
+def Owner.writeByte? (o : Owner) (D : Nat) (id : CapId) (h : Heap) (i : Nat)
+    (v : UInt8) (hw : o.Writable D id i) : Option (Owner × Heap) :=
+  match h.write? o.alloc i v with
+  | some h' => some (o, h')
+  | none => none
+
+theorem Owner.writeByte_sound {o o' : Owner} {h h' : Heap} {D : Nat} {id : CapId}
+    {i : Nat} {v : UInt8} {hg : o.Writable D id i}
+    (hr : o.writeByte? D id h i v hg = some (o', h')) :
+    o' = o ∧ h'.read? o.alloc i = some v := by
+  unfold Owner.writeByte? at hr
+  cases hb : h.write? o.alloc i v with
+  | none => simp [hb] at hr
+  | some h'' =>
+    simp [hb] at hr
+    obtain ⟨rfl, rfl⟩ := hr
+    exact ⟨rfl, Heap.write_get hb⟩
 
 -- Concrete checks: a whole-capability read budget and a spatial split.
 namespace LedgerExamples
