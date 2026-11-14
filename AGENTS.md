@@ -120,10 +120,24 @@
 - `Cap/Ledger.lean` is stage 2a of the ledger: `Leaf` carries a footprint, share,
   ceiling and state; `Tree` has fractional and spatial nodes; `budget` is the
   frontier sum at a byte; `frac_split_budget` and `spatial_split_budget` state that
-  a split preserves the budget and the sibling joins restore it. This is the
-  arithmetic the `Realizes` invariant will be stated over; the context (forest,
-  disposal entitlement, lifetimes, loans) and the executable transitions are the
-  next slice.
+  a split preserves the budget and the sibling joins restore it. Leaf replacement is
+  first-occurrence (`Tree.find?`, `Tree.replace`) and `Tree.budget_replace` proves it
+  preserves the budget. At the owner level, `Owner` carries an allocation, its
+  length, a root tree and a disposal capability; `Owner.Covered` is the byte-wise
+  full-budget invariant; `Owner.split_covered` composes a split with
+  `budget_replace`; `Owner.init_covered` establishes coverage at allocation; and
+  `Owner.Writable`/`Owner.Readable` are the write and read guards (active, whole
+  share and read--write ceiling for a write; positive share and active for a read).
+  The multi-owner context, disposal entitlements across owners, lifetimes, loans and
+  executable transitions remain the next slice.
+- `Cap/Bytes.lean` is the reference byte heap: buffers as `List UInt8` keyed by
+  `AllocId`, with `read?`, `write?`, `fill?`, `snapshot?` and `alloc`. Proved:
+  `write_get`, `write_preserves_length`, `write_ne`, the 64-byte example
+  (`example64_snapshot`, left sum 32, right sum 64), two readers of the right half
+  each summing 64 (`right_readers_both_64`), and `snapshot_independent` (a snapshot
+  is a copy). It carries no permission ledger: the guards and the budget live in
+  `Cap.Ledger`, and connecting the two is the next slice. `Heap.alloc` replaces an
+  existing buffer at the same identifier.
 - `Cap/Code.lean` is the closed value universe: codes for `Nat`, `Bool`,
   `UInt8`, `Unit`, products, sums and lists, with `El` denoting each. There is no
   code for a reference, a function or a closure. That closure does not make every

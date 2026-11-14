@@ -595,8 +595,19 @@ The arithmetic part is implemented (\file{Cap/Ledger.lean}): a leaf carries its
 footprint, share, ceiling and state, internal nodes are fractional and spatial
 splits, and the budget is the frontier sum at a byte. \texttt{frac\_split\_budget}
 and \texttt{spatial\_split\_budget} prove that a split preserves the budget at
-every byte, with the sibling joins as their converses. The context, disposal
-entitlement, lifetimes and executable transitions are proposed, not implemented.
+every byte, with the sibling joins as their converses. At the owner level, \texttt{Owner.Covered} states the byte-wise full-budget
+invariant; \texttt{Owner.split\_covered} composes a split with leaf replacement
+preservation; \texttt{Owner.init\_covered} establishes it at allocation; and
+\texttt{Owner.Writable}/\texttt{Owner.Readable} are the guards (a write needs an active leaf of
+the whole share with a read--write ceiling; a read needs a positive share). The
+multi-owner context, disposal entitlements across owners, lifetimes, loans and the
+executable transitions are proposed.
+
+A reference byte heap is implemented in \file{Cap/Bytes.lean}: \texttt{read?}, \texttt{write?},
+\texttt{fill?}, \texttt{snapshot?} and \texttt{alloc}, with \texttt{write\_get}, \texttt{write\_preserves\_length},
+\texttt{write\_ne}, the 64-byte example (left sum 32, right sum 64), two readers of the
+right half each summing 64, and snapshot independence. It carries no permission
+ledger; connecting the guards to it is the next slice.
 
 Spatial splits preserve the equation because each byte is in exactly one child;
 fractional splits preserve it because the children sum to the parent; retirement
@@ -749,7 +760,8 @@ File & Role \\
 \file{Cap/Id.lean} & allocation, capability, loan, lifetime identities \\
 \file{Cap/Share.lean} & shares, splits, the one-transfer theorem \\
 \file{Cap/Footprint.lean} & intervals, views, split facts \\
-\file{Cap/Ledger.lean} & decomposition tree and the budget preservation facts \\
+\file{Cap/Ledger.lean} & decomposition tree, owners, coverage and guards \\
+\file{Cap/Bytes.lean} & reference byte heap and the 64-byte example \\
 \file{Cap/Code.lean} & the code universe and \texttt{El} \\
 \file{Cap/Admission.lean} & \texttt{Bij}, \texttt{SafeValue}, \texttt{SafeType}, the gate \\
 \file{bench/Admission*.lean} & accepted, refused, recursive and axiomatic controls \\
