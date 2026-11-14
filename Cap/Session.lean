@@ -13,6 +13,7 @@ concrete; the dynamic split transitions and their coverage theorems are in
 -/
 import Cap.Ledger
 import Cap.Bytes
+import Cap.Policy
 
 namespace Cap
 
@@ -20,6 +21,7 @@ structure Session where
   owner : Owner
   heap : Heap
   D : Nat
+  loans : LoanCtx
 
 def Session.Realizes (s : Session) : Prop :=
   s.owner.Covered s.D
@@ -28,7 +30,8 @@ def Session.create (a : AllocId) (n D : Nat) (pos : 0 < D) (rootId disposal : Ca
     Session :=
   { owner := Owner.init a n D pos rootId disposal,
     heap := Heap.empty.alloc a n,
-    D := D }
+    D := D,
+    loans := ⟨[], []⟩ }
 
 theorem Session.create_realizes (a : AllocId) (n D : Nat) (pos : 0 < D)
     (rootId disposal : CapId) : (Session.create a n D pos rootId disposal).Realizes := by
@@ -53,13 +56,38 @@ def Session.fill? (s : Session) (id : CapId) (lo hi : Nat) (v : UInt8)
     (hg : ∀ i, lo ≤ i → i < hi → s.owner.Writable s.D id i) :
     Option (Session × Heap) :=
   match s.heap.fill? s.owner.alloc lo hi v with
-  | some h' => some (⟨s.owner, h', s.D⟩, h')
+  | some h' => some (⟨s.owner, h', s.D, s.loans⟩, h')
   | none => none
 
 theorem Session.fill_realizes {s s' : Session} {h' : Heap} {id : CapId} {lo hi : Nat}
     {v : UInt8} {hg : ∀ i, lo ≤ i → i < hi → s.owner.Writable s.D id i}
     (hf : s.fill? id lo hi v hg = some (s', h')) (hr : s.Realizes) : s'.Realizes := by
   unfold Session.fill? at hf
+  cases hb : s.heap.fill? s.owner.alloc lo hi v with
+  | none => simp [hb] at hf
+  | some h'' =>
+    simp [hb] at hf
+    obtain ⟨rfl, rfl⟩ := hf
+    exact hr
+
+/-- A fill whose every byte is authorised by the policy: the owner guard and a live
+lifetime. -/
+def Session.fillGuarded? (s : Session) (id : CapId) (lo hi : Nat) (v : UInt8)
+    (lifetime : LifetimeId)
+    (hg : ∀ i, lo ≤ i → i < hi →
+      (Policy.mk s.loans).Writable s.owner s.D id i lifetime) :
+    Option (Session × Heap) :=
+  match s.heap.fill? s.owner.alloc lo hi v with
+  | some h' => some (⟨s.owner, h', s.D, s.loans⟩, h')
+  | none => none
+
+theorem Session.fillGuarded_realizes {s s' : Session} {h' : Heap} {id : CapId}
+    {lo hi : Nat} {v : UInt8} {lifetime : LifetimeId}
+    {hg : ∀ i, lo ≤ i → i < hi →
+      (Policy.mk s.loans).Writable s.owner s.D id i lifetime}
+    (hf : s.fillGuarded? id lo hi v lifetime hg = some (s', h')) (hr : s.Realizes) :
+    s'.Realizes := by
+  unfold Session.fillGuarded? at hf
   cases hb : s.heap.fill? s.owner.alloc lo hi v with
   | none => simp [hb] at hf
   | some h'' =>
@@ -87,7 +115,8 @@ def exampleOwner : Owner :=
     disposal := ⟨2⟩ }
 
 def exampleSession : Session :=
-  { owner := exampleOwner, heap := Heap.empty.alloc exampleAlloc 64, D := 64 }
+  { owner := exampleOwner, heap := Heap.empty.alloc exampleAlloc 64, D := 64,
+    loans := ⟨[], []⟩ }
 
 theorem exampleOwner_realizes : exampleSession.Realizes := by
   intro x hx
@@ -102,12 +131,12 @@ theorem exampleOwner_realizes : exampleSession.Realizes := by
     simp [exampleSession, exampleOwner, exampleLeft, exampleRight, Tree.budget,
       Leaf.budget, hx1, hx32, hx64]
 
-def guardLeft : ∀ i, 0 ≤ i → i < 32 → exampleOwner.Writable 64 ⟨3⟩ i := by
+theorem guardLeft : ∀ i, 0 ≤ i → i < 32 → exampleOwner.Writable 64 ⟨3⟩ i := by
   intro i h1 h2
   refine ⟨exampleLeft, ?_, rfl, rfl, rfl, h1, h2⟩
   simp [exampleOwner, Tree.find?, exampleLeft, exampleRight]
 
-def guardRight : ∀ i, 32 ≤ i → i < 64 → exampleOwner.Writable 64 ⟨4⟩ i := by
+theorem guardRight : ∀ i, 32 ≤ i → i < 64 → exampleOwner.Writable 64 ⟨4⟩ i := by
   intro i h1 h2
   refine ⟨exampleRight, ?_, rfl, rfl, rfl, h1, h2⟩
   simp [exampleOwner, Tree.find?, exampleLeft, exampleRight]

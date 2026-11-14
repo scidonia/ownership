@@ -197,7 +197,9 @@
   acceptance run is concrete: a spatial split tree over `[0,32)` and `[32,64)`,
   fills of 1 and 2 through the guards, and `exampleRun_snapshot` proves the
   snapshot is 32 ones followed by 32 twos. The run builds the split tree by hand;
-  the dynamic split transitions are covered by the `Cap.Ledger` theorems.
+  the dynamic split transitions are covered by the `Cap.Ledger` theorems. The
+  session now carries a `LoanCtx`; `fillGuarded?` requires `Policy.Writable` for
+  every byte (owner guard plus a live lifetime) and preserves `Realizes`.
 - `Cap/Bytes.lean` is the reference byte heap: buffers as `List UInt8` keyed by
   `AllocId`, with `read?`, `write?`, `fill?`, `snapshot?` and `alloc`. Proved:
   `write_get`, `write_preserves_length`, `write_ne`, the 64-byte example
