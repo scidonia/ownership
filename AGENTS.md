@@ -140,6 +140,13 @@
   `endLoan` removes a present loan whose lifetime is live
   (`endLoan_removes_loan`). It has no heap and no capability ledger, and the loans
   are not yet consulted by `Cap.Ledger`'s guards.
+- `Cap/Context.lean` is the multi-owner context: a list of owners plus the
+  denominator and a fresh-allocation counter. `Ctx.Realizes` requires every owner to
+  be covered and the allocation identifiers to be distinct; `Ctx.alloc` appends a
+  fresh, fully covered owner (`alloc_realizes`) and `Ctx.free` removes one by
+  allocation (`free_realizes`). Capability-identifier freshness across owners,
+  recorded disposal entitlements, loans and dispatch of the owner-level transitions
+  over the list remain the next slice.
 - `Cap/Session.lean` is the single-owner end-to-end state: an owner, the reference
   heap and the denominator. `Session.Realizes` is the owner's coverage;
   `create_realizes`, `splitAt_realizes` and `fill_realizes` preserve it. `fill?`
