@@ -171,6 +171,14 @@
   `check_covered` carries coverage through a whole run, and the read-only write is
   refused (`readOnly_write_not_accepted`). It is a deep syntax and checker for the
   owner layer only, not the surface elaborator and not a heap semantics.
+- `Cap/Nested.lean` is the two-level borrow model: `Lender` with active/suspended
+  states, `beginBorrow` suspending the lender and issuing a borrower, `endBorrow`
+  restoring the suspended lender without returning the borrower, and
+  `Lender.canWrite` combining activity with `Policy.Writable`. Proved:
+  `begin_suspends`, `end_restores`, `suspended_not_writable` and `nested_begin`
+  (a nested borrow restores to the parent state). Footprints and ledger capability
+  states are not threaded, and the full frame rule with suspended obligations is not
+  proved.
 - `Cap/Policy.lean` combines the owner write guard with loan liveness:
   `Policy.Writable` is the owner guard and `LoanCtx.live` of the named lifetime;
   `writable_owner`/`writable_live` project, `not_writable_of_dead` refuses a dead

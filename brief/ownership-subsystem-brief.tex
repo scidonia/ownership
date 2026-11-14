@@ -614,7 +614,14 @@ owner, the reference heap and the denominator, with \texttt{Session.Realizes} as
 coverage invariant; \texttt{create\_realizes}, \texttt{splitAt\_realizes} and \texttt{fill\_realizes}
 preserve it, and \texttt{fill?} takes the ledger's \texttt{Writable} guard for every byte it
 writes. The 64-byte acceptance run is concrete and checked: \texttt{exampleRun\_snapshot}
-proves the snapshot is 32 ones followed by 32 twos.
+proves the snapshot is 32 ones followed by 32 twos. The session carries a loan
+context and \texttt{fillGuarded?} requires the policy for every byte (owner guard
+and a live lifetime). A two-level borrow model is implemented in
+\file{Cap/Nested.lean}: \texttt{beginBorrow} suspends an active lender and
+\texttt{endBorrow} restores it, with \texttt{begin\_suspends},
+\texttt{end\_restores}, \texttt{suspended\_not\_writable} and
+\texttt{nested\_begin}. Footprints and ledger capability states are not threaded,
+and no full frame rule with suspended obligations is proved.
 
 A multi-owner context is implemented in \file{Cap/Context.lean}: a list of
 owners, the denominator and a fresh-allocation counter; \texttt{Ctx.Realizes}
@@ -817,6 +824,7 @@ File & Role \\
 \file{Cap/Session.lean} & single-owner session and the 64-byte run \\
 \file{Cap/Context.lean} & multi-owner context, dispatch and disposal \\
 \file{Cap/Policy.lean} & write guard with lifetime liveness \\
+\file{Cap/Nested.lean} & two-level borrow, suspension and restoration \\
 \file{Cap/Backend.lean} & mutable-backend refinement for one allocation \\
 \file{Cap/BackendRun.lean} & the 64-byte run on the backend \\
 \file{Cap/Core.lean} & deep command language and executable checker \\
