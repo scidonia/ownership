@@ -1,0 +1,721 @@
+\documentclass[10pt,a4paper]{article}
+
+\usepackage[margin=2.1cm]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage{xcolor}
+\usepackage{booktabs}
+\usepackage{enumitem}
+\usepackage{titlesec}
+\usepackage{amsmath}
+\usepackage{listings}
+\usepackage[hidelinks]{hyperref}
+
+\definecolor{rule}{gray}{0.45}
+\definecolor{shade}{gray}{0.94}
+
+\titleformat{\section}{\large\bfseries}{\thesection}{0.6em}{}
+\titleformat{\subsection}{\normalsize\bfseries}{\thesubsection}{0.6em}{}
+\titlespacing*{\section}{0pt}{1.1ex plus .2ex}{0.6ex}
+
+\lstdefinelanguage{Lean4}{
+  morekeywords={def,theorem,structure,class,inductive,instance,namespace,end,
+    import,open,where,deriving,axiom,example,by,intro,cases,rw,simp,exact,
+    unfold,omega,decide,fun,let,in,if,then,else,do,match,with,return,pure,
+    private,partial,Type,Prop,Nat,Bool,UInt8,Array,List,Option,equivalent},
+  sensitive=true,
+  morecomment=[l]{--},
+  morecomment=[s]{/-}{-/},
+  morestring=[b]",
+}
+\lstset{
+  language=Lean4,
+  basicstyle=\ttfamily\footnotesize,
+  columns=fullflexible,
+  keepspaces=true,
+  breaklines=true,
+  frame=single,
+  rulecolor=\color{rule},
+  framesep=3pt,
+  xleftmargin=4pt,
+  xrightmargin=4pt,
+  aboveskip=0.6em,
+  belowskip=0.3em,
+  commentstyle=\itshape\color{black!65},
+  keywordstyle=\bfseries,
+  showstringspaces=false,
+  extendedchars=true,
+  literate=
+    {×}{{$\times$}}1
+    {→}{{$\to$}}1
+    {≤}{{$\le$}}1
+    {∀}{{$\forall$}}1
+    {¬}{{$\neg$}}1
+    {∧}{{$\wedge$}}1
+    {∨}{{$\vee$}}1
+    {⟨}{{$\langle$}}1
+    {⟩}{{$\rangle$}}1
+    {α}{{$\alpha$}}1
+    {β}{{$\beta$}}1
+    {ρ}{{$\rho$}}1
+    {Γ}{{$\Gamma$}}1
+    {Σ}{{$\Sigma$}}1
+    {∈}{{$\in$}}1
+    {≃}{{$\simeq$}}1
+    {↦}{{$\mapsto$}}1
+    {←}{{$\leftarrow$}}1
+}
+\lstdefinestyle{out}{
+  language={},
+  basicstyle=\ttfamily\footnotesize,
+  frame=none,
+  backgroundcolor=\color{shade},
+  xleftmargin=8pt,
+  aboveskip=0.2em,
+  belowskip=0.7em,
+}
+
+\newcommand{\file}[1]{\texttt{\small #1}}
+
+\title{\vspace{-1.2cm}\textbf{Fractional ownership and borrowing in Lean}\\[2pt]
+\large A design brief for the \texttt{Cap} subsystem\\[4pt]
+\normalsize separate from, and not a claim of, the ITP manuscript}
+\author{Gavin Mendel-Gleason}
+\date{14 November 2026}
+
+\begin{document}
+\maketitle
+\vspace{-0.8cm}
+
+\begin{center}
+\fbox{\parbox{0.96\textwidth}{\small
+\textbf{Status.} Implemented and building in this repository: \file{Cap/Id.lean},
+\file{Cap/Share.lean}, \file{Cap/Footprint.lean}, \file{Cap/Admission.lean}, with
+accepted and refused controls under \file{bench/}. Proposed, not implemented: the
+context ledger, the typed core and its semantics, the elaborator, the interpreter
+and the backend refinement. Every Lean fragment below is quoted from the
+repository (or transcribed without change of content), and every output shown was
+observed at the revision this brief was generated from. Nothing here is a
+soundness result for the subsystem; the theorem families are listed in
+Section~\ref{sec:obligations}.
+}}
+\end{center}
+
+\section{Why authority cannot live in a Lean value}
+
+Lean has no linear or affine typing. A value can be bound twice, and both names
+are equally usable. This is not a gap a careful wrapper closes: it is the host's
+semantics, and every decision below follows from it.
+
+\begin{lstlisting}[caption={Duplication is legal, so a ``unique'' wrapper is not unique (probe form of \file{bench/OwnedDemo.lean}).}]
+structure Owned (α : Type) where
+  private mk ::
+  val : α
+
+def dup (a : Owned α) : Owned α × Owned α := (a, a)
+\end{lstlisting}
+
+For a mutable array the consequence is visible at run time: both copies can be
+written through, and the buffer's count is two, so the compiler copies on write
+rather than mutating. The type said ``unique''; the runtime disagrees.
+
+\begin{lstlisting}[caption={The restricted surface's positive and negative programs (\file{bench/OwnedAccept.lean}, \file{bench/OwnedReject.lean}).}]
+def good : Owned Nat :=
+  let a := new #[0, 0]
+  let a := write a 0 1
+  write a 1 2
+
+def bad : Owned Nat :=
+  let a := new #[0, 0]
+  let _ := write a 0 1
+  write a 1 2
+\end{lstlisting}
+
+\begin{lstlisting}[style=out]
+#own_check good      -- accepted
+#own_check bad
+error: restricted ownership: handle 'a' used 2 times in its scope;
+  the discipline permits one transfer
+\end{lstlisting}
+
+The subsystem therefore separates three things:
+
+\begin{enumerate}[itemsep=2pt,topsep=2pt]
+\item \textbf{Handles are names.} A \texttt{CapId} identifies a ledger entry; it
+carries no authority by itself. Forging a name is useless because the interpreter
+looks it up.
+\item \textbf{Authority is a position in the current context.} A capability is
+\emph{active}, \emph{suspended}, \emph{retired} or \emph{consumed}; only the
+interpreter's context says which.
+\item \textbf{The context is not a public value.} No \texttt{Ctx} $\to$ \texttt{Ctx}
+transition is exported, because such a function applied twice to one value would
+manufacture authority (Section~\ref{sec:seal}).
+\end{enumerate}
+
+\section{Exact shares and the one-transfer rule}
+
+A context fixes a denominator $D$. A share is a positive numerator $q \le D$; the
+fraction is exactly $q/D$, with no rounding and no zero capability. A fractional
+split has children that add to the parent; a write needs the whole unit.
+
+\begin{lstlisting}[caption={\file{Cap/Share.lean}.}]
+def ShareWf (D q : Nat) : Prop := 0 < q ∧ q ≤ D
+
+def Splits (q q1 q2 : Nat) : Prop := q1 + q2 = q
+
+def Writable (D q : Nat) : Prop := q = D
+
+theorem no_two_writes {D q q1 q2 : Nat} (h : Splits q q1 q2) (h1 : 0 < q1)
+    (hw1 : Writable D q1) (hw2 : Writable D q2) (hq : q ≤ D) : False := by
+  unfold Splits Writable at *
+  omega
+\end{lstlisting}
+
+The theorem is the arithmetic content of the checker's ``one transfer'' rule: a
+unit context cannot split into two writable halves. A join is bounded
+(\texttt{join\_le}), and splitting off the whole parent leaves nothing
+(\texttt{split\_whole}).
+
+\paragraph{A false lemma worth printing.} The first version of the module claimed
+that the children's share bounds imply the parent's. It is false: two children
+each at most $D$ sum to $2D$. \texttt{omega} produced the counterexample, and the
+claim was replaced by two monotonicity facts. The parent's $q \le D$ is a side
+condition of the split rule, not a consequence of the children.
+
+\begin{lstlisting}[caption={The valid monotonicity facts; the parent-bound version was removed.}]
+theorem split_le_parent_left {q q1 q2 : Nat} (h : Splits q q1 q2) : q1 ≤ q := by
+  unfold Splits at h
+  omega
+\end{lstlisting}
+
+Concrete checks that build with the module:
+
+\begin{lstlisting}[caption={Decidable examples in \file{Cap/Share.lean}.}]
+example : Splits 4 1 3 := rfl
+example : ¬ Splits 4 3 2 := by unfold Splits; decide
+example : Writable 8 8 := rfl
+example : ¬ Writable 8 7 := by unfold Writable; decide
+example : ShareWf 8 3 := by unfold ShareWf; decide
+\end{lstlisting}
+
+\section{Bounded intervals and views}
+
+A footprint is half-open, with its ordering proof, and a view names an allocation
+and a footprint inside it. Splitting is where the arithmetic meets the geometry.
+
+\begin{lstlisting}[caption={\file{Cap/Footprint.lean}.}]
+structure Interval where
+  lo : Nat
+  hi : Nat
+  ordered : lo ≤ hi
+
+def Interval.Disjoint (a b : Interval) : Prop :=
+  a.hi ≤ b.lo ∨ b.hi ≤ a.lo
+
+def Interval.splitAt (i : Interval) (k : Nat) (h1 : i.lo ≤ k) (h2 : k ≤ i.hi) :
+    Interval × Interval :=
+  (⟨i.lo, k, h1⟩, ⟨k, i.hi, h2⟩)
+\end{lstlisting}
+
+The children are disjoint and cover the parent, and an allocation bound passes
+through:
+
+\begin{lstlisting}[caption={The split's facts and the within-preservation proof.}]
+theorem splitAt_disjoint ... :
+    (splitAt i k h1 h2).1.Disjoint (splitAt i k h1 h2).2
+theorem splitAt_adjacent ... :
+    (splitAt i k h1 h2).1.Adjacent (splitAt i k h1 h2).2
+theorem splitAt_cover ... :
+    (splitAt i k h1 h2).1.lo = i.lo ∧ (splitAt i k h1 h2).2.hi = i.hi
+
+theorem splitAt_within {len : Nat} {v : View} (hv : Within len v) (k : Nat)
+    (h1 : v.range.lo ≤ k) (h2 : k ≤ v.range.hi) :
+    Within len ⟨v.alloc, (splitAt v.range k h1 h2).1⟩ ∧
+      Within len ⟨v.alloc, (splitAt v.range k h1 h2).2⟩ := by
+  unfold Within Interval.splitAt at *
+  simp_all
+  omega
+\end{lstlisting}
+
+A view at \texttt{[0,64)} split at 32 gives disjoint children at \texttt{[0,32)}
+and \texttt{[32,64)}; splitting at 31 does not, and the module's example
+discharges that by \texttt{decide}.
+
+\section{Admitting a new value type}\label{sec:admission}
+
+A type may be stored only if it is equivalent to an allowed representation, and
+the equivalence's two inverse laws make its shape a kernel-checked fact. The
+allowlist is closed on purpose.
+
+\begin{lstlisting}[caption={\file{Cap/Admission.lean}: the allowlist and the certificate.}]
+inductive SafeRep : Type → Prop where
+  | nat : SafeRep Nat
+  | bool : SafeRep Bool
+  | uint8 : SafeRep UInt8
+  | prod {A B : Type} : SafeRep A → SafeRep B → SafeRep (A × B)
+
+class SafeValue (T : Type) where
+  Rep : Type
+  rep : SafeRep Rep
+  toRep : T → Rep
+  ofRep : Rep → T
+  left : ∀ t, ofRep (toRep t) = t
+  right : ∀ r, toRep (ofRep r) = r
+
+structure SafeType where
+  T : Type
+  inst : SafeValue T
+  new : Array UInt8 → T
+
+def SafeType.init (st : SafeType) (bytes : Array UInt8) : st.T := st.new bytes
+\end{lstlisting}
+
+\subsection*{An admitted structure}
+
+\begin{lstlisting}[caption={\file{bench/AdmissionAccept.lean}: \texttt{Pair} is admitted through \texttt{Nat × Nat}.}]
+structure Pair where
+  x : Nat
+  y : Nat
+
+def Pair.new (_ : Array UInt8) : Pair := ⟨0, 0⟩
+
+instance : SafeValue Pair where
+  Rep := Nat × Nat
+  rep := SafeRep.prod SafeRep.nat SafeRep.nat
+  toRep p := (p.x, p.y)
+  ofRep r := ⟨r.1, r.2⟩
+  left := by intro p; cases p; rfl
+  right := by intro r; cases r; rfl
+
+#admit_type Pair
+\end{lstlisting}
+
+\begin{lstlisting}[style=out]
+admitted 'Pair': a SafeValue instance was found
+\end{lstlisting}
+
+and the initialiser is applied to the allocation's bytes:
+
+\begin{lstlisting}[caption={The allocator applies \texttt{new} against a fresh allocation's bytes.}]
+def pairTy : SafeType := ⟨Pair, inferInstance, Pair.new⟩
+
+example : pairTy.init #[1, 2] = ⟨0, 0⟩ := rfl
+\end{lstlisting}
+
+\subsection*{A refused structure}
+
+\begin{lstlisting}[caption={\file{bench/AdmissionReject.lean}: no \texttt{SafeRep} path to \texttt{IO.Ref}.}]
+structure Bad where
+  r : IO.Ref Nat
+
+#admit_type Bad
+\end{lstlisting}
+
+\begin{lstlisting}[style=out]
+error: failed to synthesize
+  SafeValue Bad
+\end{lstlisting}
+
+\subsection*{Recursion through the parameters}
+
+Parameterised structures require the parameter's instance, so admission composes
+and refusal propagates.
+
+\begin{lstlisting}[caption={\file{bench/AdmissionParam.lean}.}]
+structure Wrap (α : Type) where
+  val : α
+
+instance [i : SafeValue α] : SafeValue (Wrap α) where
+  Rep := i.Rep
+  rep := i.rep
+  toRep w := i.toRep w.val
+  ofRep r := ⟨i.ofRep r⟩
+  left := by intro w; cases w; rw [i.left _]
+  right := by intro r; exact i.right r
+
+structure Both (α β : Type) where
+  fst : α
+  snd : β
+
+instance [i : SafeValue α] [j : SafeValue β] : SafeValue (Both α β) where
+  Rep := i.Rep × j.Rep
+  rep := SafeRep.prod i.rep j.rep
+  toRep p := (i.toRep p.fst, j.toRep p.snd)
+  ofRep r := ⟨i.ofRep r.1, j.ofRep r.2⟩
+  left := by intro p; cases p; simp [i.left, j.left]
+  right := by intro r; cases r; simp [i.right, j.right]
+\end{lstlisting}
+
+\begin{lstlisting}[style=out]
+-- with SafeValue Nat, Bool and UInt8 as the base instances
+example : SafeValue (Wrap Nat) := inferInstance
+example : SafeValue (Wrap (Wrap Bool)) := inferInstance
+example : SafeValue (Both Nat (Wrap UInt8)) := inferInstance
+
+-- refusal propagates
+error(lean.synthInstanceFailed): failed to synthesize instance of type class
+  SafeValue (Wrap Bad)
+\end{lstlisting}
+
+\subsection*{The axiom forgery, and its refusal}
+
+An equivalence can be asserted rather than proved. The gate collects the
+instance's axioms and refuses anything outside \texttt{propext},
+\texttt{Classical.choice} and \texttt{Quot.sound}.
+
+\begin{lstlisting}[caption={\file{bench/AdmissionAxiomReject.lean}.}]
+axiom badTo : Bad → Nat
+axiom badFrom : Nat → Bad
+axiom badLeft : ∀ b, badFrom (badTo b) = b
+axiom badRight : ∀ n, badTo (badFrom n) = n
+
+instance : SafeValue Bad where
+  Rep := Nat
+  rep := SafeRep.nat
+  toRep := badTo
+  ofRep := badFrom
+  left := badLeft
+  right := badRight
+
+#admit_type Bad
+\end{lstlisting}
+
+\begin{lstlisting}[style=out]
+error: the SafeValue instance for 'Bad' depends on non-standard axioms
+  [badFrom, badLeft, badRight, badTo]
+\end{lstlisting}
+
+\subsection*{What the obligations do and do not say}
+
+\begin{center}
+\begin{tabular}{@{}ll@{}}
+\toprule
+Obligation & Meaning \\
+\midrule
+\texttt{Rep}, \texttt{rep} & the representation is in the allowlist \\
+\texttt{toRep}, \texttt{ofRep} & maps in both directions \\
+\texttt{left}, \texttt{right} & the two inverse laws \\
+\texttt{new : Array UInt8} $\to$ \texttt{T} & initialiser used by allocation \\
+axiom audit & the instance rests on no non-standard axiom \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+These are \emph{shape} obligations. They certify that the type is bijective with
+an allowed representation; they do not state that the type itself carries no live
+resource. A bijection to \texttt{Nat} asserted by axioms is caught, but a genuine
+bijection is only a practical guard. Closing the gap needs either a definitional
+representation (admitted types are aliases of the safe representation) or a
+handler that builds the instance from the type's declaration, with the faithfulness
+of that structural reading named as a trust assumption.
+
+\subsection*{A catalogue of refused attempts}
+
+\begin{center}\small
+\begin{tabular}{@{}lp{0.56\textwidth}@{}}
+\toprule
+Attempt & Required rejection \\
+\midrule
+duplicate one handle, join the aliases & both names are one consumed ledger entry \\
+join fractions of different allocations & allocation-identity mismatch \\
+join equal-length, different intervals & footprint mismatch \\
+write through a half-share reader & insufficient write authority \\
+rejoin a read-only loan, then write & read-only ceiling \\
+split a writer, then use the old parent & suspended or consumed authority \\
+borrow a slice, then free the parent & outstanding loan \\
+end an outer lifetime before an inner loan & dependency violation \\
+reuse an old handle after free and reallocation & stale identity or generation \\
+capture a borrower in a returned closure & unsupported resource-bearing result \\
+discard a reader in the linear core & explicit return or retirement required \\
+retire a reader, then access it & retired claim \\
+duplicate a saved close action in one session & not composable from the post-close context \\
+free an empty slice & missing root disposal authority \\
+lose a capability in one branch & explicit sum or common post-context \\
+throw while a borrow is live & rejected until cleanup is specified \\
+lift arbitrary IO into a borrowed scope & no such lifting operation \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\paragraph{Automation.} Plain structures are mechanical: representation as a
+product, componentwise maps, both laws by \texttt{cases}/\texttt{rfl}. Parameters
+are premises. The following are not automatic and should fail with an unresolved
+obligation rather than a silent assumption: types with invariants (\texttt{Fin n},
+\texttt{Vector} $\alpha$ \texttt{n}), normalising types (sign--magnitude integers, rationals),
+quotients, opaque or privately constructed types, dependent fields, and inductive
+containers, which need a \texttt{SafeRep} extension before any handler can help.
+A type that cannot be admitted is simply not storable: that is a usability limit,
+not an unsoundness.
+
+\section{Allocation, freshness and the seal}\label{sec:seal}
+
+Allocation is an instruction of the object language, not a function the client
+calls on a context. The arena issues the identifier, the admitted type's
+initialiser supplies the value, and the ledger records them together.
+
+\begin{lstlisting}[caption={Allocation sketch. \texttt{next} is the arena's fresh counter; no client-supplied id appears.}]
+structure Entry where
+  id : AllocId
+  T : Type
+  inst : SafeValue T
+  value : T
+
+def alloc (next : Nat) (st : SafeType) (bytes : Array UInt8) : Entry :=
+  ⟨⟨next⟩, st.T, st.inst, st.init bytes⟩
+\end{lstlisting}
+
+Four rules make the discipline unforgeable, and they are architectural rather
+than type-level:
+
+\begin{enumerate}[itemsep=2pt,topsep=2pt]
+\item The ledger is never a public value. No \texttt{Ctx} $\to$ \texttt{Ctx} transition is
+exported: a private constructor stops construction, not duplication, so a public
+split function applied twice to one value would mint authority.
+\item The ledger and the runner live in one module, with the ledger's definitions
+\texttt{private}; Lean privacy is file-scoped, so no importing module can name
+them, and the runner's recursion is the only thread through the ledger.
+\item The public boundary is a checked program description with a private
+constructor, carrying a kernel-checked typing derivation. A fabricated derivation
+fails elaboration; the checker is untrusted but cannot forge the kernel's
+acceptance.
+\item A phantom arena parameter makes identifiers from one run ill-typed in
+another, and no runner executes a saved action against an existing arena: each
+run starts with fresh storage and a fresh identity namespace.
+\end{enumerate}
+
+\section{The reflective usage checker, and why it is not the seal}
+
+Before the ledger existed, a static prototype checked a restricted surface by
+reflection. It is a useful diagnostic and a useful negative result.
+
+\begin{lstlisting}[caption={\file{bench/OwnedStatic.lean}: private payload, one-transfer check.}]
+structure Owned (α : Type) where
+  private mk ::
+  private val : Array α
+
+def new (xs : Array α) : Owned α := ⟨xs⟩
+def write (o : Owned α) (i : Nat) (v : α) : Owned α := ⟨o.val.set! i v⟩
+\end{lstlisting}
+
+The check reflects the elaborated definition, counts uses of each
+\texttt{Owned}-typed binding by de Bruijn index, and refuses a second use.
+
+\begin{lstlisting}[style=out]
+-- accepted
+#own_check good
+
+-- refused
+error: restricted ownership: handle 'a' used 2 times in its scope;
+  the discipline permits one transfer
+
+-- direct payload access
+error: Field 'val' from structure 'Owned' is private
+\end{lstlisting}
+
+It cannot be the trust boundary: it reads a term and throws, producing no
+kernel-checked certificate, and it sees usage only where the shape is syntactic.
+The runtime-guarded counterpart is honest about the same limit:
+
+\begin{lstlisting}[style=out]
+-- bench/OwnedDemo.lean, a shared used-flag
+consumed handle refused: owned handle used twice
+duplicate refused: owned handle used twice
+\end{lstlisting}
+
+The runtime guard the prototype contrasts with is the guarded interface in
+\file{bench/OwnedDemo.lean}: a handle carries a shared used-flag, so a copy shares
+the flag and the second use fails at run time.
+
+\begin{lstlisting}[caption={\file{bench/OwnedDemo.lean}: dynamic enforcement.}]
+structure Owned (α : Type) where
+  private mk ::
+  val : α
+  used : IO.Ref Bool
+
+def new (a : α) : IO (Owned α) := do
+  let r ← IO.mkRef false
+  pure ⟨a, r⟩
+
+def take (o : Owned α) : IO α := do
+  if ← o.used.get then
+    throw (IO.userError "owned handle used twice")
+  o.used.set true
+  pure o.val
+\end{lstlisting}
+
+\section{The ledger design}\label{sec:ledger}
+
+The proposed context is a finite map of capabilities, a decomposition forest, a
+lifetime forest and loan records. Capability states are \emph{active},
+\emph{suspended}, \emph{retired} and \emph{consumed}; a suspended parent is
+bookkeeping, not a second active budget.
+
+For each allocated byte $x$, the terminal holders' shares must sum to one:
+
+\[
+\mathrm{Budget}_{\Gamma}(a,x)
+=
+\sum_{\substack{c \in \mathrm{Frontier}(\Gamma)\\ c.a = a,\; x \in c.F}} c.q
+= 1.
+\]
+
+Spatial splits preserve the equation because each byte is in exactly one child;
+fractional splits preserve it because the children sum to the parent; retirement
+keeps the contribution but removes access. The equation is necessary and not
+sufficient: provenance, ceiling inheritance, lifetime liveness, restoration
+removing descendants, a single disposal entitlement, and freshness across
+branches are separate conjuncts of the invariant.
+
+\begin{center}
+\begin{tabular}{@{}lp{0.62\textwidth}@{}}
+\toprule
+Transition & Required effect \\
+\midrule
+\texttt{alloc} & fresh allocation, root capability, disposal entitlement, zeroed bytes \\
+\texttt{free} & root view, disposal entitlement, no fragments, no loans \\
+\texttt{read} & active claim, live lifetime, positive share, in footprint \\
+\texttt{write} & as read, plus whole share and read--write ceiling \\
+\texttt{splitFraction} & children positive, sum to parent, inherit ceiling and lifetime \\
+\texttt{joinFraction} & distinct claims, same allocation, footprint, lifetime, provenance \\
+\texttt{splitAt} & in-bounds point, two children at the parent's share \\
+\texttt{joinSpatial} & adjacency, coverage, matching shares and ceilings, no subloans \\
+\texttt{beginBorrow} & parent suspended, loan with fresh lifetime, borrowed child \\
+\texttt{endBorrow} & returned authority complete, nested loans ended, fresh restoration \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection*{A worked trace: 64 bytes, split, borrowed, restored}
+
+The intended surface program below is the design's acceptance example: allocate
+64 bytes, take a mutable loan of the whole array, split it in two, fill both
+slices, split the right slice fractionally into two readers, scan each, rejoin
+the readers, rejoin the slices, return the loan, snapshot and free.
+
+\begin{center}
+\begin{tabular}{@{}ll@{}}
+\toprule
+Step & Usable authority \\
+\midrule
+allocate & owned root over \texttt{[0,64)} and its disposal entitlement \\
+begin mutable scope & borrowed full writer over \texttt{[0,64)}; lender suspended \\
+spatial split at 32 & full writers over \texttt{[0,32)} and \texttt{[32,64)} \\
+fractional split of right & left writer; two half-share readers over \texttt{[32,64)} \\
+rejoin readers & left writer; restored full right writer \\
+rejoin slices & full borrowed writer over \texttt{[0,64)} \\
+end mutable scope & restored owned root and disposal entitlement \\
+snapshot & same owned root; independent immutable bytes \\
+free & no allocation or access authority remains \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+A retained alias \texttt{oldReader = reader1} still names the consumed capability
+after the join; a later read through it is rejected because the ledger entry is
+consumed, not because the source name changed.
+
+The indexed judgement threads the context and a result-dependent post-context:
+
+\begin{lstlisting}[caption={The design's computation type, schematic.}]
+OwnM : (ρ : Type) → Ctx ρ → {α : Type} → (α → Ctx ρ) → Type
+
+ret  : (x : α) → OwnM ρ Γ (fun _ => Γ)
+bind : OwnM ρ Γ Q → ((x : α) → OwnM ρ (Q x) R) → OwnM ρ Γ R
+\end{lstlisting}
+
+Indices are hidden by elaboration, not discarded before composition: a
+\texttt{Sigma} $\Gamma_{\mathrm{in}}$, \texttt{Sigma} $\Gamma_{\mathrm{out}}$, \texttt{Program} $\Gamma_{\mathrm{in}}$ $\Gamma_{\mathrm{out}}$ $\alpha$ package cannot supply a
+generally valid bind unless the matching intermediate contexts are established.
+
+\section{Theorem obligations and gates}\label{sec:obligations}
+
+\begin{center}
+\begin{tabular}{@{}lp{0.66\textwidth}@{}}
+\toprule
+Theorem & Content \\
+\midrule
+share arithmetic & executable shares agree with the rational model \\
+context well-formedness & names, footprints, roots, ceilings, lifetimes \\
+primitive preservation & each legal primitive preserves \texttt{Realizes} \\
+bounds safety & every executed access is in its allocation and footprint \\
+access exclusion & a writable byte has no competing budget outside the path \\
+lifetime validity & usable claims belong to live loans with valid dependencies \\
+reconstruction & joins and loan ends remove descendants before restoring \\
+disposal safety & free consumes the unique entitlement, no live dependents \\
+frame preservation & unaffected observations and authority are preserved \\
+typed execution safety & a certified program cannot reach an ownership fault \\
+scope confinement & scoped authority is not executable outside its boundary \\
+cleanup & a closed successful program leaves no live allocation or loan \\
+checker soundness & a successful check yields the declarative judgement \\
+elaboration correctness & the certificate corresponds to the accepted source \\
+backend refinement & mutable execution simulates the reference transitions \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Stages, in dependency order: (1) shares, identities, intervals; (2) context
+ledger, forest, primitive transitions; (3) byte-array semantics; (4) fractional
+and spatial views; (5) explicit loans and reborrowing; (6) typed programs and the
+closed runner; (7) hidden-index elaborator; (8) optional retirement and scope
+recovery; (9) mutable interpreter; (10) specialisation and integrations. The
+first useful milestone is stage 4; the first programmer-facing one is stage 7.
+
+\section{What is deliberately not claimed}
+
+The subsystem is an interpreter with a checked access discipline over its own
+arena. It does not retrofit linearity onto Lean, does not make the host's values
+affine, and does not claim that Lean's reference counts reach one at a write site.
+Logical exclusive access is not a runtime representation property. Permission
+soundness, backend refinement and runtime uniqueness are separate theorem
+families, and only the first is close to being stated in the repository.
+
+\section{How to run the examples}
+
+From the repository root, with the toolchain from the dev shell:
+
+\begin{lstlisting}[style=out]
+nix develop -c lake build Cap
+
+# admission controls (the refusals are intended)
+cd bench
+export LEAN_PATH=../.lake/build/lib/lean:$LEAN_PATH
+lean AdmissionAccept.lean        # admitted 'Pair'
+lean AdmissionReject.lean        # failed to synthesize SafeValue Bad
+lean AdmissionParam.lean         # Wrap/Both instances
+lean AdmissionParamReject.lean   # failed for Wrap Bad
+lean AdmissionAxiomReject.lean   # non-standard axioms
+
+# reflective prototype
+lean OwnedAccept.lean            # accepted
+lean OwnedReject.lean            # one-transfer violation
+lean OwnedNoAccess.lean          # private payload
+lean OwnedDemo.lean              # runtime guard
+\end{lstlisting}
+
+The full gate, including the paper and the certified fragment:
+
+\begin{lstlisting}[style=out]
+nix develop -c bash scripts/check_all.sh
+\end{lstlisting}
+
+\appendix
+\section{File map}
+
+\begin{center}
+\begin{tabular}{@{}ll@{}}
+\toprule
+File & Role \\
+\midrule
+\file{Cap/Id.lean} & allocation, capability, loan, lifetime identities \\
+\file{Cap/Share.lean} & shares, splits, the one-transfer theorem \\
+\file{Cap/Footprint.lean} & intervals, views, split facts \\
+\file{Cap/Admission.lean} & \texttt{SafeRep}, \texttt{SafeValue}, \texttt{SafeType}, the gate \\
+\file{bench/Admission*.lean} & accepted, refused, recursive and axiomatic controls \\
+\file{bench/Owned*.lean} & reflective and runtime prototypes \\
+\file{docs/lean-fractional-ownership-design.md} & the full design note \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\end{document}
