@@ -162,6 +162,15 @@
   refused (`joinChildren?_alias_none`, `Owner.joinFraction_alias_none`). Arbitrary
   same-resource recombination, the common-partition normaliser and provenance beyond
   node shape are not implemented.
+- `Cap/Surface.lean` is the surface front end: `#own_prog owner D { ... }` with
+  `write`, `splitAt`, `splitFraction` and `nop`, elaborating to `Cmd` and running
+  `Cap.check` at elaboration time; acceptance is logged and refusal is a compile
+  error with the checker's message. It emits no proof term, and `splitFraction`
+  derives positivity with `by decide`, so a non-reducible share is refused. The
+  positive example splits a 64-byte leaf, writes both halves and splits the left
+  half 32/32. `bench/CapSurfaceReject.lean` holds the out-of-range write, the
+  out-of-range split and the non-summing shares, each refused with its message. It
+  is not the hidden-index elaborator of the design.
 - `Cap/Core.lean` is the deep command language and its executable checker:
   `Cmd` for write, spatial split, fractional split and no-op; `Owner.writableB` with
   `writableB_sound`; `check` returning `Except String Owner`; and `Checked` as its

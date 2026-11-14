@@ -661,6 +661,14 @@ succeeding transitions, \texttt{check\_covered} carries coverage through a run,
 and a read-only write is refused. This is a deep syntax and checker, not the
 hidden-index surface elaborator and not a heap semantics.
 
+A surface front end is implemented in \file{Cap/Surface.lean}:
+\texttt{\#own\_prog owner D \{ ... \}} with writes, spatial and fractional
+splits and no-ops, elaborating to the deep commands and running the checker at
+elaboration time; acceptance is logged, refusal is a compile error with the
+checker's message, and no proof term is emitted. The refused programmes
+(out-of-range write, out-of-range split, non-summing shares) live in
+\file{bench/CapSurfaceReject.lean}.
+
 A reference byte heap is implemented in \file{Cap/Bytes.lean}: \texttt{read?}, \texttt{write?},
 \texttt{fill?}, \texttt{snapshot?} and \texttt{alloc}, with \texttt{write\_get}, \texttt{write\_preserves\_length},
 \texttt{write\_ne}, the 64-byte example (left sum 32, right sum 64), two readers of the
@@ -838,6 +846,7 @@ File & Role \\
 \file{Cap/Backend.lean} & mutable-backend refinement for one allocation \\
 \file{Cap/BackendRun.lean} & the 64-byte run on the backend \\
 \file{Cap/Core.lean} & deep command language and executable checker \\
+\file{Cap/Surface.lean} & surface commands checked at elaboration \\
 \file{Cap/Join.lean} & sibling-only fractional join \\
 \file{Cap/Code.lean} & the code universe and \texttt{El} \\
 \file{Cap/Admission.lean} & \texttt{Bij}, \texttt{SafeValue}, \texttt{SafeType}, the gate \\
