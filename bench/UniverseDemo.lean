@@ -12,6 +12,6 @@ def idBij (α : Type) : Bij α α where
 def listCert : SafeValue (El (.list (.prod .nat .bool))) :=
   ⟨.list (.prod .nat .bool), idBij _⟩
 
-def listTy : SafeType := ⟨El (.list .nat), ⟨.list .nat, idBij _⟩, fun _ => []⟩
+def listTy : SafeType := ⟨.list .nat, fun _ => []⟩
 
 example : listTy.init #[] = ([] : List Nat) := rfl

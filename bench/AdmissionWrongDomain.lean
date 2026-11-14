@@ -16,4 +16,4 @@ def Other.bij : Bij Other (El .nat) where
   right_inv := by intro n; rfl
 
 -- A real bijection, but not of the type being admitted.
-#admit_type Pair Other.bij
+#admit_encoding Pair Other.bij

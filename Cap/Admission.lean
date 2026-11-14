@@ -48,25 +48,36 @@ structure Bij (α β : Type) where
   left_inv : ∀ a, invFun (toFun a) = a
   right_inv : ∀ b, toFun (invFun b) = b
 
-/-- The admission certificate: a code and a demonstrated bijection to it. -/
+/-- Logical encodability: a code and a bijection to its denotation.
+
+This is not a confinement property. `Unit → Nat` is bijective with `El .nat` and a
+particular such function can capture storage; extensional equality of functions
+says nothing about their compiled environments. What the certificate establishes
+is that the type's values can be encoded as the coded first-order data, not that a
+value of the type carries nothing else. Storage therefore never holds an
+arbitrary `T`: it holds `El code`. -/
 structure SafeValue (T : Type) where
   code : Code
   bij : Bij T (El code)
 
-/-- A type admitted to the subsystem, with the initialiser used by allocation. -/
+/-- Storage eligibility: a code and an initialiser producing that code's
+denotation. No arbitrary type appears here, so an initialiser cannot return a
+closure over the protected storage. -/
 structure SafeType where
-  T : Type
-  cert : SafeValue T
-  new : Array UInt8 → T
+  code : Code
+  new : Array UInt8 → El code
 
 /-- The allocator calls this with the bytes for the fresh allocation. -/
-def SafeType.init (st : SafeType) (bytes : Array UInt8) : st.T := st.new bytes
+def SafeType.init (st : SafeType) (bytes : Array UInt8) : El st.code :=
+  st.new bytes
 
-/-- Admission gate: reflect the named demonstration and check its statement. -/
-syntax "#admit_type " ident ident : command
+/-- Encoding gate: reflect the named demonstration and check that it is a
+bijection of the named type to some closed code. It does not admit the type to
+storage; storage is `El code` only. -/
+syntax "#admit_encoding " ident ident : command
 
 elab_rules : command
-  | `(#admit_type $t:ident $b:ident) => do
+  | `(#admit_encoding $t:ident $b:ident) => do
     liftTermElabM do
       let env ← getEnv
       let d ← match env.find? b.getId with
@@ -85,6 +96,6 @@ elab_rules : command
       let bad := axs.filter (fun a => !standard.contains a)
       unless bad.isEmpty do
         throwError "the demonstration '{b}' depends on non-standard axioms {bad.toList}"
-      logInfo m!"admitted '{t}' with code {c}"
+      logInfo m!"'{t}' is encoded by code {c}"
 
 end Cap

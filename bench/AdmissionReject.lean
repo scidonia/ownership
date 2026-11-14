@@ -17,4 +17,4 @@ noncomputable def badBij : Bij Bad (El .nat) where
   left_inv := badLeft
   right_inv := badRight
 
-#admit_type Bad badBij
+#admit_encoding Bad badBij

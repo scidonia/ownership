@@ -13,10 +13,11 @@ def Pair.bij : Bij Pair (El (.prod .nat .nat)) where
   left_inv := by intro p; cases p; rfl
   right_inv := by intro r; cases r; rfl
 
-#admit_type Pair Pair.bij
+#admit_encoding Pair Pair.bij
 
 def Pair.new (_ : Array UInt8) : Pair := ⟨0, 0⟩
 
-def pairTy : SafeType := ⟨Pair, ⟨(.prod .nat .nat), Pair.bij⟩, Pair.new⟩
+/-- Storage holds the code's denotation, not `Pair` itself. -/
+def pairTy : SafeType := ⟨.prod .nat .nat, fun _ => ((0 : Nat), (0 : Nat))⟩
 
-example : pairTy.init #[1, 2] = ⟨0, 0⟩ := rfl
+example : pairTy.init #[1, 2] = ((0 : Nat), (0 : Nat)) := rfl

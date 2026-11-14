@@ -2,9 +2,13 @@
 Codes for the value universe.
 
 A code denotes a first-order value type by construction, so `El c` is its own
-representation and a type is admitted to the subsystem by demonstrating a
-bijection to `El c`. The universe is closed on purpose: there is no code for a
-reference, a function or a closure.
+representation and storage holds `El c`, never an arbitrary type. The universe is
+closed on purpose: there is no code for a reference, a function or a closure.
+
+That closure does not make every type isomorphic to a coded type harmless.
+`Unit → Nat` is bijective with `El .nat`, and a particular function of that type
+can capture an array. A bijection is an encoding property; it is not a statement
+about what a value retains. This is why storage is restricted to `El c`.
 -/
 
 namespace Cap

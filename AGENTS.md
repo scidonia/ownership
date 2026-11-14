@@ -119,25 +119,25 @@
   semantics, then the elaborator, runner and backend refinement.
 - `Cap/Code.lean` is the closed value universe: codes for `Nat`, `Bool`,
   `UInt8`, `Unit`, products, sums and lists, with `El` denoting each. There is no
-  code for a reference, a function or a closure, so a type that hides a live
-  resource has no code to be bijective with.
-- `Cap/Admission.lean` admits a value type only by a demonstrated bijection into
-  that universe. `SafeValue T` is a structure carrying a closed `Code` and a
-  `Bij T (El code)` with both inverse laws; `SafeType` carries the certificate and
-  the initialiser `new`, which `SafeType.init` applies to a fresh allocation's
-  bytes. There is no class and no deriving route: a user who wants a type admitted
-  writes the bijection, and `#admit_type T bij` reflects the named declaration,
-  checks its type is `Bij T (El c)` for some closed code, and audits its axioms.
-  Accepted `bench/AdmissionAccept.lean` (`Pair` with code `.prod .nat .nat`);
-  refused `bench/AdmissionReject.lean` (an axiom-supported bijection) and
-  `bench/AdmissionWrongDomain.lean` (a real bijection of a different type).
-  Composition is ordinary functions in `bench/AdmissionParam.lean` (`Wrap.bij`,
-  `Both.bij`), and `bench/UniverseDemo.lean` admits coded types by the identity
-  bijection, so no search takes place. A deriving-style tool may propose a
-  bijection, but there is no instance to register and a failed proposal is an
-  error. The obligations remain shape obligations: they certify a bijection to a
-  coded first-order type, not that an arbitrary type carries no live resource;
-  cardinality coding would admit resource-bearing types and is not used.
+  code for a reference, a function or a closure. That closure does not make every
+  type isomorphic to a coded type harmless: `Unit → Nat` is bijective with
+  `El .nat`, and such a function can capture an array. A bijection is an encoding
+  property, not confinement.
+- `Cap/Admission.lean` separates logical encoding from storage. `SafeValue T` is a
+  closed `Code` and a `Bij T (El code)` with both inverse laws: logical
+  encodability, not confinement. `SafeType` holds a `code` and
+  `new : Array UInt8 → El code`, and `SafeType.init` applies it to a fresh
+  allocation's bytes; no arbitrary `T` is stored, so an initialiser cannot hand the
+  arena a closure over the protected storage. `#admit_encoding T bij` reflects the
+  named declaration, checks its type is `Bij T (El c)` for a closed code, and
+  audits axioms. Accepted `bench/AdmissionAccept.lean` (`Pair` encoded by
+  `.prod .nat .nat`); `bench/NatThunkAdmission.lean` shows `Unit → Nat` is
+  encodable by `.nat` while `retainBuffer` can capture an array — the gate accepts
+  the encoding, and the storage type is what excludes it. Refused
+  `bench/AdmissionReject.lean` (axiom-supported) and
+  `bench/AdmissionWrongDomain.lean` (a bijection of another type).
+  `bench/AdmissionParam.lean` composes bijections as functions, and
+  `bench/UniverseDemo.lean` admits coded types by the identity.
 - `bench/UnionFind.lean` is a hand-written union-find benchmark on `Array Nat`,
   outside the certified fragment. It compares an unshared and a shared variant at
   equal `n` and `m`; the printed figure is nanoseconds per outer iteration (two

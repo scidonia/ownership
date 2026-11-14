@@ -280,11 +280,10 @@ structure SafeValue (T : Type) where
   bij : Bij T (El code)
 
 structure SafeType where
-  T : Type
-  cert : SafeValue T
-  new : Array UInt8 → T
+  code : Code
+  new : Array UInt8 → El code
 
-def SafeType.init (st : SafeType) (bytes : Array UInt8) : st.T := st.new bytes
+def SafeType.init (st : SafeType) (bytes : Array UInt8) : El st.code := st.new bytes
 \end{lstlisting}
 
 The gate \texttt{\#admit\_type T bij} reflects the named declaration and checks
@@ -305,21 +304,19 @@ def Pair.bij : Bij Pair (El (.prod .nat .nat)) where
   left_inv := by intro p; cases p; rfl
   right_inv := by intro r; cases r; rfl
 
-#admit_type Pair Pair.bij
+#admit_encoding Pair Pair.bij
 \end{lstlisting}
 
 \begin{lstlisting}[style=out]
-admitted 'Pair' with code Code.nat.prod Code.nat
+'Pair' is encoded by code Code.nat.prod Code.nat
 \end{lstlisting}
 
-The certificate then carries that bijection into allocation:
+Storage holds the code's denotation, not \texttt{Pair} itself:
 
-\begin{lstlisting}[caption={The allocator applies \texttt{new} against a fresh allocation's bytes.}]
-def Pair.new (_ : Array UInt8) : Pair := ⟨0, 0⟩
+\begin{lstlisting}[caption={The allocator applies \texttt{new} against a fresh allocation's bytes; the stored value is \texttt{El code}.}]
+def pairTy : SafeType := ⟨.prod .nat .nat, fun _ => ((0 : Nat), (0 : Nat))⟩
 
-def pairTy : SafeType := ⟨Pair, ⟨(.prod .nat .nat), Pair.bij⟩, Pair.new⟩
-
-example : pairTy.init #[1, 2] = ⟨0, 0⟩ := rfl
+example : pairTy.init #[1, 2] = ((0 : Nat), (0 : Nat)) := rfl
 \end{lstlisting}
 
 \subsection*{A refused forgery}
@@ -339,7 +336,7 @@ noncomputable def badBij : Bij Bad (El .nat) where
   left_inv := badLeft
   right_inv := badRight
 
-#admit_type Bad badBij
+#admit_encoding Bad badBij
 \end{lstlisting}
 
 \begin{lstlisting}[style=out]
@@ -360,7 +357,7 @@ def Other.bij : Bij Other (El .nat) where
   right_inv := by intro n; rfl
 
 -- A real bijection, but not of the type being admitted.
-#admit_type Pair Other.bij
+#admit_encoding Pair Other.bij
 \end{lstlisting}
 
 \begin{lstlisting}[style=out]
@@ -429,13 +426,44 @@ axiom audit & the demonstration rests on no non-standard axiom \\
 \end{tabular}
 \end{center}
 
-These remain \emph{shape} obligations: they certify that the type is bijective
-with a coded first-order type, not that an arbitrary Lean type is resource-free.
-The universe is closed against references, functions and closures, so a type
-that hides a live resource has no code to be bijective with; a forged axiom is
-caught by the audit. Cardinality coding would destroy that: every countable type
-is classically equinumerous with \texttt{Nat}, a noncomputable bijection cannot
-be run by the allocator, and a computable one needs a table of live references,
+These are \emph{encoding} obligations, and the distinction is the correction
+this brief records. The universe has no function constructor, but a type can be
+bijective with a coded type and still be a function that captures storage:
+
+\begin{lstlisting}[caption={\file{bench/NatThunkAdmission.lean}: a genuine encoding of a function type.}]
+abbrev NatThunk := Unit → Nat
+
+def thunkBij : Bij NatThunk (El .nat) where
+  toFun f := f ()
+  invFun n := fun _ => n
+  left_inv f := by funext u; cases u; rfl
+  right_inv n := rfl
+
+#admit_encoding NatThunk thunkBij
+\end{lstlisting}
+
+\begin{lstlisting}[style=out]
+'thunkBij' depends on axioms: [Quot.sound]
+'NatThunk' is encoded by code Code.nat
+\end{lstlisting}
+
+and a particular thunk can retain a buffer:
+
+\begin{lstlisting}[]
+def retainBuffer (bytes : Array UInt8) : NatThunk := fun _ => bytes.size
+\end{lstlisting}
+
+The gate accepts the encoding, rightly: it is a real bijection. What it does not
+establish is confinement. Extensional equality of functions says nothing about
+their compiled environments. Storage therefore holds \texttt{El code}, never an
+arbitrary \texttt{T}: \texttt{SafeType.new} must return \texttt{El code}, so an
+initialiser cannot hand the arena a closure over the protected bytes, and
+\texttt{NatThunk} is not storable even though it is encodable. The axiom audit
+blocks forged encodings, not forged confinement.
+
+Cardinality coding is excluded for the same reason: every countable type is
+classically equinumerous with \texttt{Nat}, a noncomputable bijection cannot be
+run by the allocator, and a computable one needs a table of live references,
 which is the resource the discipline excludes.
 
 A type outside the universe, or one whose bijection the user does not supply, is
@@ -461,12 +489,11 @@ initialiser supplies the value, and the ledger records them together.
 \begin{lstlisting}[caption={Allocation sketch. \texttt{next} is the arena's fresh counter; no client-supplied id appears.}]
 structure Entry where
   id : AllocId
-  T : Type
-  cert : SafeValue T
-  value : T
+  code : Code
+  value : El code
 
 def alloc (next : Nat) (st : SafeType) (bytes : Array UInt8) : Entry :=
-  ⟨⟨next⟩, st.T, st.cert, st.init bytes⟩
+  ⟨⟨next⟩, st.code, st.new bytes⟩
 \end{lstlisting}
 
 Four rules make the discipline unforgeable, and they are architectural rather
@@ -689,6 +716,7 @@ lean AdmissionReject.lean        # non-standard axioms
 lean AdmissionWrongDomain.lean   # not a bijection of the admitted type
 lean AdmissionParam.lean         # Wrap/Both bijections
 lean UniverseDemo.lean           # coded identity certificates
+lean NatThunkAdmission.lean      # a function type is encodable, not storable
 
 # reflective prototype
 lean OwnedAccept.lean            # accepted
