@@ -80,7 +80,13 @@ elab_rules : command
   | `(#admit_type $t:ident) => do
     liftTermElabM do
       let ty := mkApp (mkConst ``SafeValue) (mkConst t.getId)
-      let _ ← synthInstance ty
+      let inst ← synthInstance ty
+      let some name := inst.constName? | throwError "the SafeValue instance for '{t}' is not a named declaration"
+      let axs ← collectAxioms name
+      let standard : List Name := [``propext, ``Classical.choice, ``Quot.sound]
+      let bad := axs.filter (fun a => !standard.contains a)
+      unless bad.isEmpty do
+        throwError "the SafeValue instance for '{t}' depends on non-standard axioms {bad.toList}"
     logInfo m!"admitted '{t}': a SafeValue instance was found"
 
 end Cap

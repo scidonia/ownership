@@ -128,9 +128,16 @@
   `[SafeValue α] → SafeValue (Wrap α)` and `[SafeValue α] [SafeValue β] →
   SafeValue (Both α β)` in `bench/AdmissionParam.lean`, with `Nat`, `Bool` and
   `UInt8` as the base instances, and `bench/AdmissionParamReject.lean` shows the
-  refusal propagating to `Wrap Bad`. The intended automation is a deriving
-  handler, which proposes the instance the kernel then checks; reflection cannot
-  authorise one.
+  refusal propagating to `Wrap Bad`. The gate also collects the instance's axioms
+  and refuses anything outside `propext`, `Classical.choice` and `Quot.sound`, so
+  an axiomatic bijection cannot admit a resource-bearing type: `bench/
+  AdmissionAxiomReject.lean` supplies `badTo`/`badFrom` and their inverse laws as
+  axioms and is refused. The intended automation is a deriving handler, which
+  proposes the instance the kernel then checks; reflection cannot authorise one.
+  The obligations are shape obligations — a bijection to an allowed
+  representation — so they certify storage shape, not that the type carries no
+  live resource; a handler-generated instance from the declaration, or a
+  definitional representation, is what would close that gap.
 - `bench/UnionFind.lean` is a hand-written union-find benchmark on `Array Nat`,
   outside the certified fragment. It compares an unshared and a shared variant at
   equal `n` and `m`; the printed figure is nanoseconds per outer iteration (two
