@@ -91,7 +91,7 @@
 \begin{center}
 \fbox{\parbox{0.96\textwidth}{\small
 \textbf{Status.} Implemented and building in this repository: \file{Cap/Id.lean},
-\file{Cap/Share.lean}, \file{Cap/Footprint.lean}, \file{Cap/Admission.lean}, with
+\file{Cap/Share.lean}, \file{Cap/Footprint.lean}, \file{Cap/Code.lean}, \file{Cap/Admission.lean}, with
 accepted and refused controls under \file{bench/}. Proposed, not implemented: the
 context ledger, the typed core and its semantics, the elaborator, the interpreter
 and the backend refinement. Every Lean fragment below is quoted from the
@@ -242,219 +242,14 @@ A view at \texttt{[0,64)} split at 32 gives disjoint children at \texttt{[0,32)}
 and \texttt{[32,64)}; splitting at 31 does not, and the module's example
 discharges that by \texttt{decide}.
 
-\section{Admitting a new value type}\label{sec:admission}
+\section{Admitting a value type: the user demonstrates the bijection}\label{sec:admission}
 
-A type may be stored only if it is equivalent to an allowed representation, and
-the equivalence's two inverse laws make its shape a kernel-checked fact. The
-allowlist is closed on purpose.
+There is no class and no deriving route. A certificate is a value containing a
+code and a bijection to that code's denotation, with both inverse laws. A user who
+wants a type admitted must write the bijection; the kernel checks it, and the gate
+reflects the named declaration to confirm what was demonstrated.
 
-\begin{lstlisting}[caption={\file{Cap/Admission.lean}: the allowlist and the certificate.}]
-inductive SafeRep : Type → Prop where
-  | nat : SafeRep Nat
-  | bool : SafeRep Bool
-  | uint8 : SafeRep UInt8
-  | prod {A B : Type} : SafeRep A → SafeRep B → SafeRep (A × B)
-
-class SafeValue (T : Type) where
-  Rep : Type
-  rep : SafeRep Rep
-  toRep : T → Rep
-  ofRep : Rep → T
-  left : ∀ t, ofRep (toRep t) = t
-  right : ∀ r, toRep (ofRep r) = r
-
-structure SafeType where
-  T : Type
-  inst : SafeValue T
-  new : Array UInt8 → T
-
-def SafeType.init (st : SafeType) (bytes : Array UInt8) : st.T := st.new bytes
-\end{lstlisting}
-
-\subsection*{An admitted structure}
-
-\begin{lstlisting}[caption={\file{bench/AdmissionAccept.lean}: \texttt{Pair} is admitted through \texttt{Nat × Nat}.}]
-structure Pair where
-  x : Nat
-  y : Nat
-
-def Pair.new (_ : Array UInt8) : Pair := ⟨0, 0⟩
-
-instance : SafeValue Pair where
-  Rep := Nat × Nat
-  rep := SafeRep.prod SafeRep.nat SafeRep.nat
-  toRep p := (p.x, p.y)
-  ofRep r := ⟨r.1, r.2⟩
-  left := by intro p; cases p; rfl
-  right := by intro r; cases r; rfl
-
-#admit_type Pair
-\end{lstlisting}
-
-\begin{lstlisting}[style=out]
-admitted 'Pair': a SafeValue instance was found
-\end{lstlisting}
-
-and the initialiser is applied to the allocation's bytes:
-
-\begin{lstlisting}[caption={The allocator applies \texttt{new} against a fresh allocation's bytes.}]
-def pairTy : SafeType := ⟨Pair, inferInstance, Pair.new⟩
-
-example : pairTy.init #[1, 2] = ⟨0, 0⟩ := rfl
-\end{lstlisting}
-
-\subsection*{A refused structure}
-
-\begin{lstlisting}[caption={\file{bench/AdmissionReject.lean}: no \texttt{SafeRep} path to \texttt{IO.Ref}.}]
-structure Bad where
-  r : IO.Ref Nat
-
-#admit_type Bad
-\end{lstlisting}
-
-\begin{lstlisting}[style=out]
-error: failed to synthesize
-  SafeValue Bad
-\end{lstlisting}
-
-\subsection*{Recursion through the parameters}
-
-Parameterised structures require the parameter's instance, so admission composes
-and refusal propagates.
-
-\begin{lstlisting}[caption={\file{bench/AdmissionParam.lean}.}]
-structure Wrap (α : Type) where
-  val : α
-
-instance [i : SafeValue α] : SafeValue (Wrap α) where
-  Rep := i.Rep
-  rep := i.rep
-  toRep w := i.toRep w.val
-  ofRep r := ⟨i.ofRep r⟩
-  left := by intro w; cases w; rw [i.left _]
-  right := by intro r; exact i.right r
-
-structure Both (α β : Type) where
-  fst : α
-  snd : β
-
-instance [i : SafeValue α] [j : SafeValue β] : SafeValue (Both α β) where
-  Rep := i.Rep × j.Rep
-  rep := SafeRep.prod i.rep j.rep
-  toRep p := (i.toRep p.fst, j.toRep p.snd)
-  ofRep r := ⟨i.ofRep r.1, j.ofRep r.2⟩
-  left := by intro p; cases p; simp [i.left, j.left]
-  right := by intro r; cases r; simp [i.right, j.right]
-\end{lstlisting}
-
-\begin{lstlisting}[style=out]
--- with SafeValue Nat, Bool and UInt8 as the base instances
-example : SafeValue (Wrap Nat) := inferInstance
-example : SafeValue (Wrap (Wrap Bool)) := inferInstance
-example : SafeValue (Both Nat (Wrap UInt8)) := inferInstance
-
--- refusal propagates
-error(lean.synthInstanceFailed): failed to synthesize instance of type class
-  SafeValue (Wrap Bad)
-\end{lstlisting}
-
-\subsection*{The axiom forgery, and its refusal}
-
-An equivalence can be asserted rather than proved. The gate collects the
-instance's axioms and refuses anything outside \texttt{propext},
-\texttt{Classical.choice} and \texttt{Quot.sound}.
-
-\begin{lstlisting}[caption={\file{bench/AdmissionAxiomReject.lean}.}]
-axiom badTo : Bad → Nat
-axiom badFrom : Nat → Bad
-axiom badLeft : ∀ b, badFrom (badTo b) = b
-axiom badRight : ∀ n, badTo (badFrom n) = n
-
-instance : SafeValue Bad where
-  Rep := Nat
-  rep := SafeRep.nat
-  toRep := badTo
-  ofRep := badFrom
-  left := badLeft
-  right := badRight
-
-#admit_type Bad
-\end{lstlisting}
-
-\begin{lstlisting}[style=out]
-error: the SafeValue instance for 'Bad' depends on non-standard axioms
-  [badFrom, badLeft, badRight, badTo]
-\end{lstlisting}
-
-\subsection*{What the obligations do and do not say}
-
-\begin{center}
-\begin{tabular}{@{}ll@{}}
-\toprule
-Obligation & Meaning \\
-\midrule
-\texttt{Rep}, \texttt{rep} & the representation is in the allowlist \\
-\texttt{toRep}, \texttt{ofRep} & maps in both directions \\
-\texttt{left}, \texttt{right} & the two inverse laws \\
-\texttt{new : Array UInt8} $\to$ \texttt{T} & initialiser used by allocation \\
-axiom audit & the instance rests on no non-standard axiom \\
-\bottomrule
-\end{tabular}
-\end{center}
-
-These are \emph{shape} obligations. They certify that the type is bijective with
-an allowed representation; they do not state that the type itself carries no live
-resource. A bijection to \texttt{Nat} asserted by axioms is caught, but a genuine
-bijection is only a practical guard. Closing the gap needs either a definitional
-representation (admitted types are aliases of the safe representation) or a
-handler that builds the instance from the type's declaration, with the faithfulness
-of that structural reading named as a trust assumption.
-
-\subsection*{A catalogue of refused attempts}
-
-\begin{center}\small
-\begin{tabular}{@{}lp{0.56\textwidth}@{}}
-\toprule
-Attempt & Required rejection \\
-\midrule
-duplicate one handle, join the aliases & both names are one consumed ledger entry \\
-join fractions of different allocations & allocation-identity mismatch \\
-join equal-length, different intervals & footprint mismatch \\
-write through a half-share reader & insufficient write authority \\
-rejoin a read-only loan, then write & read-only ceiling \\
-split a writer, then use the old parent & suspended or consumed authority \\
-borrow a slice, then free the parent & outstanding loan \\
-end an outer lifetime before an inner loan & dependency violation \\
-reuse an old handle after free and reallocation & stale identity or generation \\
-capture a borrower in a returned closure & unsupported resource-bearing result \\
-discard a reader in the linear core & explicit return or retirement required \\
-retire a reader, then access it & retired claim \\
-duplicate a saved close action in one session & not composable from the post-close context \\
-free an empty slice & missing root disposal authority \\
-lose a capability in one branch & explicit sum or common post-context \\
-throw while a borrow is live & rejected until cleanup is specified \\
-lift arbitrary IO into a borrowed scope & no such lifting operation \\
-\bottomrule
-\end{tabular}
-\end{center}
-
-\paragraph{Automation.} Plain structures are mechanical: representation as a
-product, componentwise maps, both laws by \texttt{cases}/\texttt{rfl}. Parameters
-are premises. The following are not automatic and should fail with an unresolved
-obligation rather than a silent assumption: types with invariants (\texttt{Fin n},
-\texttt{Vector} $\alpha$ \texttt{n}), normalising types (sign--magnitude integers, rationals),
-quotients, opaque or privately constructed types, dependent fields, and inductive
-containers, which need a \texttt{SafeRep} extension before any handler can help.
-A type that cannot be admitted is simply not storable: that is a usability limit,
-not an unsoundness.
-
-\subsection*{Universe coding, and what it does not automate}
-
-A universe of codes makes the representation uniform and removes the isomorphism
-obligation for coded types: \texttt{El c} is its own representation, so both
-inverse laws are \texttt{rfl} and no search takes place.
-
-\begin{lstlisting}[caption={\file{Cap/Universe.lean}: codes denote first-order value types by construction.}]
+\begin{lstlisting}[caption={\file{Cap/Code.lean}: the closed value universe.}]
 inductive Code where
   | nat | bool | uint8 | unit
   | prod (a b : Code)
@@ -469,50 +264,193 @@ def El : Code → Type
   | .prod a b => El a × El b
   | .sum a b => Sum (El a) (El b)
   | .list a => List (El a)
+\end{lstlisting}
 
-def repCode : (c : Code) → SafeRep (El c)
-  | .nat => SafeRep.nat
-  | .prod a b => SafeRep.prod (repCode a) (repCode b)
-  | .list a => SafeRep.list (repCode a)
-  -- the remaining cases are the same shape
+\begin{lstlisting}[caption={\file{Cap/Admission.lean}: the certificate and the gate.}]
+def repCode : (c : Code) → SafeRep (El c)        -- every code is in the allowlist
 
-instance (c : Code) : SafeValue (El c) where
-  Rep := El c
-  rep := repCode c
-  toRep := id
-  ofRep := id
-  left := by intro t; rfl
-  right := by intro r; rfl
+structure Bij (α β : Type) where
+  toFun : α → β
+  invFun : β → α
+  left_inv : ∀ a, invFun (toFun a) = a
+  right_inv : ∀ b, toFun (invFun b) = b
+
+structure SafeValue (T : Type) where
+  code : Code
+  bij : Bij T (El code)
+
+structure SafeType where
+  T : Type
+  cert : SafeValue T
+  new : Array UInt8 → T
+
+def SafeType.init (st : SafeType) (bytes : Array UInt8) : st.T := st.new bytes
+\end{lstlisting}
+
+The gate \texttt{\#admit\_type T bij} reflects the named declaration and checks
+that its type is \texttt{Bij T (El c)} for some closed code \texttt{c}; it then
+audits the declaration's axioms. It does not synthesise an instance, search for a
+representation, or accept a class instance that happened to exist.
+
+\subsection*{An admitted structure}
+
+\begin{lstlisting}[caption={\file{bench/AdmissionAccept.lean}: the user's bijection to \texttt{Nat × Nat}.}]
+structure Pair where
+  x : Nat
+  y : Nat
+
+def Pair.bij : Bij Pair (El (.prod .nat .nat)) where
+  toFun p := (p.x, p.y)
+  invFun r := ⟨r.1, r.2⟩
+  left_inv := by intro p; cases p; rfl
+  right_inv := by intro r; cases r; rfl
+
+#admit_type Pair Pair.bij
 \end{lstlisting}
 
 \begin{lstlisting}[style=out]
-example : SafeValue (El (.list (.prod .nat .bool))) := inferInstance
-def listTy : SafeType := ⟨El (.list .nat), inferInstance, fun _ => []⟩
+admitted 'Pair' with code Code.nat.prod Code.nat
+\end{lstlisting}
+
+The certificate then carries that bijection into allocation:
+
+\begin{lstlisting}[caption={The allocator applies \texttt{new} against a fresh allocation's bytes.}]
+def Pair.new (_ : Array UInt8) : Pair := ⟨0, 0⟩
+
+def pairTy : SafeType := ⟨Pair, ⟨(.prod .nat .nat), Pair.bij⟩, Pair.new⟩
+
+example : pairTy.init #[1, 2] = ⟨0, 0⟩ := rfl
+\end{lstlisting}
+
+\subsection*{A refused forgery}
+
+An equivalence can be asserted rather than proved. A \emph{definition} built on
+axioms passes the type check, so the gate audits its axioms.
+
+\begin{lstlisting}[caption={\file{bench/AdmissionReject.lean}.}]
+axiom badTo : Bad → Nat
+axiom badFrom : Nat → Bad
+axiom badLeft : ∀ b, badFrom (badTo b) = b
+axiom badRight : ∀ n, badTo (badFrom n) = n
+
+noncomputable def badBij : Bij Bad (El .nat) where
+  toFun := badTo
+  invFun := badFrom
+  left_inv := badLeft
+  right_inv := badRight
+
+#admit_type Bad badBij
+\end{lstlisting}
+
+\begin{lstlisting}[style=out]
+error: the demonstration 'badBij' depends on non-standard axioms
+  [badFrom, badLeft, badRight, badTo]
+\end{lstlisting}
+
+\subsection*{A refused wrong domain}
+
+A genuine bijection of a \emph{different} type does not admit this one: the gate
+unifies the demonstration's statement against \texttt{Bij T (El c)}.
+
+\begin{lstlisting}[caption={\file{bench/AdmissionWrongDomain.lean}.}]
+def Other.bij : Bij Other (El .nat) where
+  toFun o := o.n
+  invFun n := ⟨n⟩
+  left_inv := by intro o; cases o; rfl
+  right_inv := by intro n; rfl
+
+-- A real bijection, but not of the type being admitted.
+#admit_type Pair Other.bij
+\end{lstlisting}
+
+\begin{lstlisting}[style=out]
+error: the demonstration 'Other.bij' does not have type Bij Pair (El c)
+\end{lstlisting}
+
+\subsection*{Composition without instances}
+
+A parameterised type composes bijections as ordinary functions; the user still
+writes them, and nothing is derived.
+
+\begin{lstlisting}[caption={\file{bench/AdmissionParam.lean}.}]
+def idBij (α : Type) : Bij α α where
+  toFun a := a
+  invFun a := a
+  left_inv := by intro a; rfl
+  right_inv := by intro a; rfl
+
+def Wrap.bij {α : Type} {c : Code} (b : Bij α (El c)) : Bij (Wrap α) (El c) where
+  toFun w := b.toFun w.val
+  invFun x := ⟨b.invFun x⟩
+  left_inv := by intro w; cases w; rw [Bij.left_inv b]
+  right_inv := by intro x; rw [Bij.right_inv b]
+
+def Both.bij {α β : Type} {c d : Code} (b1 : Bij α (El c)) (b2 : Bij β (El d)) :
+    Bij (Both α β) (El (.prod c d)) where
+  toFun p := (b1.toFun p.fst, b2.toFun p.snd)
+  invFun r := ⟨b1.invFun r.1, b2.invFun r.2⟩
+  left_inv := by intro p; cases p; rw [Bij.left_inv b1, Bij.left_inv b2]
+  right_inv := by intro r; cases r; rw [Bij.right_inv b1, Bij.right_inv b2]
+\end{lstlisting}
+
+\begin{lstlisting}[style=out]
+def listCert      : SafeValue (El (.list .nat)) := ⟨.list .nat, idBij _⟩
+def wrapNatCert   : SafeValue (Wrap Nat)        := ⟨.nat, Wrap.bij (idBij Nat)⟩
+def bothCert      : SafeValue (Both Nat Bool)   :=
+  ⟨.prod .nat .bool, Both.bij (idBij Nat) (idBij Bool)⟩
+\end{lstlisting}
+
+\subsection*{Coded types need only the identity}
+
+A type that \emph{is} a code's denotation is admitted by the identity bijection;
+there is no search and no proof of an isomorphism to find.
+
+\begin{lstlisting}[caption={\file{bench/UniverseDemo.lean}.}]
+def listCert : SafeValue (El (.list (.prod .nat .bool))) :=
+  ⟨.list (.prod .nat .bool), idBij _⟩
+
+def listTy : SafeType := ⟨El (.list .nat), ⟨.list .nat, idBij _⟩, fun _ => []⟩
+
 example : listTy.init #[] = ([] : List Nat) := rfl
 \end{lstlisting}
 
-The coding does not, however, automate the cases the brief lists:
+\subsection*{What the obligations say, and what they do not}
 
-\begin{itemize}[itemsep=2pt,topsep=2pt]
-\item It does not find a code for an arbitrary \texttt{T} or prove
-\texttt{T} $\simeq$ \texttt{El c}. That is the same mathematical obligation as before; coding
-changes the representation, not the proof search.
-\item It cannot code ``everything''. A code universe with \texttt{El : Code} $\to$ \texttt{Type}
-is a small universe by construction and contains no code for \texttt{Type}
-itself; and it is closed against references, functions and closures on purpose,
-which is what keeps resource-bearing types out.
-\item Cardinality coding is the trap. Any countable type is classically
-equinumerous with \texttt{Nat}, so a Gödel-style coding would admit a type that
-hides a reference as readily as \texttt{Nat} itself. A noncomputable bijection
-cannot be run by the allocator, and a computable one needs a table from codes to
-live references, which is the resource the discipline was meant to exclude.
-\end{itemize}
+\begin{center}
+\begin{tabular}{@{}ll@{}}
+\toprule
+Obligation & Meaning \\
+\midrule
+\texttt{code} & a closed term of \texttt{Code} \\
+\texttt{bij} & a total bijection to \texttt{El code}, with both inverse laws \\
+axiom audit & the demonstration rests on no non-standard axiom \\
+\texttt{new} & the initialiser used by allocation \\
+\bottomrule
+\end{tabular}
+\end{center}
 
-The universe therefore extends the \emph{definitional} route: a type is admitted
-automatically when it is an alias of a code, and a new shape is admitted by
-adding a constructor to \texttt{Code} and \texttt{SafeRep} (a library extension
-with a safety argument). A user-defined structure still needs either such an
-alias or a proved bijection, exactly as before.
+These remain \emph{shape} obligations: they certify that the type is bijective
+with a coded first-order type, not that an arbitrary Lean type is resource-free.
+The universe is closed against references, functions and closures, so a type
+that hides a live resource has no code to be bijective with; a forged axiom is
+caught by the audit. Cardinality coding would destroy that: every countable type
+is classically equinumerous with \texttt{Nat}, a noncomputable bijection cannot
+be run by the allocator, and a computable one needs a table of live references,
+which is the resource the discipline excludes.
+
+A type outside the universe, or one whose bijection the user does not supply, is
+not storable. That is a usability limit, not an unsoundness.
+
+\subsection*{Automation is a proposal, never an admission}
+
+A deriving-style tool can propose a bijection for a plain structure --- the
+\texttt{Pair} proof is mechanical --- but there is no instance for it to register,
+and a proposal that fails becomes an error, not a silent assumption. Types with
+invariants, normalising representations, quotients, opaque types, dependent
+fields and containers stay manual until either the universe gains a code and the
+corresponding \texttt{repCode} case, or the author writes the bijection. Adding a
+code is a library extension with its own safety argument, since the universe's
+closure is what keeps resources out.
 
 \section{Allocation, freshness and the seal}\label{sec:seal}
 
@@ -524,11 +462,11 @@ initialiser supplies the value, and the ledger records them together.
 structure Entry where
   id : AllocId
   T : Type
-  inst : SafeValue T
+  cert : SafeValue T
   value : T
 
 def alloc (next : Nat) (st : SafeType) (bytes : Array UInt8) : Entry :=
-  ⟨⟨next⟩, st.T, st.inst, st.init bytes⟩
+  ⟨⟨next⟩, st.T, st.cert, st.init bytes⟩
 \end{lstlisting}
 
 Four rules make the discipline unforgeable, and they are architectural rather
@@ -747,10 +685,10 @@ nix develop -c lake build Cap
 cd bench
 export LEAN_PATH=../.lake/build/lib/lean:$LEAN_PATH
 lean AdmissionAccept.lean        # admitted 'Pair'
-lean AdmissionReject.lean        # failed to synthesize SafeValue Bad
-lean AdmissionParam.lean         # Wrap/Both instances
-lean AdmissionParamReject.lean   # failed for Wrap Bad
-lean AdmissionAxiomReject.lean   # non-standard axioms
+lean AdmissionReject.lean        # non-standard axioms
+lean AdmissionWrongDomain.lean   # not a bijection of the admitted type
+lean AdmissionParam.lean         # Wrap/Both bijections
+lean UniverseDemo.lean           # coded identity certificates
 
 # reflective prototype
 lean OwnedAccept.lean            # accepted
@@ -776,7 +714,8 @@ File & Role \\
 \file{Cap/Id.lean} & allocation, capability, loan, lifetime identities \\
 \file{Cap/Share.lean} & shares, splits, the one-transfer theorem \\
 \file{Cap/Footprint.lean} & intervals, views, split facts \\
-\file{Cap/Admission.lean} & \texttt{SafeRep}, \texttt{SafeValue}, \texttt{SafeType}, the gate \\
+\file{Cap/Code.lean} & the code universe and \texttt{El} \\
+\file{Cap/Admission.lean} & \texttt{Bij}, \texttt{SafeValue}, \texttt{SafeType}, the gate \\
 \file{bench/Admission*.lean} & accepted, refused, recursive and axiomatic controls \\
 \file{bench/Owned*.lean} & reflective and runtime prototypes \\
 \file{docs/lean-fractional-ownership-design.md} & the full design note \\

@@ -2,37 +2,44 @@ import Cap.Admission
 
 open Cap
 
-/-- A unary wrapper: admitted exactly when its parameter is. -/
+/-- The identity bijection, used to admit a type that *is* a code's denotation. -/
+def idBij (α : Type) : Bij α α where
+  toFun a := a
+  invFun a := a
+  left_inv := by intro a; rfl
+  right_inv := by intro a; rfl
+
 structure Wrap (α : Type) where
   val : α
 
-instance [i : SafeValue α] : SafeValue (Wrap α) where
-  Rep := i.Rep
-  rep := i.rep
-  toRep w := i.toRep w.val
-  ofRep r := ⟨i.ofRep r⟩
-  left := by intro w; cases w; rw [i.left _]
-  right := by intro r; exact i.right r
+/-- A wrapper's bijection is the parameter's, lifted. -/
+def Wrap.bij {α : Type} {c : Code} (b : Bij α (El c)) : Bij (Wrap α) (El c) where
+  toFun w := b.toFun w.val
+  invFun x := ⟨b.invFun x⟩
+  left_inv := by intro w; cases w; rw [Bij.left_inv b]
+  right_inv := by intro x; rw [Bij.right_inv b]
 
-/-- A binary product: both parameters are required. -/
 structure Both (α β : Type) where
   fst : α
   snd : β
 
-instance [i : SafeValue α] [j : SafeValue β] : SafeValue (Both α β) where
-  Rep := i.Rep × j.Rep
-  rep := SafeRep.prod i.rep j.rep
-  toRep p := (i.toRep p.fst, j.toRep p.snd)
-  ofRep r := ⟨i.ofRep r.1, j.ofRep r.2⟩
-  left := by intro p; cases p; simp [i.left, j.left]
-  right := by intro r; cases r; simp [i.right, j.right]
+def Both.bij {α β : Type} {c d : Code} (b1 : Bij α (El c)) (b2 : Bij β (El d)) :
+    Bij (Both α β) (El (.prod c d)) where
+  toFun p := (b1.toFun p.fst, b2.toFun p.snd)
+  invFun r := ⟨b1.invFun r.1, b2.invFun r.2⟩
+  left_inv := by
+    intro p
+    cases p
+    rw [Bij.left_inv b1, Bij.left_inv b2]
+  right_inv := by
+    intro r
+    cases r
+    rw [Bij.right_inv b1, Bij.right_inv b2]
 
--- The parameter's admission is what carries the wrapper's.
-example : SafeValue (Wrap Nat) := inferInstance
-example : SafeValue (Wrap (Wrap Bool)) := inferInstance
-example : SafeValue (Both Nat (Wrap UInt8)) := inferInstance
+/-- Coded types are admitted by identity; no search and no axiom. -/
+def listCert : SafeValue (El (.list .nat)) := ⟨.list .nat, idBij _⟩
 
-/-- Admitting the parameter admits the wrapper; refusal propagates. -/
-def wrapTy : SafeType := ⟨Wrap Nat, inferInstance, fun _ => ⟨0⟩⟩
+def wrapNatCert : SafeValue (Wrap Nat) := ⟨.nat, Wrap.bij (idBij Nat)⟩
 
-example : wrapTy.init #[] = ⟨0⟩ := rfl
+def bothCert : SafeValue (Both Nat Bool) :=
+  ⟨.prod .nat .bool, Both.bij (idBij Nat) (idBij Bool)⟩

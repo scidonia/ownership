@@ -1,12 +1,17 @@
-import Cap.Universe
+import Cap.Admission
 
 open Cap
 
-/-- A coded type is admitted by construction: the representation is itself. -/
-example : SafeValue (El (.list (.prod .nat .bool))) := inferInstance
-example : SafeValue (El (.sum .uint8 (.list .nat))) := inferInstance
+/-- Coded types are admitted by the identity bijection: no search takes place. -/
+def idBij (α : Type) : Bij α α where
+  toFun a := a
+  invFun a := a
+  left_inv := by intro a; rfl
+  right_inv := by intro a; rfl
 
-/-- And it initialises against a fresh allocation's bytes. -/
-def listTy : SafeType := ⟨El (.list .nat), inferInstance, fun _ => []⟩
+def listCert : SafeValue (El (.list (.prod .nat .bool))) :=
+  ⟨.list (.prod .nat .bool), idBij _⟩
+
+def listTy : SafeType := ⟨El (.list .nat), ⟨.list .nat, idBij _⟩, fun _ => []⟩
 
 example : listTy.init #[] = ([] : List Nat) := rfl

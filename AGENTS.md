@@ -117,33 +117,27 @@
   `nix develop -c lake build Cap`; `scripts/check_all.sh` includes it. The
   remaining stages are the context ledger and transitions, the typed core and
   semantics, then the elaborator, runner and backend refinement.
-- `Cap/Admission.lean` admits a value type by instance rather than by reflection.
-  `SafeRep` is the closed allowlist (`Nat`, `Bool`, `UInt8`, products);
-  `SafeValue T` is a proved bijection to an allowed representation; `SafeType`
-  carries the instance and the initialiser `new`, and `SafeType.init` applies it to
-  the bytes of a fresh allocation. `#admit_type` synthesises `SafeValue T` and
-  refuses when there is none. Accepted `bench/AdmissionAccept.lean` (`Pair`,
-  admitted through `Nat × Nat`); refused `bench/AdmissionReject.lean` (an
-  `IO.Ref` field has no `SafeRep` path). Recursion is the instance premise:
-  `[SafeValue α] → SafeValue (Wrap α)` and `[SafeValue α] [SafeValue β] →
-  SafeValue (Both α β)` in `bench/AdmissionParam.lean`, with `Nat`, `Bool` and
-  `UInt8` as the base instances, and `bench/AdmissionParamReject.lean` shows the
-  refusal propagating to `Wrap Bad`. The gate also collects the instance's axioms
-  and refuses anything outside `propext`, `Classical.choice` and `Quot.sound`, so
-  an axiomatic bijection cannot admit a resource-bearing type: `bench/
-  AdmissionAxiomReject.lean` supplies `badTo`/`badFrom` and their inverse laws as
-  axioms and is refused. The intended automation is a deriving handler, which
-  proposes the instance the kernel then checks; reflection cannot authorise one.
-  The obligations are shape obligations — a bijection to an allowed
-  representation — so they certify storage shape, not that the type carries no
-  live resource; a handler-generated instance from the declaration, or a
-  definitional representation, is what would close that gap.
-  `Cap.Universe` adds the definitional route: codes for `Nat`, `Bool`, `UInt8`,
-  `Unit`, products, sums and lists, `El` denoting each, and `repCode` placing
-  every coded type in `SafeRep`, so `SafeValue (El c)` holds by `rfl` with
-  `Rep := El c`. It admits coded types without a search and stays closed against
-  references, functions and closures; a user structure still needs an alias or a
-  proved bijection. `bench/UniverseDemo.lean` is the control.
+- `Cap/Code.lean` is the closed value universe: codes for `Nat`, `Bool`,
+  `UInt8`, `Unit`, products, sums and lists, with `El` denoting each. There is no
+  code for a reference, a function or a closure, so a type that hides a live
+  resource has no code to be bijective with.
+- `Cap/Admission.lean` admits a value type only by a demonstrated bijection into
+  that universe. `SafeValue T` is a structure carrying a closed `Code` and a
+  `Bij T (El code)` with both inverse laws; `SafeType` carries the certificate and
+  the initialiser `new`, which `SafeType.init` applies to a fresh allocation's
+  bytes. There is no class and no deriving route: a user who wants a type admitted
+  writes the bijection, and `#admit_type T bij` reflects the named declaration,
+  checks its type is `Bij T (El c)` for some closed code, and audits its axioms.
+  Accepted `bench/AdmissionAccept.lean` (`Pair` with code `.prod .nat .nat`);
+  refused `bench/AdmissionReject.lean` (an axiom-supported bijection) and
+  `bench/AdmissionWrongDomain.lean` (a real bijection of a different type).
+  Composition is ordinary functions in `bench/AdmissionParam.lean` (`Wrap.bij`,
+  `Both.bij`), and `bench/UniverseDemo.lean` admits coded types by the identity
+  bijection, so no search takes place. A deriving-style tool may propose a
+  bijection, but there is no instance to register and a failed proposal is an
+  error. The obligations remain shape obligations: they certify a bijection to a
+  coded first-order type, not that an arbitrary type carries no live resource;
+  cardinality coding would admit resource-bearing types and is not used.
 - `bench/UnionFind.lean` is a hand-written union-find benchmark on `Array Nat`,
   outside the certified fragment. It compares an unshared and a shared variant at
   equal `n` and `m`; the printed figure is nanoseconds per outer iteration (two

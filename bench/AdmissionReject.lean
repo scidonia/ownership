@@ -2,9 +2,19 @@ import Cap.Admission
 
 open Cap
 
-/-- A resource-bearing type: there is no `SafeRep` path to `IO.Ref`, so no
-`SafeValue` instance exists and the gate must refuse it. -/
 structure Bad where
   r : IO.Ref Nat
 
-#admit_type Bad
+/-- The forgery: axioms supply the bijection the type's fields do not have. -/
+axiom badTo : Bad → Nat
+axiom badFrom : Nat → Bad
+axiom badLeft : ∀ b, badFrom (badTo b) = b
+axiom badRight : ∀ n, badTo (badFrom n) = n
+
+noncomputable def badBij : Bij Bad (El .nat) where
+  toFun := badTo
+  invFun := badFrom
+  left_inv := badLeft
+  right_inv := badRight
+
+#admit_type Bad badBij

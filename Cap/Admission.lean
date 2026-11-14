@@ -1,30 +1,27 @@
 /-
-Admitting a new value type.
+Admitting a value type by demonstrating a bijection into the coded universe.
 
-A type enters the subsystem only with a `SafeValue` instance: a proof that it is
-equivalent to an allowed representation, built from `Nat`, `Bool`, `UInt8` and
-products. The equivalence's two inverse laws are what make the type's shape a
-kernel-checked fact; nothing here reads the elaborator's environment.
+There is deliberately no `SafeValue` class and no deriving route. A certificate is
+a value: a code `c` and a `Bij T (El c)` with both inverse laws. A user who wants
+a type admitted must write that bijection; the kernel checks it, and
+`#admit_type` reflects the named demonstration, confirms its type is
+`Bij T (El c)` for some closed code, and audits its axioms. Nothing can be
+auto-generated into admission, and nothing is accepted because an instance
+happened to exist.
 
-Reflection can automate the instance for a plain structure, but it cannot
-authorise one: a generated instance is accepted only because the kernel checks
-its proof. A type with a field outside the representation has no instance, so
-`#admit_type` refuses it without any structural guesswork.
-
-`new` is the initialiser the allocator applies against a fresh allocation id: the
-identifier is supplied by the arena, the bytes by the allocation, and the
-constructor produces the stored value.
+The universe is closed against references, functions and closures, so a type that
+hides a live resource has no code to be bijective with. A type outside the
+universe is not storable; that is a usability limit, not an unsoundness.
 -/
 
 import Lean
-import Cap.Id
+import Cap.Code
 
 open Lean Meta Elab Command
 
 namespace Cap
 
-/-- Allowed value representations. A resource-bearing or function field has no
-constructor here, so it cannot appear in an admitted type. -/
+/-- Allowed value representations. -/
 inductive SafeRep : Type → Prop where
   | nat : SafeRep Nat
   | bool : SafeRep Bool
@@ -34,62 +31,60 @@ inductive SafeRep : Type → Prop where
   | sum {A B : Type} : SafeRep A → SafeRep B → SafeRep (Sum A B)
   | list {A : Type} : SafeRep A → SafeRep (List A)
 
-/-- A type with a proved bijection to an allowed representation. -/
-class SafeValue (T : Type) where
-  Rep : Type
-  rep : SafeRep Rep
-  toRep : T → Rep
-  ofRep : Rep → T
-  left : ∀ t, ofRep (toRep t) = t
-  right : ∀ r, toRep (ofRep r) = r
+/-- Every coded type is in the allowlist by construction. -/
+def repCode : (c : Code) → SafeRep (El c)
+  | .nat => SafeRep.nat
+  | .bool => SafeRep.bool
+  | .uint8 => SafeRep.uint8
+  | .unit => SafeRep.unit
+  | .prod a b => SafeRep.prod (repCode a) (repCode b)
+  | .sum a b => SafeRep.sum (repCode a) (repCode b)
+  | .list a => SafeRep.list (repCode a)
 
-instance : SafeValue Nat where
-  Rep := Nat
-  rep := SafeRep.nat
-  toRep := id
-  ofRep := id
-  left := by intro t; rfl
-  right := by intro r; rfl
+/-- A bijection, with both inverse laws. -/
+structure Bij (α β : Type) where
+  toFun : α → β
+  invFun : β → α
+  left_inv : ∀ a, invFun (toFun a) = a
+  right_inv : ∀ b, toFun (invFun b) = b
 
-instance : SafeValue Bool where
-  Rep := Bool
-  rep := SafeRep.bool
-  toRep := id
-  ofRep := id
-  left := by intro t; rfl
-  right := by intro r; rfl
-
-instance : SafeValue UInt8 where
-  Rep := UInt8
-  rep := SafeRep.uint8
-  toRep := id
-  ofRep := id
-  left := by intro t; rfl
-  right := by intro r; rfl
+/-- The admission certificate: a code and a demonstrated bijection to it. -/
+structure SafeValue (T : Type) where
+  code : Code
+  bij : Bij T (El code)
 
 /-- A type admitted to the subsystem, with the initialiser used by allocation. -/
 structure SafeType where
   T : Type
-  inst : SafeValue T
+  cert : SafeValue T
   new : Array UInt8 → T
 
 /-- The allocator calls this with the bytes for the fresh allocation. -/
 def SafeType.init (st : SafeType) (bytes : Array UInt8) : st.T := st.new bytes
 
-/-- Admission gate: the kernel must already hold a `SafeValue` instance. -/
-syntax "#admit_type " ident : command
+/-- Admission gate: reflect the named demonstration and check its statement. -/
+syntax "#admit_type " ident ident : command
 
 elab_rules : command
-  | `(#admit_type $t:ident) => do
+  | `(#admit_type $t:ident $b:ident) => do
     liftTermElabM do
-      let ty := mkApp (mkConst ``SafeValue) (mkConst t.getId)
-      let inst ← synthInstance ty
-      let some name := inst.constName? | throwError "the SafeValue instance for '{t}' is not a named declaration"
-      let axs ← collectAxioms name
+      let env ← getEnv
+      let d ← match env.find? b.getId with
+        | some (.defnInfo d) => pure d
+        | some _ => throwError "'{b}' is not a definition"
+        | none => throwError "unknown declaration '{b}'"
+      let c ← mkFreshExprMVar (mkConst ``Code)
+      let expected := mkApp2 (mkConst ``Bij) (mkConst t.getId) (mkApp (mkConst ``El) c)
+      unless ← isDefEq d.type expected do
+        throwError "the demonstration '{b}' does not have type Bij {t} (El c)"
+      let c ← instantiateMVars c
+      if c.hasMVar || c.hasFVar then
+        throwError "the code in '{b}' is not closed"
+      let axs ← collectAxioms b.getId
       let standard : List Name := [``propext, ``Classical.choice, ``Quot.sound]
       let bad := axs.filter (fun a => !standard.contains a)
       unless bad.isEmpty do
-        throwError "the SafeValue instance for '{t}' depends on non-standard axioms {bad.toList}"
-    logInfo m!"admitted '{t}': a SafeValue instance was found"
+        throwError "the demonstration '{b}' depends on non-standard axioms {bad.toList}"
+      logInfo m!"admitted '{t}' with code {c}"
 
 end Cap
