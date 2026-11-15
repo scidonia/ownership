@@ -662,6 +662,11 @@ succeeding transitions, \texttt{check\_covered} carries coverage through a run,
 and a read-only write is refused. This is a deep syntax and checker, not the
 hidden-index surface elaborator and not a heap semantics.
 
+A closed program's certificate is recorded in \file{Cap/Certify.lean}:
+\texttt{certifiedProgram\_checked} is proved by \texttt{decide} with no axioms,
+and \texttt{certifiedProgram\_covered} carries coverage through it. The surface
+elaborator does not emit the term; this is the certificate it would have to emit.
+
 A surface front end is implemented in \file{Cap/Surface.lean}:
 \texttt{\#own\_prog owner D \{ ... \}} with writes, spatial and fractional
 splits and no-ops, elaborating to the deep commands and running the checker at
@@ -848,6 +853,7 @@ File & Role \\
 \file{Cap/BackendRun.lean} & the 64-byte run on the backend \\
 \file{Cap/Core.lean} & deep command language and executable checker \\
 \file{Cap/Surface.lean} & surface commands checked at elaboration \\
+\file{Cap/Certify.lean} & a kernel-checked certificate for a closed program \\
 \file{Cap/Join.lean} & sibling-only fractional join \\
 \file{Cap/Code.lean} & the code universe and \texttt{El} \\
 \file{Cap/Admission.lean} & \texttt{Bij}, \texttt{SafeValue}, \texttt{SafeType}, the gate \\

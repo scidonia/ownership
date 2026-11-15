@@ -14,3 +14,4 @@ import Cap.Core
 import Cap.Join
 import Cap.Nested
 import Cap.Surface
+import Cap.Certify

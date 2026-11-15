@@ -162,6 +162,11 @@
   refused (`joinChildren?_alias_none`, `Owner.joinFraction_alias_none`). Arbitrary
   same-resource recombination, the common-partition normaliser and provenance beyond
   node shape are not implemented.
+- `Cap/Certify.lean` records the kernel-checked certificate for a closed program:
+`certifiedProgram_checked : Checked certifiedOwner 12 certifiedProgram` by
+`unfold Checked; decide` (no axioms), and `certifiedProgram_covered` carrying
+coverage through it. The surface elaborator does not emit this term; the module
+shows the certificate it would have to emit, not proof-producing elaboration.
 - `Cap/Surface.lean` is the surface front end: `#own_prog owner D { ... }` with
   `write`, `splitAt`, `splitFraction` and `nop`, elaborating to `Cmd` and running
   `Cap.check` at elaboration time; acceptance is logged and refusal is a compile
