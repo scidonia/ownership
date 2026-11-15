@@ -675,6 +675,12 @@ checker's message, and no proof term is emitted. The refused programmes
 (out-of-range write, out-of-range split, non-summing shares) live in
 \file{bench/CapSurfaceReject.lean}.
 
+An instruction interpreter over the backend is implemented in
+\file{Cap/Exec.lean}: \texttt{fill} and \texttt{snapshot} instructions,
+\texttt{exec} returning the final backend and observation, the 64-byte example,
+a single-fill refinement to \texttt{Heap.fill?} and the example's agreement with
+the reference buffer.
+
 A reference byte heap is implemented in \file{Cap/Bytes.lean}: \texttt{read?}, \texttt{write?},
 \texttt{fill?}, \texttt{snapshot?} and \texttt{alloc}, with \texttt{write\_get}, \texttt{write\_preserves\_length},
 \texttt{write\_ne}, the 64-byte example (left sum 32, right sum 64), two readers of the
@@ -851,6 +857,7 @@ File & Role \\
 \file{Cap/Nested.lean} & two-level borrow, suspension and restoration \\
 \file{Cap/Backend.lean} & mutable-backend refinement for one allocation \\
 \file{Cap/BackendRun.lean} & the 64-byte run on the backend \\
+\file{Cap/Exec.lean} & instruction interpreter over the backend \\
 \file{Cap/Core.lean} & deep command language and executable checker \\
 \file{Cap/Surface.lean} & surface commands checked at elaboration \\
 \file{Cap/Certify.lean} & a kernel-checked certificate for a closed program \\

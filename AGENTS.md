@@ -200,6 +200,13 @@ shows the certificate it would have to emit, not proof-producing elaboration.
   and to ending a loan, and `not_writable_after_endLoan` is the policy corollary.
   It is a predicate combination, not an executable checker, and the session does
   not thread a loan context yet.
+- `Cap/Exec.lean` is the instruction interpreter over the backend: `fill` and
+  `snapshot` instructions, `exec` returning the final backend and observation, the
+  64-byte example (`exec_example`), a single-fill refinement to `Heap.fill?`
+  (`exec_fill_refines`), the example's agreement with `Heap.example64Buf`
+  (`exec_example_refines_heap`), and the out-of-range fill failure
+  (`execFill_beyond`). It is an interpreter over the pure backend for one
+  allocation, not the reference interpreter or a compiler guarantee.
 - `Cap/BackendRun.lean` runs the 64-byte example on that backend: fills `[0,32)`
   with 1 and `[32,64)` with 2, and proves the snapshot is the reference heap's
   (`exampleBackend_snapshot`, `exampleBackend_rel`, both by `decide`). It is a
