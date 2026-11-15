@@ -1,11 +1,11 @@
 /-
 A kernel-checked certificate for a closed capability program.
 
-`Cap.Surface` checks a program at elaboration time and emits no proof term. This
-module records the certificate for a concrete program: the checker's success is a
-decidable proposition (`Cap.Checked`), so `by decide` produces a kernel-checked
-proof for the closed program below. This does not make the surface elaborator
-proof-producing; it shows the certificate the elaborator would have to emit.
+`Cap.Surface` has both a checking form (`#own_prog`) and a proof-producing form
+(`#own_cert`), which declares a `Checked` theorem. This module records a concrete
+certificate directly: the checker's success is a decidable proposition
+(`Cap.Checked`), so `by decide` produces a kernel-checked proof for the closed
+program below. It is a second instance of the same certificate shape.
 -/
 import Cap.Core
 

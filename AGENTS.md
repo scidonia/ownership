@@ -150,7 +150,10 @@
   `Realizes`; `freeWith?` requires the recorded disposal capability and refuses a
   wrong one (`freeWith?_wrong`). Capability identifiers are collected by
   `Tree.ids`/`Owner.ids`/`Ctx.ids`, with `Ctx.Fresh`; `alloc_ids_nodup` shows a
-  fresh root and disposal identifier keep the identifiers distinct. The loan
+  fresh root and disposal identifier keep the identifiers distinct. Internal split
+  nodes record provenance identifiers that are not access capabilities and are
+  excluded from `Tree.ids`. Owner-level dispatch (`splitAtOwner?`,
+  `splitFractionOwner?`) is not freshness-checked itself; the deep checker is. The loan
   threading of the session and the freshness-preserving disposal proof are next.
 - `Cap/Join.lean` is the sibling-only fractional join: `Tree.findFrac?` and
   `Tree.replaceNode` locate and replace a fractional node, `budget_replaceNode`
@@ -203,8 +206,12 @@ shows the certificate it would have to emit, not proof-producing elaboration.
   error, an accepted write carries `o.Writable` (`write_checked`), accepted splits
   invoke succeeding transitions and name a leaf with the required bounds/shares,
   `check_covered` carries coverage through a whole run, and the read-only write is
-  refused (`readOnly_write_not_accepted`). It is a deep syntax and checker for the
-  owner layer only, not the surface elaborator and not a heap semantics.
+  refused (`readOnly_write_not_accepted`). Splits require `Owner.FreshIds` of the
+  two child identifiers, so duplicates and the reused parent identifier are refused
+  with `msgFresh` (`splitAt_checked_fresh`, `splitFraction_checked_fresh`; regressions
+  in `bench/CapFreshness.lean`). It is a deep syntax and checker for the owner layer
+  only, not surface elaboration, not a heap semantics, and acceptance is checker
+  acceptance rather than execution safety.
 - `Cap/Nested.lean` is the two-level borrow model: `Lender` with active/suspended
   states, `beginBorrow` suspending the lender and issuing a borrower, `endBorrow`
   restoring the suspended lender without returning the borrower, and

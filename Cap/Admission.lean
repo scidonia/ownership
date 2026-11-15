@@ -9,9 +9,12 @@ a type admitted must write that bijection; the kernel checks it, and
 auto-generated into admission, and nothing is accepted because an instance
 happened to exist.
 
-The universe is closed against references, functions and closures, so a type that
-hides a live resource has no code to be bijective with. A type outside the
-universe is not storable; that is a usability limit, not an unsoundness.
+The universe is closed against references, functions and closures, but that closure
+does not make every type isomorphic to a coded type harmless: `Unit → Nat` is
+bijective with `El .nat` and such a function can capture storage (see the
+`NatThunk` regression). A bijection is an encoding property, not confinement. A
+type outside the universe is not storable; that is a usability limit, not an
+unsoundness.
 -/
 
 import Lean

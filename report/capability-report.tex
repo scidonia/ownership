@@ -453,12 +453,37 @@ union-find run under the guard & UnionFind \\
 \end{tabular}
 \end{center}
 
-Open, and not claimed here: hidden-index elaboration (indices inferred and hidden,
-with a certificate for symbolic programs); a frame rule combining the ledger, loans
-and a callee's authorized footprint with suspended ownership across a call;
-specialisation and an interpreter consuming certified commands against the world;
-and concurrency, which the design defers. The surface elaborator checks and emits
-certificates for closed programs; it does not infer symbolic indices.
+The principal gap is the connection between certification and execution (review
+R1): `Cap.Core` checks a permission language with no values or heap, and
+`Cap.Exec` runs a different instruction language without consulting a certificate.
+The certificate therefore establishes checker acceptance and coverage, not that a
+certified program executes safely and cleans up. Unifying the languages, or proving
+their translation, is the next milestone. Also open: the full invariant (positive
+shares, unique active identities, bounded footprints, split provenance, disposal
+entitlements, loans, storage agreement --- review R2); the freshness of child
+identifiers is now checked in the deep checker, but the owner-level dispatch and
+the invariant are not complete; integrated nested reborrowing with a real inner
+loan (R3, currently a standalone bookkeeping model); one uniform disposal rule
+across session, context and world (R4); the complete certified 64-byte trace (R5);
+hidden-index elaboration for symbolic programs; specialisation; and concurrency,
+which the design defers.
+
+\subsection*{Claim corrections}
+
+\begin{center}
+\begin{tabular}{@{}lp{0.52\textwidth}@{}}
+\toprule
+Earlier wording & Precise statement \\
+\midrule
+The context is never a public value & The intended runner will encapsulate execution; the current context, session and world are public pure model data \\
+Deep checker soundness & Acceptance implies the current guard/transition and coverage results; whole-program execution safety awaits R1 \\
+Nested borrowing & The standalone model covers sequential end-and-borrow-again; a live inner reborrow is open \\
+64-byte acceptance run & The current run is a guarded fill/snapshot example; the complete split/borrow/join/free trace awaits connection \\
+Mutable backend & A pure buffer state machine over lists, not native mutation or RC=1 \\
+Admission excludes closures & Canonical storage excludes arbitrary original values; the encoding relation alone is not confinement \\
+\bottomrule
+\end{tabular}
+\end{center}
 
 \section{How to run}
 

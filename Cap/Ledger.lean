@@ -229,6 +229,26 @@ theorem Owner.init_covered (a : AllocId) (n D : Nat) (pos : 0 < D) (rootId dispo
   have hx' : 0 ≤ x ∧ x < n := ⟨Nat.zero_le x, hx⟩
   simp [Owner.init, Tree.budget, Leaf.budget, hx']
 
+/-- Access-capability identifiers occurring in a tree. Internal split nodes record
+provenance identifiers, which are not access capabilities and are deliberately
+excluded: reusing a child capability id as the internal node id does not make the
+child's id ambiguous. -/
+def Tree.ids : Tree → List CapId
+  | .leaf c => [c.id]
+  | .frac _ l r => l.ids ++ r.ids
+  | .spatial _ l r => l.ids ++ r.ids
+
+def Owner.ids (o : Owner) : List CapId := o.disposal :: o.root.ids
+
+/-- Two access-capability identifiers are fresh for a split of `o`: distinct from
+each other and absent from the owner's identifiers (which include the parent). -/
+def Owner.FreshIds (o : Owner) (id1 id2 : CapId) : Prop :=
+  id1 ∉ o.ids ∧ id2 ∉ o.ids ∧ id1 ≠ id2
+
+instance (o : Owner) (id1 id2 : CapId) : Decidable (o.FreshIds id1 id2) := by
+  unfold Owner.FreshIds
+  infer_instance
+
 /-- The write guard: an active leaf of the whole share with a read--write
 ceiling, at an index inside its footprint. -/
 def Owner.Writable (o : Owner) (D : Nat) (id : CapId) (i : Nat) : Prop :=

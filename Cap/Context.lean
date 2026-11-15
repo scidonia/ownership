@@ -26,14 +26,6 @@ def Ctx.Realizes (C : Ctx) : Prop :=
 def Ctx.update (C : Ctx) (a : AllocId) (o' : Owner) : Ctx :=
   { C with owners := C.owners.map (fun x => if x.alloc = a then o' else x) }
 
-/-- Capability identifiers occurring in a tree. -/
-def Tree.ids : Tree → List CapId
-  | .leaf c => [c.id]
-  | .frac id l r => id :: (l.ids ++ r.ids)
-  | .spatial id l r => id :: (l.ids ++ r.ids)
-
-def Owner.ids (o : Owner) : List CapId := o.disposal :: o.root.ids
-
 def Ctx.ids (C : Ctx) : List CapId := C.owners.flatMap Owner.ids
 
 /-- A capability identifier does not occur in the context. -/

@@ -7,7 +7,9 @@ do nothing), an interpreter that either returns the resulting owner or an error,
 and soundness theorems about accepted programs. It is not the surface syntax, not
 a hidden-index Lean elaborator, and not a heap semantics: writes here are checked
 against the ledger's `Owner.Writable` guard and leave the owner unchanged, and no
-byte is actually stored. The reference heap, backend and context live in
+byte is actually stored. Acceptance is therefore checker acceptance of the owner
+layer; it is not execution safety for a program that runs against a heap. The
+review's R1 records that missing connection. The reference heap, backend and context live in
 `Cap.Bytes`, `Cap.Backend` and `Cap.Context`.
 
 The module proves:
@@ -22,6 +24,10 @@ The module proves:
   `Owner.splitFraction?`); the checker itself calls those transitions.
 * `splitAt_checked` / `splitFraction_checked` — the transition the checker called
   succeeded, hence produced a successor owner.
+* `splitAt_checked_fresh` / `splitFraction_checked_fresh` — an accepted split uses
+  fresh child capability identifiers: distinct from each other and absent from the
+  owner's identifiers, so reusing the parent or repeating a child is refused with
+  `msgFresh`.
 * `check_covered` — an accepted program maps a covered owner to a covered owner,
   so the byte budget is preserved along a whole run.
 * `readOnly_write_refused` / `readOnly_write_not_accepted` — a write through a
@@ -61,6 +67,9 @@ theorem Owner.writableB_sound {o : Owner} {D : Nat} {id : CapId} {i : Nat}
 /-- The error reported for a write whose guard does not hold. -/
 def msgWrite : String := "write refused: capability is not writable at this index"
 
+/-- The error reported for a split whose child capability identifiers are not fresh. -/
+def msgFresh : String := "split refused: capability identifiers are not fresh"
+
 /-- The error reported for a spatial split the transition rejects. -/
 def msgSplitAt : String := "splitAt refused: no such capability or split point out of range"
 
@@ -77,13 +86,17 @@ def check (o : Owner) (D : Nat) : List Cmd → Except String Owner
   | .write id i :: cs =>
     if o.writableB D id i then check o D cs else .error msgWrite
   | .splitAt id id1 id2 k :: cs =>
-    match o.splitAt? id id1 id2 k with
-    | some o' => check o' D cs
-    | none => .error msgSplitAt
+    if hfresh : o.FreshIds id1 id2 then
+      match o.splitAt? id id1 id2 k with
+      | some o' => check o' D cs
+      | none => .error msgSplitAt
+    else .error msgFresh
   | .splitFraction id id1 id2 q1 q2 p1 p2 :: cs =>
-    match o.splitFraction? id id1 id2 q1 q2 p1 p2 with
-    | some o' => check o' D cs
-    | none => .error msgSplitFraction
+    if hfresh : o.FreshIds id1 id2 then
+      match o.splitFraction? id id1 id2 q1 q2 p1 p2 with
+      | some o' => check o' D cs
+      | none => .error msgSplitFraction
+    else .error msgFresh
 
 /-- A program is accepted from the given owner and budget. -/
 def Checked (o : Owner) (D : Nat) (cs : List Cmd) : Prop := (check o D cs).isOk = true
@@ -115,9 +128,20 @@ theorem splitAt_checked {o o' : Owner} {D : Nat} {id id1 id2 : CapId} {k : Nat}
     {cs : List Cmd}
     (h : check o D (Cmd.splitAt id id1 id2 k :: cs) = .ok o') :
     ∃ o'', o.splitAt? id id1 id2 k = some o'' := by
-  cases hs : o.splitAt? id id1 id2 k with
-  | none => simp [check, hs] at h
-  | some o'' => exact ⟨o'', rfl⟩
+  by_cases hfresh : o.FreshIds id1 id2
+  · cases hs : o.splitAt? id id1 id2 k with
+    | none => simp [check, hfresh, hs] at h
+    | some o'' => exact ⟨o'', rfl⟩
+  · simp [check, hfresh] at h
+
+/-- An accepted split uses fresh child capability identifiers. -/
+theorem splitAt_checked_fresh {o o' : Owner} {D : Nat} {id id1 id2 : CapId} {k : Nat}
+    {cs : List Cmd}
+    (h : check o D (Cmd.splitAt id id1 id2 k :: cs) = .ok o') :
+    o.FreshIds id1 id2 := by
+  by_cases hfresh : o.FreshIds id1 id2
+  · exact hfresh
+  · simp [check, hfresh] at h
 
 /-- An accepted spatial-split command names an existing leaf and a split point
 inside that leaf's footprint: the precondition of `Owner.splitAt?`. -/
@@ -141,9 +165,20 @@ theorem splitFraction_checked {o o' : Owner} {D : Nat} {id id1 id2 : CapId}
     {q1 q2 : Nat} {p1 : 0 < q1} {p2 : 0 < q2} {cs : List Cmd}
     (h : check o D (Cmd.splitFraction id id1 id2 q1 q2 p1 p2 :: cs) = .ok o') :
     ∃ o'', o.splitFraction? id id1 id2 q1 q2 p1 p2 = some o'' := by
-  cases hs : o.splitFraction? id id1 id2 q1 q2 p1 p2 with
-  | none => simp [check, hs] at h
-  | some o'' => exact ⟨o'', rfl⟩
+  by_cases hfresh : o.FreshIds id1 id2
+  · cases hs : o.splitFraction? id id1 id2 q1 q2 p1 p2 with
+    | none => simp [check, hfresh, hs] at h
+    | some o'' => exact ⟨o'', rfl⟩
+  · simp [check, hfresh] at h
+
+/-- An accepted fractional split uses fresh child capability identifiers. -/
+theorem splitFraction_checked_fresh {o o' : Owner} {D : Nat} {id id1 id2 : CapId}
+    {q1 q2 : Nat} {p1 : 0 < q1} {p2 : 0 < q2} {cs : List Cmd}
+    (h : check o D (Cmd.splitFraction id id1 id2 q1 q2 p1 p2 :: cs) = .ok o') :
+    o.FreshIds id1 id2 := by
+  by_cases hfresh : o.FreshIds id1 id2
+  · exact hfresh
+  · simp [check, hfresh] at h
 
 /-- A successful fractional split tree carries the shares precondition. -/
 theorem Leaf.splitFractionTree_shares {c : Leaf} {id1 id2 : CapId} {q1 q2 : Nat}
@@ -189,17 +224,21 @@ theorem check_covered (cs : List Cmd) :
         exact ih o o' D h hc
       · simp [check, hw] at h
     | splitAt id id1 id2 k =>
-      cases hs : o.splitAt? id id1 id2 k with
-      | none => simp [check, hs] at h
-      | some o'' =>
-        simp [check, hs] at h
-        exact ih o'' o' D h (Owner.splitAt_covered hs hc)
+      by_cases hfresh : o.FreshIds id1 id2
+      · cases hs : o.splitAt? id id1 id2 k with
+        | none => simp [check, hfresh, hs] at h
+        | some o'' =>
+          simp [check, hfresh, hs] at h
+          exact ih o'' o' D h (Owner.splitAt_covered hs hc)
+      · simp [check, hfresh] at h
     | splitFraction id id1 id2 q1 q2 p1 p2 =>
-      cases hs : o.splitFraction? id id1 id2 q1 q2 p1 p2 with
-      | none => simp [check, hs] at h
-      | some o'' =>
-        simp [check, hs] at h
-        exact ih o'' o' D h (Owner.splitFraction_covered hs hc)
+      by_cases hfresh : o.FreshIds id1 id2
+      · cases hs : o.splitFraction? id id1 id2 q1 q2 p1 p2 with
+        | none => simp [check, hfresh, hs] at h
+        | some o'' =>
+          simp [check, hfresh, hs] at h
+          exact ih o'' o' D h (Owner.splitFraction_covered hs hc)
+      · simp [check, hfresh] at h
     | nop =>
       simp [check] at h
       exact ih o o' D h hc
