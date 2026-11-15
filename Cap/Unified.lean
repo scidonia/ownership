@@ -158,6 +158,10 @@ theorem uRun_snapshot :
     uRun = some (List.replicate 32 (1 : UInt8) ++ List.replicate 32 (2 : UInt8)) := by
   decide
 
+/-- The concrete program is accepted. -/
+theorem uProgram_ok : (checkWorld uWorld uProgram).isOk = true := by
+  decide
+
 theorem uProgram_rel : ∃ w, checkWorld uWorld uProgram = .ok w ∧ w.Rel := by
   have hok : (checkWorld uWorld uProgram).isOk = true := by decide
   cases h : checkWorld uWorld uProgram with

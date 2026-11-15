@@ -12,6 +12,11 @@ Closed instances evaluate at elaboration: `prog_run` below computes a two-write
 program's run. The indices are ordinary `World` values, not a new runtime state;
 the executable route remains `Cap.Unified`'s `checkWorld`, and `prog_sound`
 connects the indexed run to it for the concrete program.
+
+This is a *specification* type: its `run` field does not, by itself, establish a
+post-relation for an arbitrary inhabitant, and a client can build one with an
+unrelated `run`. The certificate-carrying form is `Cap/Prog.lean`/`Cap/Runner.lean`,
+where the syntax is packaged with `checkWorld`'s derivation.
 -/
 import Cap.Unified
 

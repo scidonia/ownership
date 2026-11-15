@@ -475,6 +475,33 @@ The two-write program is checked at elaboration: \texttt{prog\_run} computes its
 are ordinary `World` values; there is no elaborator inferring them for symbolic
 programs, and runtime mutation is still performed by the executable route.
 
+\section{Sealed program certificates}
+
+The runner handoff's sharpest point is that a type with a bare `run` field does
+not establish a post-relation: a client can inhabit it with an unrelated function.
+\file{Cap/Runner.lean} gives the certificate-carrying form: syntax packaged with
+the checker's derivation.
+
+\begin{lstlisting}[caption={\file{Cap/Runner.lean}.}]
+structure Prog (pre : World) where
+  post : World
+  cmds : List UCmd
+  ok : checkWorld pre cmds = .ok post
+
+def Prog.snapshot (p : Prog pre) (a : AllocId) : Option (List UInt8) :=
+  (p.post.heaps a).map (fun b => b.buf)
+
+def p64 : Prog uWorld := ⟨post64, uProgram, post64_ok⟩
+theorem p64_snapshot : p64.snapshot ⟨0⟩ = some (32 ones ++ 32 twos)
+\end{lstlisting}
+
+A `Prog` cannot exist without the checker's result, and the only observation is an
+immutable snapshot from the post-world. \texttt{Cap/Indexed.lean}'s `Ix` is a
+specification type by comparison: its `run` field alone does not establish a
+post-relation, which is now stated in that module. `World` remains public pure
+model data, so the sealed runtime boundary, the complete invariant and the full
+command set are still open (the runner handoff's P0).
+
 \section{Surface checker and certificates}
 
 \texttt{\#own\_prog} elaborates surface commands to the deep language and runs the
