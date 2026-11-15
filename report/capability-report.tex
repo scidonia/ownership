@@ -1,0 +1,476 @@
+\documentclass[10pt,a4paper]{article}
+
+\usepackage[margin=2.0cm]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage{xcolor}
+\usepackage{booktabs}
+\usepackage{enumitem}
+\usepackage{titlesec}
+\usepackage{listings}
+\usepackage{amsmath}
+\usepackage[hidelinks]{hyperref}
+
+\definecolor{rule}{gray}{0.45}
+\definecolor{shade}{gray}{0.94}
+
+\titleformat{\section}{\large\bfseries}{\thesection}{0.6em}{}
+\titleformat{\subsection}{\normalsize\bfseries}{\thesubsection}{0.6em}{}
+\titlespacing*{\section}{0pt}{1.1ex plus .2ex}{0.6ex}
+
+\lstdefinelanguage{Lean4}{
+  morekeywords={def,theorem,structure,class,inductive,instance,namespace,end,
+    import,open,where,deriving,axiom,example,by,intro,cases,rw,simp,exact,
+    unfold,omega,decide,fun,let,in,if,then,else,do,match,with,return,pure,
+    private,partial,Type,Prop,Nat,Bool,UInt8,Array,List,Option},
+  sensitive=true,
+  morecomment=[l]{--},
+  morecomment=[s]{/-}{-/},
+  morestring=[b]",
+}
+\lstset{
+  language=Lean4,
+  basicstyle=\ttfamily\footnotesize,
+  columns=fullflexible,
+  keepspaces=true,
+  breaklines=true,
+  frame=single,
+  rulecolor=\color{rule},
+  framesep=3pt,
+  xleftmargin=4pt,
+  xrightmargin=4pt,
+  aboveskip=0.6em,
+  belowskip=0.3em,
+  commentstyle=\itshape\color{black!65},
+  keywordstyle=\bfseries,
+  showstringspaces=false,
+  extendedchars=true,
+  literate=
+    {×}{{$\times$}}1 {→}{{$\to$}}1 {≤}{{$\le$}}1 {∀}{{$\forall$}}1
+    {¬}{{$\neg$}}1 {∧}{{$\wedge$}}1 {∨}{{$\vee$}}1 {⟨}{{$\langle$}}1
+    {⟩}{{$\rangle$}}1 {α}{{$\alpha$}}1 {β}{{$\beta$}}1 {ρ}{{$\rho$}}1
+    {Γ}{{$\Gamma$}}1 {Σ}{{$\Sigma$}}1 {∈}{{$\in$}}1 {≃}{{$\simeq$}}1
+    {↦}{{$\mapsto$}}1 {←}{{$\leftarrow$}}1 {·}{{$\cdot$}}1 {∃}{{$\exists$}}1 {∉}{{$\notin$}}1
+}
+\lstdefinestyle{out}{
+  language={},
+  basicstyle=\ttfamily\footnotesize,
+  frame=none,
+  backgroundcolor=\color{shade},
+  xleftmargin=8pt,
+  aboveskip=0.2em,
+  belowskip=0.7em,
+}
+
+\newcommand{\file}[1]{\texttt{\small #1}}
+
+\title{\vspace{-1.2cm}\textbf{A capability-ledger subsystem in Lean}\\[2pt]
+\large Implementation report, with examples\\[4pt]
+\normalsize separate from, and not a claim of, the ITP manuscript}
+\author{Gavin Mendel-Gleason}
+\date{15 November 2026}
+
+\begin{document}
+\maketitle
+\vspace{-0.8cm}
+
+\begin{center}
+\fbox{\parbox{0.96\textwidth}{\small
+\textbf{Scope.} This report describes the \texttt{Cap} subsystem: exact shares,
+bounded footprints, a closed value-code universe, an owner/context ledger with
+guards, lifetime and loan bookkeeping, a reference byte heap and a pure mutable
+backend related to it, a surface checker and certificate command, and a union-find
+example under the write discipline. Every Lean fragment is quoted from the
+repository and every output was observed at the revision reported. The subsystem
+is not a refinement of Lean's compiler or runtime, and the open research stages are
+listed in Section~\ref{sec:open}.
+}}
+\end{center}
+
+\section{What the subsystem is}
+
+Lean has no linear or affine typing, so a ``unique'' wrapper is not unique: a value
+can be bound twice. The subsystem therefore separates three things. Handles are
+inert names; authority is a position in the current checked context; and the
+context is never a public value. Every access is justified against a capability
+ledger, and the guarded operations take the ledger's predicates as proofs.
+
+\begin{lstlisting}[caption={Duplication is legal in the host, which is why authority cannot live in a wrapper.}]
+structure Owned (α : Type) where
+  private mk ::
+  val : α
+
+def dup (a : Owned α) : Owned α × Owned α := (a, a)
+\end{lstlisting}
+
+\section{Layout}
+
+\begin{center}
+\begin{tabular}{@{}ll@{}}
+\toprule
+Module & Content \\
+\midrule
+\file{Cap/Id.lean} & allocation, capability, loan, lifetime identities \\
+\file{Cap/Share.lean} & shares, splits, the one-transfer theorem \\
+\file{Cap/Footprint.lean} & half-open intervals, views, split facts \\
+\file{Cap/Code.lean} & codes for the closed value universe \\
+\file{Cap/Admission.lean} & bijection certificates and the encoding gate \\
+\file{Cap/Ledger.lean} & decomposition tree, budget, owners, splits, joins, guards \\
+\file{Cap/Context.lean} & multi-owner context, dispatch, freshness, disposal \\
+\file{Cap/Policy.lean} & write guard plus lifetime liveness \\
+\file{Cap/Loans.lean} & lifetime and loan bookkeeping \\
+\file{Cap/Nested.lean} & two-level borrow, suspension and restoration \\
+\file{Cap/Bytes.lean} & reference byte heap \\
+\file{Cap/Session.lean} & single-owner session and the 64-byte run \\
+\file{Cap/Backend.lean} & pure mutable backend and its refinement \\
+\file{Cap/BackendRun.lean} & the 64-byte run on the backend \\
+\file{Cap/Exec.lean} & instruction interpreter over the backend \\
+\file{Cap/World.lean} & owners plus mutable backends \\
+\file{Cap/Core.lean} & deep command language and executable checker \\
+\file{Cap/Surface.lean} & surface checker and certificate command \\
+\file{Cap/Certify.lean} & a kernel-checked closed-program certificate \\
+\file{Cap/UnionFind.lean} & union-find under the write discipline \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\section{Exact shares and footprints}
+
+A context fixes a denominator $D$; a share is a positive numerator $q \le D$. A
+write needs the whole unit, a read only a positive share.
+
+\begin{lstlisting}[caption={\file{Cap/Share.lean}: the one-transfer theorem.}]
+def ShareWf (D q : Nat) : Prop := 0 < q ∧ q ≤ D
+def Splits (q q1 q2 : Nat) : Prop := q1 + q2 = q
+def Writable (D q : Nat) : Prop := q = D
+
+theorem no_two_writes {D q q1 q2 : Nat} (h : Splits q q1 q2) (h1 : 0 < q1)
+    (hw1 : Writable D q1) (hw2 : Writable D q2) (hq : q ≤ D) : False
+\end{lstlisting}
+
+Footprints are half-open intervals with an ordering proof; a view names an
+allocation and a footprint. Splitting at a point yields disjoint children that
+cover the parent, and an allocation bound passes through:
+
+\begin{lstlisting}[caption={\file{Cap/Footprint.lean}, selected facts.}]
+theorem splitAt_disjoint ... : (splitAt i k h1 h2).1.Disjoint (splitAt i k h1 h2).2
+theorem splitAt_adjacent ... : (splitAt i k h1 h2).1.Adjacent (splitAt i k h1 h2).2
+theorem splitAt_cover ... :
+    (splitAt i k h1 h2).1.lo = i.lo ∧ (splitAt i k h1 h2).2.hi = i.hi
+theorem splitAt_within ... : Within len (...) ∧ Within len (...)
+\end{lstlisting}
+
+\section{Admission: encoding is not confinement}
+
+A type is admitted to the \emph{value language} by a demonstrated bijection to a
+closed code. The gate reflects the named demonstration, requires the code to be
+closed, and audits the axioms.
+
+\begin{lstlisting}[caption={\file{Cap/Admission.lean}.}]
+structure Bij (α β : Type) where
+  toFun : α → β
+  invFun : β → α
+  left_inv : ∀ a, invFun (toFun a) = a
+  right_inv : ∀ b, toFun (invFun b) = b
+
+structure SafeValue (T : Type) where
+  code : Code
+  bij : Bij T (El code)
+\end{lstlisting}
+
+\begin{lstlisting}[style=out]
+'Pair' is encoded by code Code.nat.prod Code.nat
+the demonstration 'badBij' depends on non-standard axioms
+  [badFrom, badLeft, badRight, badTo]
+the demonstration 'Other.bij' does not have type Bij Pair (El c)
+\end{lstlisting}
+
+A bijection is not a confinement proof. \texttt{Unit → Nat} is bijective with
+\texttt{El .nat} and a particular thunk can capture a buffer:
+
+\begin{lstlisting}[caption={\file{bench/NatThunkAdmission.lean}.}]
+abbrev NatThunk := Unit → Nat
+
+def thunkBij : Bij NatThunk (El .nat) where
+  toFun f := f ()
+  invFun n := fun _ => n
+  left_inv f := by funext u; cases u; rfl
+  right_inv n := rfl
+
+def retainBuffer (bytes : Array UInt8) : NatThunk := fun _ => bytes.size
+\end{lstlisting}
+
+The gate accepts the encoding and the storage type excludes it: \texttt{SafeType}
+holds a code and an initialiser producing \texttt{El code}, never an arbitrary
+\texttt{T}.
+
+\section{The ledger}
+
+Capabilities are leaves of a decomposition tree. Internal nodes are fractional and
+spatial splits; the budget at a byte is the frontier sum. Splits and sibling joins
+preserve the budget:
+
+\begin{lstlisting}[caption={\file{Cap/Ledger.lean}.}]
+theorem frac_split_budget ... :
+    (Tree.frac c1.id (.leaf c1) (.leaf c2)).budget x = (Tree.leaf c).budget x
+
+theorem spatial_split_budget ... :
+    (Tree.spatial c1.id (.leaf c1) (.leaf c2)).budget x = (Tree.leaf c).budget x
+
+theorem Tree.budget_replace ... :
+    (t.replace id f).budget x = t.budget x
+\end{lstlisting}
+
+At the owner level, \texttt{Owner.Covered} is the byte-wise full-budget invariant;
+splits preserve it and allocation establishes it. The write guard is a
+proposition:
+
+\begin{lstlisting}[caption={\file{Cap/Ledger.lean}: coverage and guards.}]
+def Owner.Covered (o : Owner) (D : Nat) : Prop :=
+  ∀ x, x < o.len → o.root.budget x = D
+
+def Owner.Writable (o : Owner) (D : Nat) (id : CapId) (i : Nat) : Prop :=
+  ∃ c, o.root.find? id = some c ∧ c.state = .active ∧ c.q = D ∧
+    c.ceiling = .readWrite ∧ c.lo ≤ i ∧ i < c.hi
+
+theorem Owner.splitFraction_covered ... : o'.Covered D
+theorem Owner.splitAt_covered ... : o'.Covered D
+\end{lstlisting}
+
+The join is sibling-only, refuses aliases, and preserves coverage:
+
+\begin{lstlisting}[caption={\file{Cap/Join.lean}.}]
+theorem Owner.joinFraction_covered ... : o'.Covered D
+theorem Owner.joinFraction_alias_none ... :
+    -- a join whose two children carry the same capability id is refused
+\end{lstlisting}
+
+\section{Context, lifecycle and disposal}
+
+The context is a list of owners with distinct allocations. Allocation appends a
+fresh fully covered owner, disposal removes one through its recorded disposal
+capability, and splits dispatch to the owner:
+
+\begin{lstlisting}[caption={\file{Cap/Context.lean}.}]
+def Ctx.alloc (C : Ctx) (a : AllocId) (n : Nat) (pos : 0 < C.D)
+    (rootId disposal : CapId) (hfresh : a ∉ C.owners.map (·.alloc)) : Ctx
+
+def Ctx.freeWith? (C : Ctx) (a : AllocId) (d : CapId) : Option Ctx
+def Ctx.splitAtOwner? ... : Option Ctx
+def Ctx.splitFractionOwner? ... : Option Ctx
+
+theorem Ctx.alloc_realizes ... : (C.alloc ...).Realizes
+theorem Ctx.freeWith?_realizes ... : C'.Realizes
+theorem Ctx.splitAtOwner_realizes ... : C'.Realizes
+\end{lstlisting}
+
+Lifetimes and loans are pure bookkeeping; the policy combines the write guard with
+liveness; the nested model suspends and restores a lender:
+
+\begin{lstlisting}[caption={\file{Cap/Policy.lean}, \file{Cap/Nested.lean}.}]
+def Policy.Writable (p : Policy) (o : Owner) (D : Nat) (id : CapId) (i : Nat)
+    (lifetime : LifetimeId) : Prop :=
+  o.Writable D id i ∧ LoanCtx.live p.loans lifetime = true
+
+theorem Policy.not_writable_of_dead ...
+theorem LoanCtx.live_false_of_endLoan ...
+theorem begin_suspends ... : -- the returned lender is suspended, share unchanged
+theorem end_restores ... : -- ending restores an active lender, cap and share same
+\end{lstlisting}
+
+The session carries a loan context; a policy-guarded fill requires the policy for
+every byte, and disposal is refused while a loan is outstanding:
+
+\begin{lstlisting}[caption={\file{Cap/Session.lean}.}]
+def Session.fillGuarded? ... (lifetime : LifetimeId)
+    (hg : ∀ i, lo ≤ i → i < hi →
+      (Policy.mk s.loans).Writable s.owner s.D id i lifetime) : Option (Session × Heap)
+
+def Session.free? (s : Session) : Option Heap :=
+  if s.loans.loans = [] then s.heap.free? s.owner.alloc else none
+
+theorem Session.free_refused_of_loan ... : s.free? = none
+\end{lstlisting}
+
+\section{The 64-byte acceptance run}
+
+A concrete spatial tree covers \texttt{[0,32)} and \texttt{[32,64)}; fills of 1 and 2
+go through the guards; the snapshot is proved:
+
+\begin{lstlisting}[caption={\file{Cap/Session.lean}.}]
+theorem exampleRun_snapshot :
+    exampleRun = some (List.replicate 32 (1 : UInt8) ++ List.replicate 32 (2 : UInt8))
+  := by decide
+\end{lstlisting}
+
+The reference heap proves write visibility, length preservation, non-interference
+at other indices, snapshot independence, and that two readers of the right half each
+see 64:
+
+\begin{lstlisting}[caption={\file{Cap/Bytes.lean}, selected facts.}]
+theorem write_get ... : read? h' a i = some v
+theorem write_preserves_length ... : ...
+theorem write_ne ... : read? h' a j = read? h a j
+theorem right_readers_both_64 : rightReaders = some (64, 64)
+theorem snapshot_independent : snapshotRun = some ([7,7,7,7], [7,7,7,7], [9,7,7,7])
+\end{lstlisting}
+
+\section{Backend, interpreter and world}
+
+A pure mutable backend refines the reference heap; the 64-byte run on it agrees;
+an instruction interpreter agrees on the example; the world adds owners with
+backends and preserves the relation under guarded write and disposal.
+
+\begin{lstlisting}[caption={\file{Cap/Backend.lean}, \file{Cap/BackendRun.lean}, \file{Cap/Exec.lean}.}]
+theorem Backend.read_refines ... : h.read? a i = some v
+theorem Backend.write_refines ... : b'.Rel h' a
+theorem Backend.write_then_read ... : b'.read i = some v
+
+theorem exampleBackend_snapshot :
+    exampleBackendSnapshot = some (List.replicate 32 (1:UInt8) ++ List.replicate 32 (2:UInt8))
+
+theorem exec_example :
+    exec (Backend.empty 64) execExampleProgram = some (_, List.replicate 32 1 ++ List.replicate 32 2)
+\end{lstlisting}
+
+\begin{lstlisting}[caption={\file{Cap/World.lean}.}]
+theorem World.write_rel ... : w'.Rel
+theorem World.freeWith_rel ... : w'.Rel
+\end{lstlisting}
+
+\section{Surface checker and certificates}
+
+\texttt{\#own\_prog} elaborates surface commands to the deep language and runs the
+checker at elaboration time; \texttt{\#own\_cert} declares the kernel-checked
+theorem for a closed program.
+
+\begin{lstlisting}[caption={\file{Cap/Surface.lean}, surface program and certificate.}]
+#own_prog surfaceOwner 64 {
+  splitAt ⟨0⟩ ⟨2⟩ ⟨3⟩ 32
+  write ⟨2⟩ 5
+  write ⟨3⟩ 40
+  splitFraction ⟨2⟩ ⟨4⟩ ⟨5⟩ 32 32
+  nop
+}
+
+#own_cert surfaceCert : surfaceOwner 64 {
+  splitAt ⟨0⟩ ⟨2⟩ ⟨3⟩ 32
+  write ⟨2⟩ 5
+  write ⟨3⟩ 40
+}
+\end{lstlisting}
+
+\begin{lstlisting}[style=out]
+capability program accepted
+Cap.surfaceCert :
+  Checked surfaceOwner 64
+    [Cmd.splitAt { val := 0 } { val := 2 } { val := 3 } 32,
+     Cmd.write { val := 2 } 5, Cmd.write { val := 3 } 40]
+\end{lstlisting}
+
+The certificate is axiom-free; the deep checker has write and split soundness and
+carries coverage through a run:
+
+\begin{lstlisting}[caption={\file{Cap/Core.lean}, \file{Cap/Certify.lean}.}]
+theorem write_checked ... : o.Writable D id i
+theorem check_covered ... : o'.Covered D
+theorem certifiedProgram_checked : Checked certifiedOwner 12 certifiedProgram
+\end{lstlisting}
+
+\section{Union-find under the discipline}
+
+The parent and rank arrays are one allocation, covered by a single whole-share
+read--write leaf. Every write is \texttt{UF.writeParent}, which takes the guard as a
+proof and preserves the store length. In-range guards are supplied; index 4 has
+none.
+
+\begin{lstlisting}[caption={\file{Cap/UnionFind.lean}.}]
+structure UF where
+  owner : Owner
+  parent : List Nat
+  rank : List Nat
+  hlen : parent.length = rank.length
+  D : Nat
+
+def UF.writeParent (u : UF) (id : CapId) (i v : Nat)
+    (_hg : u.owner.Writable u.D id i) : UF :=
+  { owner := u.owner, parent := u.parent.set i v, rank := u.rank,
+    hlen := by rw [List.length_set]; exact u.hlen, D := u.D }
+
+theorem ufOwner_writable (i : Nat) (h : i < 4) : ufOwner.Writable 4 ⟨1⟩ i
+theorem ufOwner_not_writable_4 : ¬ ufOwner.Writable 4 ⟨1⟩ 4
+\end{lstlisting}
+
+The concrete run attaches 1 under 0, 3 under 2, and 2 under 0:
+
+\begin{lstlisting}[caption={The run and its results.}]
+def uf0 : UF :=
+  { owner := ufOwner, parent := [0, 1, 2, 3], rank := [0, 0, 0, 0], hlen := rfl, D := 4 }
+
+def uf1 : UF := uf0.writeParent ⟨1⟩ 1 0 (ufOwner_writable 1 (by decide))
+def uf2 : UF := uf1.writeParent ⟨1⟩ 3 2 (ufOwner_writable 3 (by decide))
+def uf3 : UF := uf2.writeParent ⟨1⟩ 2 0 (ufOwner_writable 2 (by decide))
+
+theorem uf3_parent : uf3.parent = [0, 0, 0, 2] := by decide
+
+theorem uf3_find_all :
+    uf3.findRoot 0 = some 0 ∧ uf3.findRoot 1 = some 0 ∧
+      uf3.findRoot 2 = some 0 ∧ uf3.findRoot 3 = some 0 := by decide
+\end{lstlisting}
+
+What the example establishes: every write in the run is authorised by the ledger
+guard, out-of-range writes have no guard, the parent list is as stated, all four
+lookups reach 0, and the arrays keep their lengths. What it does not establish: a
+union-find correctness theorem (partition refinement, path-compression semantics,
+complexity), or rank balancing --- the example attaches by explicit choice.
+
+\section{Measurements}
+
+\texttt{bench/CapTiming.lean} times the two pure models on the 64-byte
+fill/snapshot pattern. At this revision, 10,000 repetitions gave 47,643 ns per
+repetition for the backend model and 32,648 ns for the reference model, with equal
+checksums. Evaluation is interpreted; this covers the models' operation sequences,
+not an interpreter, an optimised backend, FFI, or allocation/GC, and is
+environment-dependent.
+
+\section{What is proved, and what is open}\label{sec:open}
+
+\begin{center}
+\begin{tabular}{@{}lp{0.64\textwidth}@{}}
+\toprule
+Proved & Module \\
+\midrule
+share uniqueness arithmetic, split/join budgets & Share, Footprint, Ledger, Join \\
+owner coverage, split/join preservation, guards & Ledger, Context \\
+allocation, disposal and identifier freshness & Context \\
+loan bookkeeping, policy liveness, nested restore & Loans, Policy, Nested \\
+reference heap, 64-byte run, snapshot independence & Bytes, Session \\
+backend refinement, interpreter agreement, world relation & Backend, Exec, World \\
+deep checker soundness, coverage, surface certificate & Core, Surface, Certify \\
+union-find run under the guard & UnionFind \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Open, and not claimed here: hidden-index elaboration (indices inferred and hidden,
+with a certificate for symbolic programs); a frame rule combining the ledger, loans
+and a callee's authorized footprint with suspended ownership across a call;
+specialisation and an interpreter consuming certified commands against the world;
+and concurrency, which the design defers. The surface elaborator checks and emits
+certificates for closed programs; it does not infer symbolic indices.
+
+\section{How to run}
+
+\begin{lstlisting}[style=out]
+nix develop -c lake build Cap
+nix develop -c bash scripts/check_all.sh
+
+# examples
+nix develop -c lake env lean bench/NatThunkAdmission.lean
+nix develop -c lake env lean bench/CapNegative.lean
+nix develop -c lake env lean bench/CapSurfaceReject.lean   # intended refusals
+nix develop -c lake env lean bench/CapTiming.lean
+\end{lstlisting}
+
+\end{document}
