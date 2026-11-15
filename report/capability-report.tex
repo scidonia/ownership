@@ -370,6 +370,44 @@ theorem World.write_rel ... : w'.Rel
 theorem World.freeWith_rel ... : w'.Rel
 \end{lstlisting}
 
+\section{The stronger owner and context invariant}
+
+\file{Cap/Invariant.lean} strengthens the ledger invariant with the facts the
+runner handoff asks for at this layer: every leaf of an owner's tree lies inside
+the owner's allocation and extent, coverage and the recorded disposal capability
+hold, and a context has realization, per-owner well-formedness and distinct
+capability identifiers.
+
+\begin{lstlisting}[caption={\file{Cap/Invariant.lean}.}]
+def Owner.LeavesWithin (o : Owner) : Prop :=
+  forall id c, o.root.find? id = some c -> c.alloc = o.alloc ∧ c.hi <= o.len
+
+def Owner.WellFormed (o : Owner) (D : Nat) : Prop :=
+  o.Covered D ∧ o.LeavesWithin ∧ o.DisposalPresent
+
+def Ctx.WellFormed (C : Ctx) : Prop :=
+  C.Realizes ∧ (forall o ∈ C.owners, o.WellFormed C.D) ∧ C.ids.Nodup
+
+theorem Owner.init_wellFormed ...
+theorem Ctx.alloc_wellFormed ...
+theorem Ctx.splitAtOwner_wellFormed ...
+theorem Ctx.splitFractionOwner_wellFormed ...
+theorem Ctx.free_wellFormed ...
+\end{lstlisting}
+
+Establishment and preservation are proved with explicit hypotheses: owner id
+distinctness and freshness for the owner splits, context-wide child freshness for
+the dispatched splits, and allocation and id freshness for \texttt{alloc}. The tree's
+first-occurrence replacement is characterised (\texttt{find?\_replace\_eq},
+\texttt{ids\_replace\_perm}, \texttt{leaves\_replace\_nodup}) and the identifier list is shown to be
+preserved up to permutation. The concrete 64-byte owner satisfies `WellFormed 64`.
+
+Not yet in this invariant: loans and lifetime association, storage/heap agreement,
+one disposal entitlement per allocation as a global condition, and ceiling
+inheritance. \texttt{DisposalPresent} is deliberately a disjunction (a leaf, or absence
+from the tree's ids) so that initialisation is unconditional; the strict reading is
+recorded separately.
+
 \section{One legal disposal rule}
 
 \file{Cap/Disposal.lean} gives the single predicate under which an allocation may

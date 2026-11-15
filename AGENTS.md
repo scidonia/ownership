@@ -144,6 +144,18 @@
   loan's lifetime (`hasDescendant_sound`, `endLoan_none_of_descendant`). It has no
   heap and no capability ledger, and the loans are not yet consulted by
   `Cap.Ledger`'s guards; a live inner reborrow is still not integrated.
+- `Cap/Invariant.lean` is the stronger owner/context invariant: `Owner.LeavesWithin`
+  (every leaf lies in the owner's allocation and extent), `Owner.WellFormed`
+  (coverage, leaves within, disposal recorded), and `Ctx.WellFormed` (realization,
+  per-owner well-formedness, distinct capability ids). Established at initialisation
+  and preserved by `alloc`, `free`/`freeWith?`, and the dispatched spatial and
+  fractional splits, with the tree's first-occurrence replace infrastructure
+  (`find?_replace_eq`, `ids_replace_perm`, `leaves_replace_nodup`). Split
+  preservation assumes owner id distinctness and freshness, and context-wide child
+  freshness; the module records each hypothesis. `DisposalPresent` is a disjunction
+  (a leaf or absence from the tree's ids), chosen so initialisation is
+  unconditional; loans, storage agreement and one-entitlement-per-allocation are
+  not in this invariant yet.
 - `Cap/Context.lean` is the multi-owner context: a list of owners plus the
   denominator and a fresh-allocation counter. `Ctx.Realizes` requires every owner to
   be covered and the allocation identifiers to be distinct; `Ctx.alloc` appends a
