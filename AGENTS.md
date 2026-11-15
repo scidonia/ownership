@@ -178,6 +178,15 @@
   returns 0 (`uf3_find_all`), and the lengths are preserved (`uf3_lengths`). It is
   an example of the discipline, not a verified union-find against an
   equivalence-class model.
+- `Cap/Disposal.lean` is the one legal-disposal predicate: `DisposalState` pairs a
+  world with a loan context; `Legal` requires the found owner, its coverage, the
+  recorded disposal entitlement, an empty loan list and a reconstructed root
+  (a single active whole-share leaf over the allocation); `free?` is the checked
+  route through `World.freeWith?`, and the facts are `free?_none_of_not_legal`,
+  `free?_legal`, `free?_removes_owner`, `free?_none_after_free`, the entitlement
+  and loan refusals, and concrete examples. It is not yet wired into
+  `Cap.Unified`, and names are invalidated by owner removal rather than by arena
+  generations.
 - `Cap/World.lean` is the world of owners and mutable backends: the heap map is a
   function from allocations to `Backend`, `World.Rel` combines `Ctx.Realizes` with
   the per-owner buffer length, `write?` takes the owner's `Writable` guard as a

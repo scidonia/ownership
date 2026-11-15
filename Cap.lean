@@ -19,3 +19,4 @@ import Cap.Exec
 import Cap.World
 import Cap.UnionFind
 import Cap.Unified
+import Cap.Disposal

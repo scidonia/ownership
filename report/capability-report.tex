@@ -132,6 +132,7 @@ Module & Content \\
 \file{Cap/Certify.lean} & a kernel-checked closed-program certificate \\
 \file{Cap/UnionFind.lean} & union-find under the write discipline \\
 \file{Cap/Unified.lean} & value-carrying writes, checker as interpreter \\
+\file{Cap/Disposal.lean} & the legal-disposal predicate and checked free \\
 \bottomrule
 \end{tabular}
 \end{center}
@@ -340,6 +341,32 @@ theorem World.write_rel ... : w'.Rel
 theorem World.freeWith_rel ... : w'.Rel
 \end{lstlisting}
 
+\section{One legal disposal rule}
+
+\file{Cap/Disposal.lean} gives the single predicate under which an allocation may
+be freed. A `DisposalState` pairs the world with the loan context; `Legal` requires
+the found owner, its coverage, the recorded disposal entitlement, an empty loan
+list, and a reconstructed root (a single active whole-share leaf over the
+allocation). `free?` is the checked route through the world's disposal check.
+
+\begin{lstlisting}[caption={\file{Cap/Disposal.lean}.}]
+def DisposalState.Legal (s : DisposalState) (a : AllocId) (d : CapId) : Prop :=
+  exists o, s.world.ctx.findOwner? a = some o ∧ o.Covered s.world.ctx.D ∧
+    o.disposal = d ∧ s.loans.loans = [] ∧ o.RootReconstructed s.world.ctx.D
+
+def DisposalState.free? ... : Option DisposalState
+
+theorem DisposalState.free?_none_of_not_legal ... : s.free? a d = none
+theorem DisposalState.free?_legal ... : exists s', s.free? a d = some s'
+theorem DisposalState.free?_removes_owner ... : s'.world.ctx.findOwner? a = none
+theorem DisposalState.free?_none_after_free ... : s'.free? a d = none
+\end{lstlisting}
+
+Refusals for a wrong entitlement and for an outstanding loan are proved, and a
+legal disposal succeeds and leaves no owner for the allocation. The predicate is
+not yet wired into `Cap.Unified`; names are invalidated by owner removal rather
+than by arena generations.
+
 \section{Unified certified execution (first slice)}
 
 The review's principal finding was that certification and execution were separate.
@@ -516,7 +543,8 @@ identifiers is now checked in the deep checker, but the owner-level dispatch and
 the invariant are not complete; a begun loan is now bound to the lifetime it
 inserts and `endLoan` refuses while a recorded descendant loan exists, but a live
 inner reborrow integrated with the ledger is still absent (R3); one uniform
-disposal rule across world, context and session (R4, in progress); the complete
+disposal rule is implemented as a predicate with a checked free, but it is not yet
+wired into the unified language (R4); the complete
 certified 64-byte trace (R5);
 hidden-index elaboration for symbolic programs; specialisation; and concurrency,
 which the design defers.
