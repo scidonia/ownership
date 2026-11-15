@@ -748,8 +748,12 @@ the heap agreement through a same-length owner replacement is
 \texttt{World.update\_storage}. The unified checker now carries the invariant:
 \texttt{checkWorld\_wf} shows an accepted execution preserves it through writes
 and splits, and \texttt{checkWorld\_rel} derives the older \texttt{World.Rel}
-from it. Allocation, joins, loans, snapshot and disposal commands are not yet in
-this language.
+from it. The language also carries disposal and allocation commands (\texttt{free} through
+the recorded capability, \texttt{alloc} with fresh identifiers), each preserving
+the invariant; the concrete lifecycle program runs alloc, write, split, write and
+free through the unified route and leaves the pre-existing backend at its initial
+zeros (\texttt{uLifecycle\_snapshot}). Joins, loans and a snapshot command are
+not yet in this language.
 
 \section{Measurements}
 

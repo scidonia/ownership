@@ -340,4 +340,77 @@ theorem World.splitAtChecked_wf {w w' : World} {a : AllocId} {id id1 id2 : CapId
       simpa [hoalloc] using hf
     exact ⟨hwfC, hfun, World.update_storage hwf hfa ho'alloc ho'len⟩
 
+/-- A checked disposal through the recorded disposal capability. -/
+def World.freeChecked (w : World) (a : AllocId) (d : CapId) : Except String World :=
+  match w.freeWith? a d with
+  | some w' => .ok w'
+  | none => .error "free: refused"
+
+/-- A successful disposal preserves the world invariant. -/
+theorem World.freeChecked_wf {w w' : World} {a : AllocId} {d : CapId}
+    (h : w.freeChecked a d = .ok w') (hwf : w.WellFormed) : w'.WellFormed := by
+  unfold World.freeChecked at h
+  cases hw : w.freeWith? a d with
+  | none => simp [hw] at h
+  | some w'' =>
+    simp [hw] at h
+    cases h
+    exact World.freeWith?_wellFormed hw hwf
+
+/-- A checked allocation: the next allocation identifier must be free and the
+root and disposal capabilities fresh and distinct. The new owner's backend is
+empty. -/
+def World.allocChecked (w : World) (n : Nat) (rootId disposal : CapId)
+    (pos : 0 < w.ctx.D) : Except String World :=
+  if hf : (⟨w.ctx.nextAlloc⟩ : AllocId) ∉ w.ctx.owners.map (·.alloc) then
+    if hfresh : rootId ∉ w.ctx.ids ∧ disposal ∉ w.ctx.ids ∧ rootId ≠ disposal then
+      .ok { ctx := w.ctx.alloc ⟨w.ctx.nextAlloc⟩ n pos rootId disposal hf,
+            heaps := fun x => if x = (⟨w.ctx.nextAlloc⟩ : AllocId) then some (Backend.empty n) else w.heaps x }
+    else .error "alloc: capability identifiers are not fresh"
+  else .error "alloc: stale allocation identifier"
+
+/-- A successful allocation preserves the world invariant. -/
+theorem World.allocChecked_wf {w w' : World} {n : Nat} {rootId disposal : CapId}
+    {pos : 0 < w.ctx.D} (h : w.allocChecked n rootId disposal pos = .ok w')
+    (hwf : w.WellFormed) : w'.WellFormed := by
+  unfold World.allocChecked at h
+  by_cases hf : (⟨w.ctx.nextAlloc⟩ : AllocId) ∉ w.ctx.owners.map (·.alloc)
+  · by_cases hfresh : rootId ∉ w.ctx.ids ∧ disposal ∉ w.ctx.ids ∧ rootId ≠ disposal
+    · simp [hf, hfresh] at h
+      cases h
+      refine ⟨Ctx.alloc_wellFormed (hfresh := hf) hwf.1 hfresh.1 hfresh.2.1 hfresh.2.2, ?_, ?_⟩
+      · apply Ctx.functional_of_nodup
+        simp only [Ctx.alloc, List.map_cons, List.nodup_cons]
+        exact ⟨hf, hwf.1.1.2⟩
+      · intro a' o' hfind
+        unfold Ctx.findOwner? Ctx.alloc at hfind
+        simp only [List.find?_cons] at hfind
+        by_cases hx : (Owner.init ⟨w.ctx.nextAlloc⟩ n w.ctx.D pos rootId disposal).alloc = a'
+        · simp [hx] at hfind
+          cases hfind
+          refine ⟨Backend.empty n, ?_, ?_⟩
+          · rw [← hx]
+            exact if_pos rfl
+          · simp [Backend.empty, Owner.init]
+        · simp [hx] at hfind
+          have hmem : o' ∈ w.ctx.owners := List.mem_of_find?_eq_some hfind
+          have hoalloc : o'.alloc = a' := by
+            have h := List.find?_some (p := fun x : Owner => decide (x.alloc = a')) hfind
+            simpa using h
+          have hne : a' ≠ (⟨w.ctx.nextAlloc⟩ : AllocId) := by
+            intro hcontra
+            rw [hcontra] at hoalloc
+            have : (Owner.init ⟨w.ctx.nextAlloc⟩ n w.ctx.D pos rootId disposal).alloc = ⟨w.ctx.nextAlloc⟩ := rfl
+            exact hx (this.trans hcontra.symm)
+          have hfind_old : w.ctx.findOwner? a' = some o' := by
+            have holdfun : w.ctx.Functional := Ctx.functional_of_nodup hwf.1.1.2
+            have := Ctx.findOwner?_eq_some_of_mem_of_functional holdfun hmem
+            rwa [hoalloc] at this
+          obtain ⟨b, hb, hlen⟩ := hwf.2.2 a' o' hfind_old
+          exact ⟨b, by simp [hne, hb], hlen⟩
+    · rw [dif_pos hf, dif_neg hfresh] at h
+      nomatch h
+  · rw [dif_neg hf] at h
+    nomatch h
+
 end Cap

@@ -21,6 +21,8 @@ namespace Cap
 inductive UCmd where
   | write (a : AllocId) (id : CapId) (i : Nat) (v : UInt8)
   | splitAt (a : AllocId) (id id1 id2 : CapId) (k : Nat)
+  | free (a : AllocId) (d : CapId)
+  | alloc (n : Nat) (rootId disposal : CapId)
   | nop
 
 namespace World
@@ -126,6 +128,16 @@ def checkWorld : World → List UCmd → Except String World
     match w.splitAtChecked a id id1 id2 k with
     | .ok w' => checkWorld w' cs
     | .error e => .error e
+  | w, .free a d :: cs =>
+    match w.freeChecked a d with
+    | .ok w' => checkWorld w' cs
+    | .error e => .error e
+  | w, .alloc n rootId disposal :: cs =>
+    if hpos : 0 < w.ctx.D then
+      match w.allocChecked n rootId disposal hpos with
+      | .ok w' => checkWorld w' cs
+      | .error e => .error e
+    else .error "alloc: non-positive denominator" 
 
 /-- An accepted execution preserves the world invariant. -/
 theorem checkWorld_wf : ∀ (w w' : World) (cs : List UCmd),
@@ -155,6 +167,20 @@ theorem checkWorld_wf : ∀ (w w' : World) (cs : List UCmd),
       | ok w'' =>
         simp [checkWorld, hw] at h
         exact ih w'' h (World.splitAtChecked_wf hw hwf)
+    | free a d =>
+      cases hw : w.freeChecked a d with
+      | error e => simp [checkWorld, hw] at h
+      | ok w'' =>
+        simp [checkWorld, hw] at h
+        exact ih w'' h (World.freeChecked_wf hw hwf)
+    | alloc n rootId disposal =>
+      by_cases hpos : 0 < w.ctx.D
+      · cases hw : w.allocChecked n rootId disposal hpos with
+        | error e => simp [checkWorld, hpos, hw] at h
+        | ok w'' =>
+          simp [checkWorld, hpos, hw] at h
+          exact ih w'' h (World.allocChecked_wf hw hwf)
+      · simp [checkWorld, hpos] at h
 
 /-- An accepted execution preserves the world relation, provided the input world
 is well formed. -/
@@ -242,5 +268,40 @@ theorem uProgram_rel : ∃ w, checkWorld uWorld uProgram = .ok w ∧ w.Rel := by
     rw [hfalse] at hok
     cases hok
   | ok w => exact ⟨w, rfl, checkWorld_rel uWorld w uProgram h uWorld_wf⟩
+
+/-- A lifecycle program through the unified route: allocate a fresh 4-byte
+owner, write one byte, split it spatially, write the left half, then dispose it.
+The pre-existing 64-byte owner is untouched. -/
+def uLifecycle : List UCmd :=
+  [ .alloc 4 ⟨3⟩ ⟨4⟩,
+    .write ⟨1⟩ ⟨3⟩ 0 7,
+    .splitAt ⟨1⟩ ⟨3⟩ ⟨5⟩ ⟨6⟩ 2,
+    .write ⟨1⟩ ⟨5⟩ 0 8,
+    .free ⟨1⟩ ⟨4⟩ ]
+
+/-- The lifecycle program is accepted and preserves the pre-existing snapshot. -/
+def uLifecycleSnapshot : Option (Option (List UInt8)) :=
+  match checkWorld uWorld uLifecycle with
+  | .ok w => some ((w.heaps ⟨0⟩).map (fun b => b.buf))
+  | .error _ => none
+
+/-- The lifecycle leaves the pre-existing 64-byte backend at its initial value:
+the commands act only on the freshly allocated owner. -/
+theorem uLifecycle_snapshot :
+    uLifecycleSnapshot = some (some (List.replicate 64 (0 : UInt8))) := by
+  decide
+
+/-- The lifecycle program is accepted. -/
+theorem uLifecycle_ok : (checkWorld uWorld uLifecycle).isOk = true := by
+  decide
+
+/-- The lifecycle program's final world is well formed. -/
+theorem uLifecycle_wf : ∃ w, checkWorld uWorld uLifecycle = .ok w ∧ w.WellFormed := by
+  have hok : (checkWorld uWorld uLifecycle).isOk = true := uLifecycle_ok
+  cases h : checkWorld uWorld uLifecycle with
+  | error e =>
+    rw [h] at hok
+    cases hok
+  | ok w => exact ⟨w, rfl, checkWorld_wf uWorld w uLifecycle h uWorld_wf⟩
 
 end Cap

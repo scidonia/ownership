@@ -259,17 +259,23 @@
   Indices are ordinary `World` values; there is no hidden-index elaborator, so
   symbolic programs are not inferred.
 - `Cap/Unified.lean` is the first slice of the review's R1: a value-carrying
-  `UCmd` (`write allocation capability index byte`, `splitAt`, `nop`),
-  `World.writeChecked` which checks the ledger's `writableB` and performs the
-  backend write, `World.splitAtChecked` for spatial splits, and `checkWorld` as
-  checker and interpreter at once. `writeChecked_sound` names the owner, guard,
-  backend and replacement; `writeChecked_wf` and `checkWorld_wf` preserve the
-  world invariant (`World.WellFormed`) through writes and splits, and
-  `checkWorld_rel` derives `World.Rel` from it; the concrete 64-byte world is
-  well formed (`uWorld_wf`), the run through this route snapshots 32 ones then
-  32 twos (`uRun_snapshot`), and its world remains related (`uProgram_rel`).
-  Allocation, joins, loans, snapshot and disposal are not yet in this language;
-  they remain in the owner layer.
+  `UCmd` (`write`, `splitAt`, `free`, `alloc`, `nop`), `World.writeChecked`
+  which checks the ledger's `writableB` and performs the backend write,
+  `World.splitAtChecked` for spatial splits, `World.freeChecked` for disposal
+  through the recorded capability, `World.allocChecked` for allocation with
+  fresh identifiers, and `checkWorld` as checker and interpreter at once.
+  `writeChecked_sound` names the owner, guard, backend and replacement;
+  `writeChecked_wf`, `World.splitAtChecked_wf`, `World.freeChecked_wf`,
+  `World.allocChecked_wf` and `checkWorld_wf` preserve the world invariant
+  (`World.WellFormed`) through every command, and `checkWorld_rel` derives
+  `World.Rel` from it; the concrete 64-byte world is well formed (`uWorld_wf`),
+  the run through this route snapshots 32 ones then 32 twos (`uRun_snapshot`),
+  and its world remains related (`uProgram_rel`). `uLifecycle` runs
+  alloc/write/split/write/free through this route: it is accepted
+  (`uLifecycle_ok`), its final world is well formed (`uLifecycle_wf`), and the
+  untouched pre-existing backend reads back its initial zeros
+  (`uLifecycle_snapshot`). Joins, loans and a snapshot command are not yet in
+  this language; they remain in the owner layer.
 - `Cap/Certify.lean` records the kernel-checked certificate for a closed program:
 `certifiedProgram_checked : Checked certifiedOwner 12 certifiedProgram` by
 `unfold Checked; decide` (no axioms), and `certifiedProgram_covered` carrying
