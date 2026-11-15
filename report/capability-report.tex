@@ -736,6 +736,21 @@ This is one-step compression on the functional model: not full path compression,
 not the ownership layer, and no termination or complexity claim. It supplies the
 algorithmic facts an ownership-integrated union-find would preserve.
 
+\section{World-level invariant and the split command}
+
+\file{Cap/WorldInvariant.lean} bundles the world invariant: the context invariant
+of \file{Cap/Invariant.lean}, one owner per allocation (functionality), and the
+agreement that the found owner has a backend of its length. Writes and disposal
+preserve it. The spatial split command is at the world level:
+\texttt{World.splitAtChecked} requires the owner and both children to be fresh
+for the context and preserves the invariant (\texttt{World.splitAtChecked\_wf});
+the heap agreement through a same-length owner replacement is
+\texttt{World.update\_storage}. The unified checker now carries the invariant:
+\texttt{checkWorld\_wf} shows an accepted execution preserves it through writes
+and splits, and \texttt{checkWorld\_rel} derives the older \texttt{World.Rel}
+from it. Allocation, joins, loans, snapshot and disposal commands are not yet in
+this language.
+
 \section{Measurements}
 
 \texttt{bench/CapTiming.lean} times the two pure models on the 64-byte

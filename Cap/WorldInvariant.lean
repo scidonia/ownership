@@ -241,4 +241,103 @@ theorem World.freeWith?_wellFormed {w w' : World} {a : AllocId} {d : CapId}
     obtain ⟨b, hb, hlen⟩ := hwf.2.2 b0 o0 hfindC
     exact ⟨b, by simp [hb, hb0ne], hlen⟩
 
+/-- A checked spatial split at the owner of an allocation. The owner and both
+children must be fresh for the context. -/
+def World.splitAtChecked (w : World) (a : AllocId) (id id1 id2 : CapId) (k : Nat) :
+    Except String World :=
+  match w.ctx.findOwner? a with
+  | none => .error "split: no owner for the allocation"
+  | some o =>
+    if hf : o.FreshIds id1 id2 ∧ id1 ∉ w.ctx.ids ∧ id2 ∉ w.ctx.ids then
+      match hs : w.ctx.splitAtOwner? o id id1 id2 k with
+      | some C' => .ok { w with ctx := C' }
+      | none => .error "split: refused"
+    else .error "split: capability identifiers are not fresh"
+
+theorem World.splitAtChecked_sound {w w' : World} {a : AllocId} {id id1 id2 : CapId}
+    {k : Nat} (h : w.splitAtChecked a id id1 id2 k = .ok w') :
+    ∃ o C', w.ctx.findOwner? a = some o ∧ o.FreshIds id1 id2 ∧
+      id1 ∉ w.ctx.ids ∧ id2 ∉ w.ctx.ids ∧
+      w.ctx.splitAtOwner? o id id1 id2 k = some C' ∧ w' = { w with ctx := C' } := by
+  unfold World.splitAtChecked at h
+  split at h
+  · simp at h
+  · rename_i o hf
+    split at h
+    · rename_i hfr
+      split at h
+      · rename_i C' hs
+        simp only [Except.ok.injEq] at h
+        exact ⟨o, C', hf, hfr.1, hfr.2.1, hfr.2.2, hs, h.symm⟩
+      · simp at h
+    · simp at h
+
+/-- Replacing one owner by a split result of the same length keeps the heap
+agreement. -/
+theorem World.update_storage {w : World} {o o' : Owner}
+    (hwf : w.WellFormed) (hfind : w.ctx.findOwner? o.alloc = some o)
+    (halloc : o'.alloc = o.alloc) (hlen : o'.len = o.len) :
+    ({ w with ctx := w.ctx.update o.alloc o' } : World).StorageMatches := by
+  intro a' o'' hfind''
+  have hmem'' : o'' ∈ (w.ctx.update o.alloc o').owners :=
+    List.mem_of_find?_eq_some hfind''
+  have ho''alloc : o''.alloc = a' := by
+    have h := List.find?_some (p := fun x : Owner => decide (x.alloc = a'))
+      (show (w.ctx.update o.alloc o').owners.find? (fun x => decide (x.alloc = a')) = some o'' by
+        simpa [Ctx.findOwner?] using hfind'')
+    simpa using h
+  by_cases ho'' : o'' = o'
+  · subst ho''
+    subst a'
+    obtain ⟨b, hb, hb_len⟩ := hwf.2.2 o.alloc o hfind
+    exact ⟨b, by simpa [halloc] using hb, by rw [hb_len, hlen]⟩
+  · have hmem_old : o'' ∈ w.ctx.owners := by
+      unfold Ctx.update at hmem''
+      have hmem_map : o'' ∈ w.ctx.owners.map (fun x : Owner => if x.alloc = o.alloc then o' else x) := hmem''
+      obtain ⟨x, hx, hxo⟩ := List.mem_map.mp hmem_map
+      by_cases hxa : x.alloc = o.alloc
+      · have : o'' = o' := by
+          rw [← hxo]
+          simp [hxa]
+        exact absurd this ho''
+      · have : o'' = x := by
+          rw [← hxo]
+          simp [hxa]
+        subst x
+        exact hx
+    have hfind_old : w.ctx.findOwner? a' = some o'' := by
+      have holdfun : w.ctx.Functional := Ctx.functional_of_nodup hwf.1.1.2
+      have := Ctx.findOwner?_eq_some_of_mem_of_functional holdfun hmem_old
+      rwa [ho''alloc] at this
+    obtain ⟨b, hb, hb_len⟩ := hwf.2.2 a' o'' hfind_old
+    exact ⟨b, hb, hb_len⟩
+
+/-- A successful checked split preserves the world invariant. -/
+theorem World.splitAtChecked_wf {w w' : World} {a : AllocId} {id id1 id2 : CapId}
+    {k : Nat} (h : w.splitAtChecked a id id1 id2 k = .ok w') (hwf : w.WellFormed) :
+    w'.WellFormed := by
+  obtain ⟨o, C', hf, hfids, hfresh1, hfresh2, hs, hw'⟩ := splitAtChecked_sound h
+  subst w'
+  have hmem : o ∈ w.ctx.owners := List.mem_of_find?_eq_some hf
+  have hs' : w.ctx.splitAtOwner? o id id1 id2 k = some C' := hs
+  unfold Ctx.splitAtOwner? at hs
+  cases ho : o.splitAt? id id1 id2 k with
+  | none => simp [ho] at hs
+  | some o' =>
+    simp only [ho, Option.map_some, Option.some.injEq] at hs
+    subst C'
+    have hwfC : (w.ctx.update o.alloc o').WellFormed :=
+      Ctx.splitAtOwner_wellFormed hwf.1 hmem hfids hfresh1 hfresh2 hs'
+    have ho'alloc : o'.alloc = o.alloc := Owner.splitAt?_alloc ho
+    have ho'len : o'.len = o.len := Owner.splitAt?_len ho
+    have hfun : (w.ctx.update o.alloc o').Functional :=
+      Ctx.update_functional ho'alloc hwf.1.1.2
+    have hoalloc : o.alloc = a := by
+      have := List.find?_some (p := fun x : Owner => decide (x.alloc = a))
+        (by simpa [Ctx.findOwner?] using hf)
+      simpa using this
+    have hfa : w.ctx.findOwner? o.alloc = some o := by
+      simpa [hoalloc] using hf
+    exact ⟨hwfC, hfun, World.update_storage hwf hfa ho'alloc ho'len⟩
+
 end Cap

@@ -13,12 +13,14 @@ language; that is the next slice.
 import Cap.World
 import Cap.Backend
 import Cap.Core
+import Cap.WorldInvariant
 
 namespace Cap
 
 /-- A value-carrying execution command. -/
 inductive UCmd where
   | write (a : AllocId) (id : CapId) (i : Nat) (v : UInt8)
+  | splitAt (a : AllocId) (id id1 id2 : CapId) (k : Nat)
   | nop
 
 namespace World
@@ -85,6 +87,30 @@ theorem writeChecked_rel {w w' : World} {a : AllocId} {id : CapId} {i : Nat}
     · refine ⟨b0, ?_, hlen⟩
       simp [hheaps, hx, hb0]
 
+/-- An accepted write preserves the world invariant: the context is unchanged
+and the backend is replaced by one of the same length. -/
+theorem writeChecked_wf {w w' : World} {a : AllocId} {id : CapId} {i : Nat}
+    {v : UInt8} (h : w.writeChecked a id i v = .ok w') (hwf : w.WellFormed) :
+    w'.WellFormed := by
+  obtain ⟨o, b, b', hf, _hw, hb, hbw, hctx, hheaps⟩ := writeChecked_sound h
+  refine ⟨?_, ?_, ?_⟩
+  · rw [hctx]; exact hwf.1
+  · rw [hctx]; exact hwf.2.1
+  · intro a' o' hfind
+    rw [hctx] at hfind
+    obtain ⟨b0, hb0, hlen⟩ := hwf.2.2 a' o' hfind
+    by_cases ha : a' = a
+    · subst a'
+      have hb_eq : b0 = b := by
+        rw [hb] at hb0
+        exact (Option.some.inj hb0).symm
+      subst hb_eq
+      refine ⟨b', ?_, ?_⟩
+      · simp [hheaps]
+      · rw [Backend.write_preserves_len hbw, hlen]
+    · refine ⟨b0, ?_, hlen⟩
+      simp [hheaps, ha, hb0]
+
 end World
 
 /-- The checker is the interpreter: an accepted program returns the world it
@@ -96,29 +122,46 @@ def checkWorld : World → List UCmd → Except String World
     match w.writeChecked a id i v with
     | .ok w' => checkWorld w' cs
     | .error e => .error e
+  | w, .splitAt a id id1 id2 k :: cs =>
+    match w.splitAtChecked a id id1 id2 k with
+    | .ok w' => checkWorld w' cs
+    | .error e => .error e
 
-/-- An accepted execution preserves the world relation. -/
-theorem checkWorld_rel : ∀ (w w' : World) (cs : List UCmd),
-    checkWorld w cs = .ok w' → w.Rel → w'.Rel := by
+/-- An accepted execution preserves the world invariant. -/
+theorem checkWorld_wf : ∀ (w w' : World) (cs : List UCmd),
+    checkWorld w cs = .ok w' → w.WellFormed → w'.WellFormed := by
   intro w w' cs
   induction cs generalizing w with
   | nil =>
-    intro h hr
+    intro h hwf
     simp [checkWorld] at h
     cases h
-    exact hr
+    exact hwf
   | cons c cs ih =>
-    intro h hr
+    intro h hwf
     cases c with
     | nop =>
       simp [checkWorld] at h
-      exact ih w h hr
+      exact ih w h hwf
     | write a id i v =>
       cases hw : w.writeChecked a id i v with
       | error e => simp [checkWorld, hw] at h
       | ok w'' =>
         simp [checkWorld, hw] at h
-        exact ih w'' h (w.writeChecked_rel hw hr)
+        exact ih w'' h (World.writeChecked_wf hw hwf)
+    | splitAt a id id1 id2 k =>
+      cases hw : w.splitAtChecked a id id1 id2 k with
+      | error e => simp [checkWorld, hw] at h
+      | ok w'' =>
+        simp [checkWorld, hw] at h
+        exact ih w'' h (World.splitAtChecked_wf hw hwf)
+
+/-- An accepted execution preserves the world relation, provided the input world
+is well formed. -/
+theorem checkWorld_rel : ∀ (w w' : World) (cs : List UCmd),
+    checkWorld w cs = .ok w' → w.WellFormed → w'.Rel := by
+  intro w w' cs h hwf
+  exact World.rel_of_wellFormed (checkWorld_wf w w' cs h hwf)
 
 /-- The concrete owner: one 64-byte whole-share leaf. -/
 def uOwner : Owner := Owner.init ⟨0⟩ 64 64 (by decide) ⟨1⟩ ⟨2⟩
@@ -128,7 +171,34 @@ def uWorld : World :=
   { ctx := { owners := [uOwner], D := 64, nextAlloc := 1 },
     heaps := fun a => if a = ⟨0⟩ then some (Backend.empty 64) else none }
 
+/-- The concrete 64-byte world is well formed. -/
+theorem uWorld_wf : uWorld.WellFormed := by
+  refine ⟨?_, ?_, ?_⟩
+  · -- Ctx.WellFormed
+    refine ⟨?_, ?_, ?_⟩
+    · refine ⟨?_, ?_⟩
+      · intro o ho
+        simp [uWorld] at ho
+        rcases ho with rfl
+        exact Owner.init_covered ⟨0⟩ 64 64 (by decide) ⟨1⟩ ⟨2⟩
+      · simp [uWorld]
+    · intro o ho
+      simp [uWorld] at ho
+      rcases ho with rfl
+      exact Owner.init_wellFormed ⟨0⟩ 64 64 (by decide) ⟨1⟩ ⟨2⟩
+    · decide
+  · exact Ctx.functional_of_nodup (by simp [uWorld])
+  · intro a o hfind
+    unfold uWorld at hfind
+    simp [Ctx.findOwner?, uOwner] at hfind
+    have ho : o = uOwner := hfind.2.symm
+    have ha : a = uOwner.alloc := hfind.1.symm
+    subst ha
+    subst o
+    exact ⟨Backend.empty 64, rfl, rfl⟩
+
 theorem uWorld_rel : uWorld.Rel := by
+
   refine ⟨?_, ?_⟩
   · refine ⟨?_, ?_⟩
     · intro o ho
@@ -171,6 +241,6 @@ theorem uProgram_rel : ∃ w, checkWorld uWorld uProgram = .ok w ∧ w.Rel := by
       rfl
     rw [hfalse] at hok
     cases hok
-  | ok w => exact ⟨w, rfl, checkWorld_rel uWorld w uProgram h uWorld_rel⟩
+  | ok w => exact ⟨w, rfl, checkWorld_rel uWorld w uProgram h uWorld_wf⟩
 
 end Cap

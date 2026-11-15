@@ -151,7 +151,12 @@
   `Ctx.update_functional` and `Ctx.free_functional` preserve it;
   `World.rel_of_wellFormed` bridges to the older `World.Rel`; and
   `World.write?_wellFormed`/`World.freeWith?_wellFormed` preserve the bundle.
-  Loans, disposal uniqueness and split commands are not in this layer yet.
+  `World.splitAtChecked` is the checked spatial split at an allocation's owner
+  (the owner and both children must be fresh for the context);
+  `World.splitAtChecked_sound` names the owner, the freshness facts and the
+  resulting context; `World.update_storage` keeps the heap agreement through a
+  same-length owner replacement; and `World.splitAtChecked_wf` preserves the
+  bundle. Loans and disposal uniqueness are not in this layer yet.
 - `Cap/Invariant.lean` is the stronger owner/context invariant: `Owner.LeavesWithin`
   (every leaf lies in the owner's allocation and extent), `Owner.WellFormed`
   (coverage, leaves within, disposal recorded), and `Ctx.WellFormed` (realization,
@@ -254,13 +259,16 @@
   Indices are ordinary `World` values; there is no hidden-index elaborator, so
   symbolic programs are not inferred.
 - `Cap/Unified.lean` is the first slice of the review's R1: a value-carrying
-  `UCmd` (`write allocation capability index byte`, `nop`), `World.writeChecked`
-  which checks the ledger's `writableB` and performs the backend write, and
-  `checkWorld` as checker and interpreter at once. `writeChecked_sound` names the
-  owner, guard, backend and replacement; `writeChecked_rel` and `checkWorld_rel`
-  preserve `World.Rel`; the concrete 64-byte run through this route snapshots 32
-  ones then 32 twos (`uRun_snapshot`) and its world remains related
-  (`uProgram_rel`). Splits, joins, loans and disposal are not yet in this language;
+  `UCmd` (`write allocation capability index byte`, `splitAt`, `nop`),
+  `World.writeChecked` which checks the ledger's `writableB` and performs the
+  backend write, `World.splitAtChecked` for spatial splits, and `checkWorld` as
+  checker and interpreter at once. `writeChecked_sound` names the owner, guard,
+  backend and replacement; `writeChecked_wf` and `checkWorld_wf` preserve the
+  world invariant (`World.WellFormed`) through writes and splits, and
+  `checkWorld_rel` derives `World.Rel` from it; the concrete 64-byte world is
+  well formed (`uWorld_wf`), the run through this route snapshots 32 ones then
+  32 twos (`uRun_snapshot`), and its world remains related (`uProgram_rel`).
+  Allocation, joins, loans, snapshot and disposal are not yet in this language;
   they remain in the owner layer.
 - `Cap/Certify.lean` records the kernel-checked certificate for a closed program:
 `certifiedProgram_checked : Checked certifiedOwner 12 certifiedProgram` by

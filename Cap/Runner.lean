@@ -76,6 +76,12 @@ theorem checkWorld_append : ∀ (cs ds : List UCmd) (w w' : World),
       | ok w'' =>
         simp only [List.cons_append, checkWorld, hw] at h ⊢
         exact ih ds w'' w' h
+    | splitAt a id id1 id2 k =>
+      cases hw : w.splitAtChecked a id id1 id2 k with
+      | error e => simp [checkWorld, hw] at h
+      | ok w'' =>
+        simp only [List.cons_append, checkWorld, hw] at h ⊢
+        exact ih ds w'' w' h
 
 /-- Sequential composition of certificates: the second program starts in the first
 program's post-world, and the commands are appended. -/
