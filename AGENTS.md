@@ -223,6 +223,9 @@
   the dynamic split transitions are covered by the `Cap.Ledger` theorems. The
   session now carries a `LoanCtx`; `fillGuarded?` requires `Policy.Writable` for
   every byte (owner guard plus a live lifetime) and preserves `Realizes`.
+  `Session.free?` removes the allocation only when no loan is outstanding
+  (`free_refused_of_loan`), and succeeds when the buffer is present
+  (`free_succeeds_of_no_loan`); `Heap.free?` removes the buffer.
 - `Cap/Bytes.lean` is the reference byte heap: buffers as `List UInt8` keyed by
   `AllocId`, with `read?`, `write?`, `fill?`, `snapshot?` and `alloc`. Proved:
   `write_get`, `write_preserves_length`, `write_ne`, the 64-byte example

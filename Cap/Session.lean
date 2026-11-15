@@ -95,6 +95,25 @@ theorem Session.fillGuarded_realizes {s s' : Session} {h' : Heap} {id : CapId}
     obtain ⟨rfl, rfl⟩ := hf
     exact hr
 
+/-- Free the allocation, refused while any loan is outstanding. -/
+def Session.free? (s : Session) : Option Heap :=
+  if s.loans.loans = [] then s.heap.free? s.owner.alloc else none
+
+/-- An outstanding loan refuses disposal. -/
+theorem Session.free_refused_of_loan {s : Session} (h : s.loans.loans ≠ []) :
+    s.free? = none := by
+  unfold Session.free?
+  simp [h]
+
+/-- With no loans and a present buffer, disposal succeeds. -/
+theorem Session.free_succeeds_of_no_loan {s : Session} (h : s.loans.loans = [])
+    (hex : s.heap.lookup? s.owner.alloc ≠ none) : ∃ h', s.free? = some h' := by
+  cases hl : s.heap.lookup? s.owner.alloc with
+  | none => exact absurd hl hex
+  | some xs =>
+    refine ⟨⟨s.heap.bufs.filter (fun p => p.1 ≠ s.owner.alloc)⟩, ?_⟩
+    simp [Session.free?, Heap.free?, h, hl]
+
 def Session.snapshot? (s : Session) : Option (List UInt8) :=
   s.heap.snapshot? s.owner.alloc
 

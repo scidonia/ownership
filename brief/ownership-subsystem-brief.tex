@@ -616,7 +616,8 @@ preserve it, and \texttt{fill?} takes the ledger's \texttt{Writable} guard for e
 writes. The 64-byte acceptance run is concrete and checked: \texttt{exampleRun\_snapshot}
 proves the snapshot is 32 ones followed by 32 twos. The session carries a loan
 context and \texttt{fillGuarded?} requires the policy for every byte (owner guard
-and a live lifetime). A two-level borrow model is implemented in
+and a live lifetime); \texttt{Session.free?} refuses disposal while a loan is
+outstanding and removes the buffer otherwise. A two-level borrow model is implemented in
 \file{Cap/Nested.lean}: \texttt{beginBorrow} suspends an active lender and
 \texttt{endBorrow} restores it, with \texttt{begin\_suspends},
 \texttt{end\_restores}, \texttt{suspended\_not\_writable} and

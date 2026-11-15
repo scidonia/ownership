@@ -70,6 +70,15 @@ def write? (h : Heap) (a : AllocId) (i : Nat) (v : UInt8) : Option Heap :=
   | none => none
   | some xs => if i < xs.length then some ⟨updateList h.bufs a (xs.set i v)⟩ else none
 
+/-- Remove an allocation from the heap; fails if it is absent. -/
+def free? (h : Heap) (a : AllocId) : Option Heap :=
+  if (h.lookup? a).isSome then some ⟨h.bufs.filter (fun p => p.1 ≠ a)⟩ else none
+
+theorem free?_none_of_absent {h : Heap} {a : AllocId} (hl : h.lookup? a = none) :
+    h.free? a = none := by
+  unfold free?
+  simp [hl]
+
 /-- A copy of allocation `a`'s bytes. Writes to the heap do not affect a snapshot
 already taken. -/
 def snapshot? (h : Heap) (a : AllocId) : Option (List UInt8) := lookup? h a
