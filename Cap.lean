@@ -20,3 +20,4 @@ import Cap.World
 import Cap.UnionFind
 import Cap.Unified
 import Cap.Disposal
+import Cap.HashSet

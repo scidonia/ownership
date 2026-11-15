@@ -169,6 +169,13 @@
   refused (`joinChildren?_alias_none`, `Owner.joinFraction_alias_none`). Arbitrary
   same-resource recombination, the common-partition normaliser and provenance beyond
   node shape are not implemented.
+- `Cap/HashSet.lean` is a linear-probing hash set under the discipline: one
+  eight-slot whole-share read--write allocation, `Table.insert` probing and writing
+  through the owner's `Writable` guard (derived from the example owner), a read-only
+  `contains`, and `insert_length` showing the table length is preserved. The
+  concrete colliding insertions 3, 11, 19 fill slots 3, 4, 5; `contains 11` is true,
+  `contains 4` is false, and the length stays 8. No resizing, deletion, hashing
+  theorem or complexity claim.
 - `Cap/UnionFind.lean` is the union-find example under the write discipline: one
   whole-share read--write leaf covers a four-element parent/rank allocation;
   `UF.writeParent` takes the owner's `Writable` guard as a proof and preserves the
