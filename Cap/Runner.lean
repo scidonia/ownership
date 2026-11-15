@@ -120,4 +120,69 @@ def Prog.seq (p : Prog pre) (q : Prog p.post) : Prog pre where
     rw [checkWorld_append p.cmds q.cmds pre p.post p.ok]
     exact q.ok
 
+/-- The canonical empty world: no owners, no backends. -/
+def World.emptyWorld : World :=
+  { ctx := { owners := [], D := 64, nextAlloc := 0 }, heaps := fun _ => none }
+
+/-- The empty world is well formed. -/
+theorem World.emptyWorld_wf : World.emptyWorld.WellFormed := by
+  refine ⟨?_, ?_, ?_⟩
+  · refine ⟨⟨?_, ?_⟩, ?_, ?_⟩
+    · intro o ho
+      simp [World.emptyWorld] at ho
+    · simp [World.emptyWorld]
+    · intro o ho
+      simp [World.emptyWorld] at ho
+    · decide
+  · apply Ctx.functional_of_nodup
+    simp [World.emptyWorld]
+  · intro a o hfind
+    simp [World.emptyWorld, Ctx.findOwner?] at hfind
+
+/-- A closed program: commands accepted from the empty world. The empty world is
+not exported for reuse; the only way to observe a closed program is its
+snapshot. -/
+structure ClosedProgram where
+  cmds : List UCmd
+  accepted : (checkWorld World.emptyWorld cmds).isOk = true
+
+/-- A closed program's run succeeds. -/
+theorem ClosedProgram.post_exists (p : ClosedProgram) :
+    ∃ w, checkWorld World.emptyWorld p.cmds = .ok w := by
+  cases h : checkWorld World.emptyWorld p.cmds with
+  | error e =>
+    have hfalse : (checkWorld World.emptyWorld p.cmds).isOk = false := by rw [h]; rfl
+    rw [p.accepted] at hfalse
+    cases hfalse
+  | ok w => exact ⟨w, rfl⟩
+
+/-- The final world of a closed program. -/
+noncomputable def ClosedProgram.post (p : ClosedProgram) : World :=
+  Classical.choose p.post_exists
+
+theorem ClosedProgram.post_ok (p : ClosedProgram) :
+    checkWorld World.emptyWorld p.cmds = .ok p.post :=
+  Classical.choose_spec p.post_exists
+
+/-- A closed program's final world is well formed. -/
+theorem ClosedProgram.wf (p : ClosedProgram) : p.post.WellFormed :=
+  checkWorld_wf _ _ _ p.post_ok World.emptyWorld_wf
+
+/-- The observation of a closed program: the bytes of one allocation's backend. -/
+noncomputable def ClosedProgram.snapshot (p : ClosedProgram) (a : AllocId) :
+    Option (List UInt8) :=
+  (p.post.heaps a).map (·.buf)
+
+/-- The 64-byte example as a closed program: allocate, fill both halves. -/
+def closed64 : ClosedProgram :=
+  ⟨[.alloc 64 ⟨1⟩ ⟨2⟩] ++ fillCmds ⟨1⟩ 0 32 1 ++ fillCmds ⟨1⟩ 32 32 2, by decide⟩
+
+/-- The closed 64-byte run snapshots 32 ones then 32 twos. -/
+theorem closed64_snapshot :
+    (checkWorld World.emptyWorld closed64.cmds).toOption.map
+      (fun w => (w.heaps ⟨0⟩).map (·.buf))
+      = some (some (List.replicate 32 (1 : UInt8) ++ List.replicate 32 (2 : UInt8))) := by
+  decide
+
 end Cap
+

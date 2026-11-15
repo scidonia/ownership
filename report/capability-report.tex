@@ -547,11 +547,21 @@ not establish a post-relation: a client can inhabit it with an unrelated functio
 \file{Cap/Runner.lean} gives the certificate-carrying form: syntax packaged with
 the checker's derivation.
 
+The closed form starts from the canonical empty world (no owners, no backends,
+well formed by \texttt{emptyWorld\_wf}); a \texttt{ClosedProgram} packages
+commands accepted from it, and the only observation is the snapshot of the final
+well-formed world. \texttt{closed64} is the allocate/fill example, with
+\texttt{closed64\_snapshot} proving the 32 ones then 32 twos.
+
 \begin{lstlisting}[caption={\file{Cap/Runner.lean}.}]
 structure Prog (pre : World) where
   post : World
   cmds : List UCmd
   ok : checkWorld pre cmds = .ok post
+
+structure ClosedProgram where
+  cmds : List UCmd
+  accepted : (checkWorld World.emptyWorld cmds).isOk = true
 
 def Prog.snapshot (p : Prog pre) (a : AllocId) : Option (List UInt8) :=
   (p.post.heaps a).map (fun b => b.buf)

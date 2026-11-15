@@ -255,7 +255,13 @@
   cannot exist without the checker's derivation; `Prog.snapshot` observes only an
   immutable buffer from the post-world. `checkWorld_append` runs an appended list
   from the first part's result, so `Prog.seq` composes certificates: the second
-  program starts in the first's post-world. `p64` is the concrete 64-byte
+  program starts in the first's post-world. `World.emptyWorld` (no owners, no
+  backends) is well formed (`emptyWorld_wf`); `ClosedProgram` packages commands
+  accepted from the empty world, with `post` chosen from the run, `post_ok`
+  spending the acceptance, `wf` giving the final world's invariant, and
+  `snapshot` the only observation; `closed64` is the concrete allocate/fill
+  example with `closed64_snapshot` proving the 32 ones then 32 twos. `p64` is the
+  concrete 64-byte
   certificate and `p64_snapshot` is its result. `World` is still public pure model data; the
   sealed runtime boundary, the complete invariant and the full command set remain
   the runner handoff's P0 work.
