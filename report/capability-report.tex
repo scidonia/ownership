@@ -513,9 +513,11 @@ their translation, is the next milestone. Also open: the full invariant (positiv
 shares, unique active identities, bounded footprints, split provenance, disposal
 entitlements, loans, storage agreement --- review R2); the freshness of child
 identifiers is now checked in the deep checker, but the owner-level dispatch and
-the invariant are not complete; integrated nested reborrowing with a real inner
-loan (R3, currently a standalone bookkeeping model); one uniform disposal rule
-across session, context and world (R4); the complete certified 64-byte trace (R5);
+the invariant are not complete; a begun loan is now bound to the lifetime it
+inserts and `endLoan` refuses while a recorded descendant loan exists, but a live
+inner reborrow integrated with the ledger is still absent (R3); one uniform
+disposal rule across world, context and session (R4, in progress); the complete
+certified 64-byte trace (R5);
 hidden-index elaboration for symbolic programs; specialisation; and concurrency,
 which the design defers.
 
