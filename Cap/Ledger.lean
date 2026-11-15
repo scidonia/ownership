@@ -423,6 +423,35 @@ theorem Owner.splitFraction?_alloc {o o' : Owner} {id id1 id2 : CapId} {q1 q2 : 
       cases h
       rfl
 
+/-- A spatial split keeps the owner's length. -/
+theorem Owner.splitAt?_len {o o' : Owner} {id id1 id2 : CapId} {k : Nat}
+    (h : o.splitAt? id id1 id2 k = some o') : o'.len = o.len := by
+  unfold Owner.splitAt? at h
+  cases hf : o.root.find? id with
+  | none => simp [hf] at h
+  | some c =>
+    cases hs : c.splitSpatial? id1 id2 k with
+    | none => simp [hf, hs] at h
+    | some t =>
+      simp [hf, hs] at h
+      cases h
+      rfl
+
+/-- A fractional split keeps the owner's length. -/
+theorem Owner.splitFraction?_len {o o' : Owner} {id id1 id2 : CapId} {q1 q2 : Nat}
+    {p1 : 0 < q1} {p2 : 0 < q2}
+    (h : o.splitFraction? id id1 id2 q1 q2 p1 p2 = some o') : o'.len = o.len := by
+  unfold Owner.splitFraction? at h
+  cases hf : o.root.find? id with
+  | none => simp [hf] at h
+  | some c =>
+    cases hs : c.splitFractionTree id1 id2 q1 q2 p1 p2 with
+    | none => simp [hf, hs] at h
+    | some t =>
+      simp [hf, hs] at h
+      cases h
+      rfl
+
 /-- A writable leaf must be active. -/
 theorem Owner.writable_active {o : Owner} {D : Nat} {id : CapId} {i : Nat}
     (h : o.Writable D id i) : ∃ c, o.root.find? id = some c ∧ c.state = .active := by
