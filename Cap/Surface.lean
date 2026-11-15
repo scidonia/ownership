@@ -4,9 +4,11 @@ A surface front end for the deep command language.
 `#own_prog o D { ... }` elaborates a small command syntax to a `List Cap.Cmd`
 and runs the executable checker `Cap.check` *at elaboration time*: an accepted
 program is logged and a refused one is a compile error carrying the checker's
-message. This is a front end, not a proof-producing elaborator: the command
-declares nothing and emits no proof term, so no theorem about the program is
-added to the environment. It is not the hidden-index elaborator of the design;
+message. `#own_prog` is a checking front end: it declares nothing. `#own_cert` is the
+proof-producing form: it translates the same surface commands to the deep list and
+declares `theorem n : Checked o D [..] := by unfold Checked; decide`, so the kernel
+checks a certificate for the closed program. Neither is the hidden-index elaborator
+of the design;
 there are no index refinements, no `Checked` hypotheses and no `Cmd`-level
 soundness facts derived here.
 
@@ -104,6 +106,37 @@ elab_rules : command
     let thm ← `(theorem $n : Checked $o $d $cs := by unfold Checked; decide)
     elabCommand thm
 
+/-- Translate a surface command to the deep command term syntax. -/
+private def capCmdToTerm : Syntax → TermElabM Syntax
+  | `(capCmd| write $id:term $i:term) => `(Cmd.write $id $i)
+  | `(capCmd| splitAt $id:term $id1:term $id2:term $k:term) =>
+    `(Cmd.splitAt $id $id1 $id2 $k)
+  | `(capCmd| splitFraction $id:term $id1:term $id2:term $q1:term $q2:term) =>
+    `(Cmd.splitFraction $id $id1 $id2 $q1 $q2 (by decide) (by decide))
+  | `(capCmd| nop) => `(Cmd.nop)
+  | stx => throwError "unrecognised capability command: {stx}"
+
+/-- Proof-producing surface form: translate the commands to the deep list syntax,
+then declare `theorem n : Checked o D [..] := by unfold Checked; decide`, which the
+ordinary command elaborator and the kernel check. -/
+syntax (name := ownCertSurface) "#own_cert " ident " : " term:max term:max "{" capCmd* "}" : command
+
+elab_rules : command
+  | `(command| #own_cert $n:ident : $o:term $d:term { $cmds:capCmd* }) => do
+    let terms ← liftTermElabM do
+      let mut ts : Array Syntax := #[]
+      for c in cmds do
+        ts := ts.push (← capCmdToTerm c)
+      pure ts
+    let rec mkList : List (TSyntax `term) → TermElabM (TSyntax `term)
+      | [] => `([])
+      | x :: xs => do
+        let rest ← mkList xs
+        `($x :: $rest)
+    let listStx ← liftTermElabM (mkList (terms.toList.map (fun s => ⟨s⟩)))
+    let thm ← `(theorem $n : Checked $o $d $listStx := by unfold Checked; decide)
+    elabCommand thm
+
 /-! ## A checked program
 
 The owner is one 64-byte read--write leaf of share 64; the program splits it in
@@ -122,8 +155,11 @@ def surfaceOwner : Owner :=
   nop
 }
 
-#own_cert surfaceCert : surfaceOwner 64 :=
-  [Cmd.splitAt ⟨0⟩ ⟨2⟩ ⟨3⟩ 32, Cmd.write ⟨2⟩ 5, Cmd.write ⟨3⟩ 40]
+#own_cert surfaceCert : surfaceOwner 64 {
+  splitAt ⟨0⟩ ⟨2⟩ ⟨3⟩ 32
+  write ⟨2⟩ 5
+  write ⟨3⟩ 40
+}
 
 #check surfaceCert
 
