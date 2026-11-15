@@ -445,6 +445,36 @@ Scope: writes and no-ops only. Splits, joins, loans and disposal remain in the
 owner layer and are not yet part of this language; the surface still targets the
 owner-layer checker.
 
+\section{World-indexed computations}
+
+\file{Cap/Indexed.lean} gives the computation type the design calls for: a
+program is indexed by its pre-world and by a function from its result to its
+post-world, and composition forces the continuation to start in the world the
+first computation produced.
+
+\begin{lstlisting}[caption={\file{Cap/Indexed.lean}.}]
+structure Ix (pre : World) (α : Type) (post : α -> World) where
+  run : (w : World) -> w = pre -> Option α
+
+def Ix.bind (m : Ix pre α post) (k : (a : α) -> Ix (post a) β post') :
+    Ix pre β post'
+  -- the continuation's pre-world is the first computation's post-world
+
+def writeIx ... : Ix pre Unit (fun _ => pre.writePure a b')
+  -- carries the ledger guard and the backend write; the post-index is the world
+  -- the guarded write produces
+
+def prog : Ix uWorld Unit (fun _ => post2)
+theorem prog_run : prog.run uWorld rfl = some ()
+theorem prog_sound :
+    checkWorld uWorld [UCmd.write ..., UCmd.write ...] = .ok post2
+\end{lstlisting}
+
+The two-write program is checked at elaboration: \texttt{prog\_run} computes its run and
+\texttt{prog\_sound} shows the executable route reaches the same post-world. The indices
+are ordinary `World` values; there is no elaborator inferring them for symbolic
+programs, and runtime mutation is still performed by the executable route.
+
 \section{Surface checker and certificates}
 
 \texttt{\#own\_prog} elaborates surface commands to the deep language and runs the

@@ -201,6 +201,14 @@
   disposal check and clears the backend. `write_rel` and `freeWith_rel` preserve the
   relation. It is a pure world, not the interpreter, an FFI path or a concurrency
   claim.
+- `Cap/Indexed.lean` is the world-indexed computation type: `Ix pre α post` runs
+  from `pre` and ends in `post a`; `ret` and `bind` thread the worlds, with the
+  continuation's precondition forced to be the first computation's post-world;
+  `writeIx` carries the ledger guard and the backend write, and its post-index is
+  the world the guarded write produces. `prog_run` computes a two-write program at
+  elaboration` and `prog_sound` shows `checkWorld` reaches the same post-world.
+  Indices are ordinary `World` values; there is no hidden-index elaborator, so
+  symbolic programs are not inferred.
 - `Cap/Unified.lean` is the first slice of the review's R1: a value-carrying
   `UCmd` (`write allocation capability index byte`, `nop`), `World.writeChecked`
   which checks the ledger's `writableB` and performs the backend write, and

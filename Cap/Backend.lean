@@ -39,6 +39,20 @@ structure Backend where
   len : Nat
   hlen : buf.length = len
 
+/-- Equality ignores the length proof, which is proof-irrelevant. -/
+instance : DecidableEq Backend := by
+  intro a b
+  by_cases h : a.buf = b.buf ∧ a.len = b.len
+  · refine isTrue ?_
+    cases a
+    cases b
+    simp_all
+  · refine isFalse ?_
+    intro hab
+    apply h
+    cases hab
+    exact ⟨rfl, rfl⟩
+
 /-- The reference buffer of an allocation, if present. -/
 def Backend.Rel (b : Backend) (h : Heap) (a : AllocId) : Prop :=
   h.lookup? a = some b.buf

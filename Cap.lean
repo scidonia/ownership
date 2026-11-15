@@ -21,3 +21,4 @@ import Cap.UnionFind
 import Cap.Unified
 import Cap.Disposal
 import Cap.HashSet
+import Cap.Indexed
