@@ -603,6 +603,54 @@ do nothing out of range rather than being refused. Closing this needs the store
 relation, the bounded-leaves fact, a \texttt{write\_in\_bounds} theorem that uses
 the guard, and execution through the unified route.
 
+\section{A second example: a linear-probing hash set}
+
+\file{Cap/HashSet.lean} puts a hash set under the write discipline: one eight-slot
+whole-share allocation, insertion probing from the hash position and writing
+through the owner's \texttt{Writable} guard, a read-only lookup, and
+\texttt{insert\_length} preserving the table length.
+
+\begin{lstlisting}[caption={\file{Cap/HashSet.lean}.}]
+def Table.write (t : Table) (i : Nat) (v : Option Nat)
+    (_hg : t.owner.Writable t.D ⟨1⟩ i) : Table
+
+def Table.insert (t : Table) (x : Nat) (howner : t.owner = hsOwner) (hD : t.D = 8)
+    : Nat -> Nat -> Table
+
+theorem Table.insert_length ... :
+    (t.insert x howner hD fuel start).slots.length = t.slots.length
+\end{lstlisting}
+
+The concrete colliding insertions 3, 11 and 19 fill slots 3, 4 and 5; membership
+of 11 is true, of 4 false, and the length stays 8. No resizing, deletion, hashing
+theorem or complexity claim is made.
+
+\section{Union-find partition semantics}
+
+\file{Cap/UFPartition.lean} is the algorithmic relation, separate from ownership:
+\texttt{Reachable} follows parent steps, \texttt{Same} holds when two nodes reach
+a common root and is proved reflexive, symmetric and transitive, and the simple
+union links one node directly under another.
+
+\begin{lstlisting}[caption={\file{Cap/UFPartition.lean}.}]
+inductive Reachable (p : Arr) : Nat -> Nat -> Prop
+  | one {a b} : step p a = b -> Reachable p a b
+  | more {a b c} : step p a = b -> Reachable p b c -> Reachable p a c
+
+def Same (p : Arr) (a b : Nat) : Prop :=
+  exists r, Reachable p a r ∧ Reachable p b r
+
+theorem same_refl, same_symm, same_trans
+theorem union_same ... : Same (union p a b) a b
+theorem uf3_eq : uf3 = [0, 0, 0, 2]
+theorem uf3_same_all : -- every pair below 4 is Same
+\end{lstlisting}
+
+This is the relation, not the algorithm library: the union is the direct
+\texttt{set b a}, with no root finding, rank, path compression or ownership
+integration, and no complexity claim. It supplies the partition facts an
+ownership-integrated union-find would need to preserve.
+
 \section{Measurements}
 
 \texttt{bench/CapTiming.lean} times the two pure models on the 64-byte

@@ -23,3 +23,4 @@ import Cap.Disposal
 import Cap.HashSet
 import Cap.Indexed
 import Cap.Runner
+import Cap.UFPartition

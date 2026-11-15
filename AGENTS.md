@@ -169,6 +169,13 @@
   refused (`joinChildren?_alias_none`, `Owner.joinFraction_alias_none`). Arbitrary
   same-resource recombination, the common-partition normaliser and provenance beyond
   node shape are not implemented.
+- `Cap/UFPartition.lean` is the functional union-find relation: `Reachable` by
+  parent steps, `Same` by a common root (proved reflexive, symmetric and
+  transitive), and the simple `union p a b := p.set b a`. It proves `union_same`
+  and conditional class preservation, the concrete trace ending at
+  `[0,0,0,2]`, and `uf3_same_all` (every pair below 4 is `Same`). It has no
+  ownership, no root finding, no rank and no path compression; the `set`-based
+  union is not the general union-find.
 - `Cap/HashSet.lean` is a linear-probing hash set under the discipline: one
   eight-slot whole-share read--write allocation, `Table.insert` probing and writing
   through the owner's `Writable` guard (derived from the example owner), a read-only
