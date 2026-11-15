@@ -138,8 +138,12 @@
   `BeginOK` collects the freshness, liveness and parent-liveness conditions and
   `begin` appends the lifetime and loan (`begin_mem_lifetime`, `begin_mem_loan`);
   `endLoan` removes a present loan whose lifetime is live
-  (`endLoan_removes_loan`). It has no heap and no capability ledger, and the loans
-  are not yet consulted by `Cap.Ledger`'s guards.
+  (`endLoan_removes_loan`). `BeginOK` now binds the loan to the lifetime it inserts
+  (`loan.lifetime = life.id`) and requires distinct lender and borrower
+  capabilities; `endLoan` refuses while a recorded loan descends from the ended
+  loan's lifetime (`hasDescendant_sound`, `endLoan_none_of_descendant`). It has no
+  heap and no capability ledger, and the loans are not yet consulted by
+  `Cap.Ledger`'s guards; a live inner reborrow is still not integrated.
 - `Cap/Context.lean` is the multi-owner context: a list of owners plus the
   denominator and a fresh-allocation counter. `Ctx.Realizes` requires every owner to
   be covered and the allocation identifiers to be distinct; `Ctx.alloc` appends a

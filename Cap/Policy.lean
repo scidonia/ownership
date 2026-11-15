@@ -114,36 +114,40 @@ theorem LoanCtx.live_false_of_endLoan {Γ Γ' : LoanCtx} {loanId : LoanId} {loan
   rw [hf] at he
   dsimp only at he
   rw [ite_eq_left hs] at he
-  cases he
-  have hg : ∀ x : Lifetime,
-      (if x.id = loan.lifetime then { x with state := .ended } else x).id = x.id := by
-    intro x
-    split <;> rfl
-  have hf' : Γ.lifetimes.find? (fun x => x.id = loan.lifetime) = some life := hf
-  have hfind : (Γ.lifetimes.map
-      (fun y => if y.id = loan.lifetime then { y with state := .ended } else y)).find?
-        (fun x => x.id = loan.lifetime) = some { life with state := .ended } := by
-    rw [findLifetime?_map _ _ hg, hf']
-    show some (if life.id = loan.lifetime then { life with state := .ended } else life)
-        = some { life with state := .ended }
-    rw [ite_eq_left hid]
-  unfold LoanCtx.live
-  unfold LoanCtx.findLifetime?
-  rw [hfind]
-  dsimp only
-  decide
+  cases hb : Γ.hasDescendant loan.lifetime with
+  | true => simp [hb] at he
+  | false =>
+    simp [hb] at he
+    cases he
+    have hg : ∀ x : Lifetime,
+        (if x.id = loan.lifetime then { x with state := .ended } else x).id = x.id := by
+      intro x
+      split <;> rfl
+    have hf' : Γ.lifetimes.find? (fun x => x.id = loan.lifetime) = some life := hf
+    have hfind : (Γ.lifetimes.map
+        (fun y => if y.id = loan.lifetime then { y with state := .ended } else y)).find?
+          (fun x => x.id = loan.lifetime) = some { life with state := .ended } := by
+      rw [findLifetime?_map _ _ hg, hf']
+      show some (if life.id = loan.lifetime then { life with state := .ended } else life)
+          = some { life with state := .ended }
+      rw [ite_eq_left hid]
+    unfold LoanCtx.live
+    unfold LoanCtx.findLifetime?
+    rw [hfind]
+    dsimp only
+    decide
 
-/-- After a successful `endLoan`, the policy built from the resulting context
-permits no write under the ended lifetime. -/
-theorem Policy.not_writable_after_endLoan {p : Policy} {o : Owner} {D : Nat}
-    {id : CapId} {i : Nat} {loanId : LoanId} {loan : Loan} {life : Lifetime}
-    {Γ' : LoanCtx}
-    (hl : p.loans.findLoan? loanId = some loan)
-    (hf : p.loans.findLifetime? loan.lifetime = some life)
-    (hs : life.state = .live)
-    (he : p.loans.endLoan loanId = some Γ') :
-    ¬ (Policy.Writable { loans := Γ' } o D id i loan.lifetime) := by
-  apply Policy.not_writable_of_dead
-  exact LoanCtx.live_false_of_endLoan hl hf hs he
+  /-- After a successful `endLoan`, the policy built from the resulting context
+  permits no write under the ended lifetime. -/
+  theorem Policy.not_writable_after_endLoan {p : Policy} {o : Owner} {D : Nat}
+      {id : CapId} {i : Nat} {loanId : LoanId} {loan : Loan} {life : Lifetime}
+      {Γ' : LoanCtx}
+      (hl : p.loans.findLoan? loanId = some loan)
+      (hf : p.loans.findLifetime? loan.lifetime = some life)
+      (hs : life.state = .live)
+      (he : p.loans.endLoan loanId = some Γ') :
+      ¬ (Policy.Writable { loans := Γ' } o D id i loan.lifetime) := by
+    apply Policy.not_writable_of_dead
+    exact LoanCtx.live_false_of_endLoan hl hf hs he
 
 end Cap
