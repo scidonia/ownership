@@ -181,6 +181,15 @@
   disposal check and clears the backend. `write_rel` and `freeWith_rel` preserve the
   relation. It is a pure world, not the interpreter, an FFI path or a concurrency
   claim.
+- `Cap/Unified.lean` is the first slice of the review's R1: a value-carrying
+  `UCmd` (`write allocation capability index byte`, `nop`), `World.writeChecked`
+  which checks the ledger's `writableB` and performs the backend write, and
+  `checkWorld` as checker and interpreter at once. `writeChecked_sound` names the
+  owner, guard, backend and replacement; `writeChecked_rel` and `checkWorld_rel`
+  preserve `World.Rel`; the concrete 64-byte run through this route snapshots 32
+  ones then 32 twos (`uRun_snapshot`) and its world remains related
+  (`uProgram_rel`). Splits, joins, loans and disposal are not yet in this language;
+  they remain in the owner layer.
 - `Cap/Certify.lean` records the kernel-checked certificate for a closed program:
 `certifiedProgram_checked : Checked certifiedOwner 12 certifiedProgram` by
 `unfold Checked; decide` (no axioms), and `certifiedProgram_covered` carrying

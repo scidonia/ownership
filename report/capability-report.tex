@@ -131,6 +131,7 @@ Module & Content \\
 \file{Cap/Surface.lean} & surface checker and certificate command \\
 \file{Cap/Certify.lean} & a kernel-checked closed-program certificate \\
 \file{Cap/UnionFind.lean} & union-find under the write discipline \\
+\file{Cap/Unified.lean} & value-carrying writes, checker as interpreter \\
 \bottomrule
 \end{tabular}
 \end{center}
@@ -339,6 +340,55 @@ theorem World.write_rel ... : w'.Rel
 theorem World.freeWith_rel ... : w'.Rel
 \end{lstlisting}
 
+\section{Unified certified execution (first slice)}
+
+The review's principal finding was that certification and execution were separate.
+The first slice unifies them for byte writes: a command carries the allocation, the
+capability, the index and the value; the checker is the interpreter over the world;
+and acceptance names the guard while preserving the world relation.
+
+\begin{lstlisting}[caption={\file{Cap/Unified.lean}.}]
+inductive UCmd where
+  | write (a : AllocId) (id : CapId) (i : Nat) (v : UInt8)
+  | nop
+
+def World.writeChecked (w : World) (a : AllocId) (id : CapId) (i : Nat) (v : UInt8) :
+    Except String World :=
+  match w.ctx.findOwner? a with
+  | none => .error "write: no owner for the allocation"
+  | some o =>
+    match w.heaps a with
+    | none => .error "write: no backend for the allocation"
+    | some b =>
+      if _hw : o.writableB w.ctx.D id i then
+        match b.write i v with
+        | none => .error "write: index out of range"
+        | some b' =>
+          .ok { w with heaps := fun x => if x = a then some b' else w.heaps x }
+      else .error "write: capability is not writable at this index"
+
+def checkWorld : World -> List UCmd -> Except String World
+  -- checker and interpreter: an accepted program returns the world it executed
+
+theorem World.writeChecked_sound ... : -- names the owner, its guard, the backend and the replacement
+theorem World.writeChecked_rel ... : w'.Rel
+theorem checkWorld_rel ... : w'.Rel
+\end{lstlisting}
+
+\begin{lstlisting}[caption={The 64-byte run through the certified route.}]
+def uProgram : List UCmd := fillCmds ⟨1⟩ 0 32 1 ++ fillCmds ⟨1⟩ 32 32 2
+
+theorem uRun_snapshot :
+    uRun = some (List.replicate 32 (1 : UInt8) ++ List.replicate 32 (2 : UInt8)) := by
+  decide
+
+theorem uProgram_rel : exists w, checkWorld uWorld uProgram = .ok w ∧ w.Rel
+\end{lstlisting}
+
+Scope: writes and no-ops only. Splits, joins, loans and disposal remain in the
+owner layer and are not yet part of this language; the surface still targets the
+owner-layer checker.
+
 \section{Surface checker and certificates}
 
 \texttt{\#own\_prog} elaborates surface commands to the deep language and runs the
@@ -454,10 +504,11 @@ union-find run under the guard & UnionFind \\
 \end{center}
 
 The principal gap is the connection between certification and execution (review
-R1): `Cap.Core` checks a permission language with no values or heap, and
-`Cap.Exec` runs a different instruction language without consulting a certificate.
-The certificate therefore establishes checker acceptance and coverage, not that a
-certified program executes safely and cleans up. Unifying the languages, or proving
+R1). `Cap.Unified` now covers byte writes: one language with values, a checker that
+is also the interpreter, and preservation of the world relation, with the 64-byte
+run through that route. Splits, joins, loans and disposal are not yet in that
+language, so the certificate still does not establish that a complete run (split,
+borrow, join, free) executes safely and cleans up. Unifying the languages, or proving
 their translation, is the next milestone. Also open: the full invariant (positive
 shares, unique active identities, bounded footprints, split provenance, disposal
 entitlements, loans, storage agreement --- review R2); the freshness of child
