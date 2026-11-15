@@ -26,3 +26,4 @@ import Cap.Runner
 import Cap.UFPartition
 import Cap.Invariant
 import Cap.WorldInvariant
+import Cap.UFCompress

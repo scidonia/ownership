@@ -718,6 +718,24 @@ This is the relation, not the algorithm library: the union is the direct
 integration, and no complexity claim. It supplies the partition facts an
 ownership-integrated union-find would need to preserve.
 
+\section{Root finding and compression}
+
+\file{Cap/UFCompress.lean} adds bounded root finding and one-step compression to
+the functional model.
+
+\begin{lstlisting}[caption={\file{Cap/UFCompress.lean}.}]
+def findRootF (p : Arr) : Nat -> Nat -> Nat
+def StopsAt (p : Arr) (fuel start : Nat) : Prop
+theorem findRootF_root ... : IsRoot p (findRootF p fuel start)
+theorem findRootF_reachable ... : Reach p start (findRootF p fuel start)
+def compress (p : Arr) (x r : Nat) : Arr := p.set x r
+theorem compress_same_sound ... : -- compression from a reachable root creates no new Same pairs
+\end{lstlisting}
+
+This is one-step compression on the functional model: not full path compression,
+not the ownership layer, and no termination or complexity claim. It supplies the
+algorithmic facts an ownership-integrated union-find would preserve.
+
 \section{Measurements}
 
 \texttt{bench/CapTiming.lean} times the two pure models on the 64-byte

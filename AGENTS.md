@@ -189,6 +189,14 @@
   refused (`joinChildren?_alias_none`, `Owner.joinFraction_alias_none`). Arbitrary
   same-resource recombination, the common-partition normaliser and provenance beyond
   node shape are not implemented.
+- `Cap/UFCompress.lean` adds bounded root finding and one-step compression to the
+  functional model: `findRootF` chases parents with fuel, `StopsAt` records a
+  reached fixed point, `findRootF_root`/`findRootF_reachable` give the root and
+  reachability facts, `compress p x r := p.set x r`, and
+  `compress_same_sound` shows a compression from a reachable root creates no new
+  `Same` pairs (with the reach-avoiding lemmas alongside). It is one-step
+  compression on the functional model: not full path compression, not the
+  ownership layer, and no termination or complexity claim.
 - `Cap/UFPartition.lean` is the functional union-find relation: `Reachable` by
   parent steps, `Same` by a common root (proved reflexive, symmetric and
   transitive), and the simple `union p a b := p.set b a`. It proves `union_same`
