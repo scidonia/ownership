@@ -223,8 +223,10 @@
 - `Cap/Runner.lean` is the sealed certificate form the runner handoff accepts:
   `Prog pre` packages a command list with `checkWorld pre cmds = .ok post`, so it
   cannot exist without the checker's derivation; `Prog.snapshot` observes only an
-  immutable buffer from the post-world. `p64` is the concrete 64-byte certificate
-  and `p64_snapshot` is its result. `World` is still public pure model data; the
+  immutable buffer from the post-world. `checkWorld_append` runs an appended list
+  from the first part's result, so `Prog.seq` composes certificates: the second
+  program starts in the first's post-world. `p64` is the concrete 64-byte
+  certificate and `p64_snapshot` is its result. `World` is still public pure model data; the
   sealed runtime boundary, the complete invariant and the full command set remain
   the runner handoff's P0 work.
 - `Cap/Indexed.lean` is the world-indexed computation type: `Ix pre α post` runs

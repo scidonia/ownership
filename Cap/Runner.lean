@@ -54,4 +54,36 @@ theorem p64_snapshot :
   unfold Prog.snapshot p64
   exact hrun
 
+/-- Running an appended command list continues from the first part's result. -/
+theorem checkWorld_append : ∀ (cs ds : List UCmd) (w w' : World),
+    checkWorld w cs = .ok w' → checkWorld w (cs ++ ds) = checkWorld w' ds := by
+  intro cs
+  induction cs with
+  | nil =>
+    intro ds w w' h
+    simp [checkWorld] at h
+    cases h
+    rfl
+  | cons c cs ih =>
+    intro ds w w' h
+    cases c with
+    | nop =>
+      simp only [List.cons_append, checkWorld] at h ⊢
+      exact ih ds w w' h
+    | write a id i v =>
+      cases hw : w.writeChecked a id i v with
+      | error e => simp [checkWorld, hw] at h
+      | ok w'' =>
+        simp only [List.cons_append, checkWorld, hw] at h ⊢
+        exact ih ds w'' w' h
+
+/-- Sequential composition of certificates: the second program starts in the first
+program's post-world, and the commands are appended. -/
+def Prog.seq (p : Prog pre) (q : Prog p.post) : Prog pre where
+  post := q.post
+  cmds := p.cmds ++ q.cmds
+  ok := by
+    rw [checkWorld_append p.cmds q.cmds pre p.post p.ok]
+    exact q.ok
+
 end Cap

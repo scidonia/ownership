@@ -534,7 +534,9 @@ theorem p64_snapshot : p64.snapshot ⟨0⟩ = some (32 ones ++ 32 twos)
 \end{lstlisting}
 
 A `Prog` cannot exist without the checker's result, and the only observation is an
-immutable snapshot from the post-world. \texttt{Cap/Indexed.lean}'s `Ix` is a
+immutable snapshot from the post-world. Certificates compose: \texttt{checkWorld\_append}
+runs an appended command list from the first part's result, and \texttt{Prog.seq} makes
+the second program start in the first one's post-world. \texttt{Cap/Indexed.lean}'s `Ix` is a
 specification type by comparison: its `run` field alone does not establish a
 post-relation, which is now stated in that module. `World` remains public pure
 model data, so the sealed runtime boundary, the complete invariant and the full
