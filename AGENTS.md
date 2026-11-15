@@ -162,6 +162,15 @@
   refused (`joinChildren?_alias_none`, `Owner.joinFraction_alias_none`). Arbitrary
   same-resource recombination, the common-partition normaliser and provenance beyond
   node shape are not implemented.
+- `Cap/UnionFind.lean` is the union-find example under the write discipline: one
+  whole-share read--write leaf covers a four-element parent/rank allocation;
+  `UF.writeParent` takes the owner's `Writable` guard as a proof and preserves the
+  store length; `ufOwner_writable` supplies the guard for in-range indices and
+  `ufOwner_not_writable_4` shows index 4 has none. The concrete run (attach 1 under
+  0, 3 under 2, 2 under 0) has parent `[0,0,0,2]` (`uf3_parent`), every `findRoot`
+  returns 0 (`uf3_find_all`), and the lengths are preserved (`uf3_lengths`). It is
+  an example of the discipline, not a verified union-find against an
+  equivalence-class model.
 - `Cap/World.lean` is the world of owners and mutable backends: the heap map is a
   function from allocations to `Backend`, `World.Rel` combines `Ctx.Realizes` with
   the per-owner buffer length, `write?` takes the owner's `Writable` guard as a

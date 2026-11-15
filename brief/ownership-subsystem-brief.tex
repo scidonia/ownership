@@ -797,6 +797,18 @@ closed runner; (7) hidden-index elaborator; (8) optional retirement and scope
 recovery; (9) mutable interpreter; (10) specialisation and integrations. The
 first useful milestone is stage 4; the first programmer-facing one is stage 7.
 
+\section{A union-find example}
+
+\file{Cap/UnionFind.lean} puts union-find under the write discipline: one
+whole-share read--write leaf covers a four-element parent/rank allocation, and every
+write is \texttt{UF.writeParent}, which takes the owner's \texttt{Writable} guard
+as a proof and preserves the store length. In-range indices have the guard
+(\texttt{ufOwner\_writable}); index 4 does not
+(\texttt{ufOwner\_not\_writable\_4}). The concrete three-union run ends with
+parent \texttt{[0,0,0,2]}, every \texttt{findRoot} returns 0, and both arrays keep
+their length. It is an example of the discipline, not a verified union-find against
+an equivalence-class model.
+
 \section{Observed model timings}
 
 \file{bench/CapTiming.lean} times the two pure models on the 64-byte
