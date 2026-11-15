@@ -182,7 +182,10 @@ shows the certificate it would have to emit, not proof-producing elaboration.
   positive example splits a 64-byte leaf, writes both halves and splits the left
   half 32/32. `bench/CapSurfaceReject.lean` holds the out-of-range write, the
   out-of-range split and the non-summing shares, each refused with its message. It
-  is not the hidden-index elaborator of the design.
+  is not the hidden-index elaborator of the design. `#own_cert n : o D := cs`
+  declares `theorem n : Checked o D cs := by unfold Checked; decide` through the
+  ordinary command elaborator, so the kernel checks the certificate; `surfaceCert`
+  is a concrete instance.
 - `Cap/Core.lean` is the deep command language and its executable checker:
   `Cmd` for write, spatial split, fractional split and no-op; `Owner.writableB` with
   `writableB_sound`; `check` returning `Except String Owner`; and `Checked` as its

@@ -93,6 +93,17 @@ elab_rules : command
     else
       throwError "capability program did not evaluate to a checker result: {result}"
 
+/-- Proof-producing form for a program written in the deep command list: elaborate
+`theorem n : Checked o D cs := by unfold Checked; decide` through the ordinary
+command elaborator, so the kernel checks the certificate. A refused program makes
+`decide` fail, which is a compile error. -/
+syntax (name := ownCert) "#own_cert " ident " : " term:max term:max ":=" term:max : command
+
+elab_rules : command
+  | `(command| #own_cert $n:ident : $o:term $d:term := $cs:term) => do
+    let thm ← `(theorem $n : Checked $o $d $cs := by unfold Checked; decide)
+    elabCommand thm
+
 /-! ## A checked program
 
 The owner is one 64-byte read--write leaf of share 64; the program splits it in
@@ -110,5 +121,10 @@ def surfaceOwner : Owner :=
   splitFraction ⟨2⟩ ⟨4⟩ ⟨5⟩ 32 32
   nop
 }
+
+#own_cert surfaceCert : surfaceOwner 64 :=
+  [Cmd.splitAt ⟨0⟩ ⟨2⟩ ⟨3⟩ 32, Cmd.write ⟨2⟩ 5, Cmd.write ⟨3⟩ 40]
+
+#check surfaceCert
 
 end Cap

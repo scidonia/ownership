@@ -678,7 +678,9 @@ splits and no-ops, elaborating to the deep commands and running the checker at
 elaboration time; acceptance is logged, refusal is a compile error with the
 checker's message, and no proof term is emitted. The refused programmes
 (out-of-range write, out-of-range split, non-summing shares) live in
-\file{bench/CapSurfaceReject.lean}.
+\file{bench/CapSurfaceReject.lean}. \texttt{\#own\_cert n : o D := cs} declares
+\texttt{theorem n : Checked o D cs := by unfold Checked; decide}, so the kernel
+checks the certificate; \texttt{surfaceCert} is a concrete instance.
 
 An instruction interpreter over the backend is implemented in
 \file{Cap/Exec.lean}: \texttt{fill} and \texttt{snapshot} instructions,
