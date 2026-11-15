@@ -137,6 +137,24 @@ Module & Content \\
 \end{tabular}
 \end{center}
 
+\section{Changes since the reviewed revision}
+
+\begin{center}
+\begin{tabular}{@{}lp{0.60\textwidth}@{}}
+\toprule
+Review item & Change in this revision \\
+\midrule
+R1 & \file{Cap/Unified.lean}: value-carrying writes with the checker as interpreter; world-relation preservation; the 64-byte run through that route. Splits, snapshot, free and loans are not yet in this language. \\
+R2 & Access-capability ids separated from internal split-node provenance; \texttt{Owner.FreshIds} and a freshness branch in the checker refusing duplicate and reused-parent identifiers (\texttt{msgFresh}); regressions in \texttt{bench/CapFreshness.lean}. The full invariant is still open. \\
+R3 & A begun loan is bound to the lifetime it inserts and requires distinct lender/borrower capabilities; \texttt{endLoan} refuses while a recorded descendant loan exists. A live inner reborrow integrated with the ledger is still absent. \\
+R4 & \file{Cap/Disposal.lean}: one \texttt{Legal} predicate (entitlement, coverage, reconstructed root, empty loans) and a checked \texttt{free?}; not yet a command of the unified language. \\
+R5 & Not done: the complete split/borrow/fill/read/rejoin/restore/snapshot/free trace. \\
+Validation & \texttt{scripts/check\_cap\_controls.sh} requires each negative fixture to fail with its intended diagnostic; \texttt{check\_all} runs it. \\
+Examples & Union-find and a linear-probing hash set under the guard API, with their limits stated. \\
+\bottomrule
+\end{tabular}
+\end{center}
+
 \section{Exact shares and footprints}
 
 A context fixes a denominator $D$; a share is a positive numerator $q \le D$. A
@@ -238,6 +256,17 @@ def Owner.Writable (o : Owner) (D : Nat) (id : CapId) (i : Nat) : Prop :=
 
 theorem Owner.splitFraction_covered ... : o'.Covered D
 theorem Owner.splitAt_covered ... : o'.Covered D
+\end{lstlisting}
+
+Capability identifiers are collected from the tree's leaves only; internal split
+nodes record provenance and are excluded. A split must use \texttt{Owner.FreshIds}:
+two distinct child identifiers absent from the owner, which includes the parent.
+The deep checker enforces this with \texttt{msgFresh}, so duplicate children and a
+reused parent identifier are refused:
+
+\begin{lstlisting}[caption={\file{Cap/Core.lean}: freshness.}]
+theorem splitAt_checked_fresh ... : o.FreshIds id1 id2
+theorem splitFraction_checked_fresh ... : o.FreshIds id1 id2
 \end{lstlisting}
 
 The join is sibling-only, refuses aliases, and preserves coverage:
@@ -502,6 +531,21 @@ lookups reach 0, and the arrays keep their lengths. What it does not establish: 
 union-find correctness theorem (partition refinement, path-compression semantics,
 complexity), or rank balancing --- the example attaches by explicit choice.
 
+\subsection*{What the examples enforce, and what they do not}
+
+The hash set in \file{Cap/HashSet.lean} has the same status. Both examples require
+a \texttt{Writable} proof for every write, supplied from a whole-share owner, so
+the write is proof-carrying at the owner layer. But the proof is not yet
+load-bearing: in both write functions the guard parameter is unused; neither
+structure records that the store's length and allocation agree with the owner
+(\texttt{parent.length = owner.len}, \texttt{slots.length = owner.len}); and
+neither algorithm runs through \texttt{World.writeChecked}/\texttt{checkWorld}, so
+\texttt{World.Rel} is not maintained for them. A caller could pair a writable owner
+with a store of another length or allocation, and \texttt{List.set} would silently
+do nothing out of range rather than being refused. Closing this needs the store
+relation, the bounded-leaves fact, a \texttt{write\_in\_bounds} theorem that uses
+the guard, and execution through the unified route.
+
 \section{Measurements}
 
 \texttt{bench/CapTiming.lean} times the two pure models on the 64-byte
@@ -525,10 +569,18 @@ loan bookkeeping, policy liveness, nested restore & Loans, Policy, Nested \\
 reference heap, 64-byte run, snapshot independence & Bytes, Session \\
 backend refinement, interpreter agreement, world relation & Backend, Exec, World \\
 deep checker soundness, coverage, surface certificate & Core, Surface, Certify \\
-union-find run under the guard & UnionFind \\
+union-find and hash-set runs under the guard & UnionFind, HashSet \\
+loan-lifetime binding and descendant refusal & Loans, Policy \\
+one legal-disposal predicate and checked free & Disposal \\
+unified value-carrying writes and world preservation & Unified \\
+identifier roles and split freshness & Ledger, Context, Core \\
 \bottomrule
 \end{tabular}
 \end{center}
+
+The two algorithms are owner-layer examples whose guard is not yet load-bearing and
+whose store is not tied to the owner by an invariant; they do not run through the
+unified execution. That tightening is part of R2 and R1 together.
 
 The principal gap is the connection between certification and execution (review
 R1). `Cap.Unified` now covers byte writes: one language with values, a checker that
