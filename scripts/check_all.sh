@@ -30,6 +30,11 @@ run nix develop -c lake build Ownership
 run nix develop -c lake build OwnershipLcnf
 run nix develop -c lake build OwnershipTest
 run nix develop -c lake build Cap
+echo "== capability controls =="
+if ! bash scripts/check_cap_controls.sh; then
+  echo "FAILED: capability controls" >&2
+  fail=1
+fi
 run nix develop -c lake env lean scripts/check_axioms.lean
 run nix develop -c bash scripts/check_claims.sh
 run nix develop -c bash scripts/check_claims.sh --self-test

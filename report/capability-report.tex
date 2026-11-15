@@ -547,6 +547,13 @@ nix develop -c lake env lean bench/NatThunkAdmission.lean
 nix develop -c lake env lean bench/CapNegative.lean
 nix develop -c lake env lean bench/CapSurfaceReject.lean   # intended refusals
 nix develop -c lake env lean bench/CapTiming.lean
+
+# positive and negative capability fixtures, with their intended diagnostics
+nix develop -c bash scripts/check_cap_controls.sh
 \end{lstlisting}
+
+The harness is part of \texttt{check\_all}: the positive fixtures must elaborate,
+and each negative fixture must fail with its intended diagnostic rather than an
+unrelated error.
 
 \end{document}

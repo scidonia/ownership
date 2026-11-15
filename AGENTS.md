@@ -258,6 +258,10 @@ shows the certificate it would have to emit, not proof-producing elaboration.
   checksums, interpreted evaluation. These are measurements of the two models'
   operation sequences, not of an interpreter, an optimised backend, FFI or
   allocation/GC, and they are environment-dependent.
+- `scripts/check_cap_controls.sh` runs the capability fixtures with their intended
+  diagnostics: the admission, prototype and freshness positives must elaborate, and
+  the alias/axiom/wrong-domain/surface/reflective negatives must fail with the
+  named message. `scripts/check_all.sh` includes it.
 - `bench/CapNegative.lean` holds the checked negative controls: a read-only, a
   consumed and a half-share leaf cannot authorise a write, and one identifier is
   not a join pair.
