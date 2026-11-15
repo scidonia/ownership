@@ -162,6 +162,13 @@
   refused (`joinChildren?_alias_none`, `Owner.joinFraction_alias_none`). Arbitrary
   same-resource recombination, the common-partition normaliser and provenance beyond
   node shape are not implemented.
+- `Cap/World.lean` is the world of owners and mutable backends: the heap map is a
+  function from allocations to `Backend`, `World.Rel` combines `Ctx.Realizes` with
+  the per-owner buffer length, `write?` takes the owner's `Writable` guard as a
+  proof and replaces the backend, and `freeWith?` dispatches through the context's
+  disposal check and clears the backend. `write_rel` and `freeWith_rel` preserve the
+  relation. It is a pure world, not the interpreter, an FFI path or a concurrency
+  claim.
 - `Cap/Certify.lean` records the kernel-checked certificate for a closed program:
 `certifiedProgram_checked : Checked certifiedOwner 12 certifiedProgram` by
 `unfold Checked; decide` (no axioms), and `certifiedProgram_covered` carrying

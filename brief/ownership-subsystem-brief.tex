@@ -662,6 +662,11 @@ succeeding transitions, \texttt{check\_covered} carries coverage through a run,
 and a read-only write is refused. This is a deep syntax and checker, not the
 hidden-index surface elaborator and not a heap semantics.
 
+A world of owners and mutable backends is implemented in \file{Cap/World.lean}:
+a functional heap map, a relation combining context coverage with per-owner buffer
+length, a guarded write that replaces the backend, a disposal that clears it, and
+preservation of the relation by both.
+
 A closed program's certificate is recorded in \file{Cap/Certify.lean}:
 \texttt{certifiedProgram\_checked} is proved by \texttt{decide} with no axioms,
 and \texttt{certifiedProgram\_covered} carries coverage through it. The surface
@@ -861,6 +866,7 @@ File & Role \\
 \file{Cap/Core.lean} & deep command language and executable checker \\
 \file{Cap/Surface.lean} & surface commands checked at elaboration \\
 \file{Cap/Certify.lean} & a kernel-checked certificate for a closed program \\
+\file{Cap/World.lean} & owners plus mutable backends, guarded write and disposal \\
 \file{Cap/Join.lean} & sibling-only fractional join \\
 \file{Cap/Code.lean} & the code universe and \texttt{El} \\
 \file{Cap/Admission.lean} & \texttt{Bij}, \texttt{SafeValue}, \texttt{SafeType}, the gate \\
