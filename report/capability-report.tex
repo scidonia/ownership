@@ -408,6 +408,33 @@ inheritance. \texttt{DisposalPresent} is deliberately a disjunction (a leaf, or 
 from the tree's ids) so that initialisation is unconditional; the strict reading is
 recorded separately.
 
+\section{The world-level invariant}
+
+\file{Cap/WorldInvariant.lean} bundles the three components needed above the
+owner/context layer: the context invariant, owner uniqueness per allocation, and
+storage agreement.
+
+\begin{lstlisting}[caption={\file{Cap/WorldInvariant.lean}.}]
+def Ctx.Functional (C : Ctx) : Prop :=
+  forall a o o', C.findOwner? a = some o -> o' ∈ C.owners -> o'.alloc = a -> o' = o
+
+def World.StorageMatches (w : World) : Prop :=
+  forall a o, w.ctx.findOwner? a = some o ->
+    exists b, w.heaps a = some b ∧ b.buf.length = o.len
+
+def World.WellFormed (w : World) : Prop :=
+  Ctx.WellFormed w.ctx ∧ Ctx.Functional w.ctx ∧ w.StorageMatches
+
+theorem World.rel_of_wellFormed : w.WellFormed -> w.Rel
+theorem World.write?_wellFormed ... : w'.WellFormed
+theorem World.freeWith?_wellFormed ... : w'.WellFormed
+\end{lstlisting}
+
+Functionality is derived from distinct allocation identifiers
+(\texttt{functional\_of\_nodup}); update and free preserve it; write and disposal
+preserve the bundle with no additional hypotheses. Loans, global disposal
+uniqueness and the split commands are not yet part of this layer.
+
 \section{One legal disposal rule}
 
 \file{Cap/Disposal.lean} gives the single predicate under which an allocation may

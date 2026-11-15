@@ -144,6 +144,14 @@
   loan's lifetime (`hasDescendant_sound`, `endLoan_none_of_descendant`). It has no
   heap and no capability ledger, and the loans are not yet consulted by
   `Cap.Ledger`'s guards; a live inner reborrow is still not integrated.
+- `Cap/WorldInvariant.lean` bundles the world invariant: `Ctx.WellFormed`,
+  `Ctx.Functional` (each allocation resolves to at most one owner) and
+  `World.StorageMatches` (the found owner has a backend of its length).
+  `Ctx.functional_of_nodup` derives functionality from distinct allocation ids;
+  `Ctx.update_functional` and `Ctx.free_functional` preserve it;
+  `World.rel_of_wellFormed` bridges to the older `World.Rel`; and
+  `World.write?_wellFormed`/`World.freeWith?_wellFormed` preserve the bundle.
+  Loans, disposal uniqueness and split commands are not in this layer yet.
 - `Cap/Invariant.lean` is the stronger owner/context invariant: `Owner.LeavesWithin`
   (every leaf lies in the owner's allocation and extent), `Owner.WellFormed`
   (coverage, leaves within, disposal recorded), and `Ctx.WellFormed` (realization,

@@ -25,3 +25,4 @@ import Cap.Indexed
 import Cap.Runner
 import Cap.UFPartition
 import Cap.Invariant
+import Cap.WorldInvariant
