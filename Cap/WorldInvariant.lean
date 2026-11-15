@@ -413,4 +413,106 @@ theorem World.allocChecked_wf {w w' : World} {n : Nat} {rootId disposal : CapId}
   · rw [dif_neg hf] at h
     nomatch h
 
+/-- A checked fractional split at the owner of an allocation. -/
+def World.splitFractionChecked (w : World) (a : AllocId) (id id1 id2 : CapId)
+    (q1 q2 : Nat) (p1 : 0 < q1) (p2 : 0 < q2) : Except String World :=
+  match w.ctx.findOwner? a with
+  | none => .error "split: no owner for the allocation"
+  | some o =>
+    if o.FreshIds id1 id2 ∧ id1 ∉ w.ctx.ids ∧ id2 ∉ w.ctx.ids then
+      match w.ctx.splitFractionOwner? o id id1 id2 q1 q2 p1 p2 with
+      | some C' => .ok { w with ctx := C' }
+      | none => .error "split: refused"
+    else .error "split: capability identifiers are not fresh"
+
+/-- A successful fractional split preserves the world invariant. -/
+theorem World.splitFractionChecked_wf {w w' : World} {a : AllocId} {id id1 id2 : CapId}
+    {q1 q2 : Nat} {p1 : 0 < q1} {p2 : 0 < q2}
+    (h : w.splitFractionChecked a id id1 id2 q1 q2 p1 p2 = .ok w')
+    (hwf : w.WellFormed) : w'.WellFormed := by
+  unfold World.splitFractionChecked at h
+  split at h
+  · simp at h
+  · rename_i o hf'
+    split at h
+    · rename_i hfr
+      split at h
+      · rename_i C' hs
+        simp only [Except.ok.injEq] at h
+        cases h
+        have hmem : o ∈ w.ctx.owners := List.mem_of_find?_eq_some hf'
+        have hs' := hs
+        unfold Ctx.splitFractionOwner? at hs
+        cases ho : o.splitFraction? id id1 id2 q1 q2 p1 p2 with
+        | none => simp [ho] at hs
+        | some o' =>
+          simp only [ho, Option.map_some, Option.some.injEq] at hs
+          subst C'
+          have hwfC : (w.ctx.update o.alloc o').WellFormed :=
+            Ctx.splitFractionOwner_wellFormed hwf.1 hmem hfr.1 hfr.2.1 hfr.2.2 hs'
+          have ho'alloc : o'.alloc = o.alloc := Owner.splitFraction?_alloc ho
+          have ho'len : o'.len = o.len := Owner.splitFraction?_len ho
+          have hfun : (w.ctx.update o.alloc o').Functional :=
+            Ctx.update_functional ho'alloc hwf.1.1.2
+          have hoalloc : o.alloc = a := by
+            have := List.find?_some (p := fun x : Owner => decide (x.alloc = a))
+              (by simpa [Ctx.findOwner?] using hf')
+            simpa using this
+          have hfa : w.ctx.findOwner? o.alloc = some o := by
+            simpa [hoalloc] using hf'
+          exact ⟨hwfC, hfun, World.update_storage hwf hfa ho'alloc ho'len⟩
+      · simp at h
+    · simp at h
+
+/-- A checked fractional join at the owner of an allocation; the fresh
+identifier must not occur in the context. -/
+def World.joinChecked (w : World) (a : AllocId) (node newId : CapId) :
+    Except String World :=
+  match w.ctx.findOwner? a with
+  | none => .error "join: no owner for the allocation"
+  | some o =>
+    if newId ∉ w.ctx.ids then
+      match w.ctx.joinFractionOwner? o node newId with
+      | some C' => .ok { w with ctx := C' }
+      | none => .error "join: refused"
+    else .error "join: capability identifier is not fresh"
+
+/-- A successful fractional join preserves the world invariant. -/
+theorem World.joinChecked_wf {w w' : World} {a : AllocId} {node newId : CapId}
+    (h : w.joinChecked a node newId = .ok w') (hwf : w.WellFormed) :
+    w'.WellFormed := by
+  unfold World.joinChecked at h
+  split at h
+  · simp at h
+  · rename_i o hf'
+    split at h
+    · rename_i hfresh
+      split at h
+      · rename_i C' hs
+        simp only [Except.ok.injEq] at h
+        cases h
+        have hmem : o ∈ w.ctx.owners := List.mem_of_find?_eq_some hf'
+        have hs' := hs
+        unfold Ctx.joinFractionOwner? at hs
+        cases ho : o.joinFraction? node newId with
+        | none => simp [ho] at hs
+        | some o' =>
+          simp only [ho, Option.map_some, Option.some.injEq] at hs
+          subst C'
+          have hwfC : (w.ctx.update o.alloc o').WellFormed :=
+            Ctx.joinFractionOwner_wellFormed hwf.1 hmem hfresh hs'
+          have ho'alloc : o'.alloc = o.alloc := Owner.joinFraction_alloc ho
+          have ho'len : o'.len = o.len := Owner.joinFraction?_len ho
+          have hfun : (w.ctx.update o.alloc o').Functional :=
+            Ctx.update_functional ho'alloc hwf.1.1.2
+          have hoalloc : o.alloc = a := by
+            have := List.find?_some (p := fun x : Owner => decide (x.alloc = a))
+              (by simpa [Ctx.findOwner?] using hf')
+            simpa using this
+          have hfa : w.ctx.findOwner? o.alloc = some o := by
+            simpa [hoalloc] using hf'
+          exact ⟨hwfC, hfun, World.update_storage hwf hfa ho'alloc ho'len⟩
+      · simp at h
+    · simp at h
+
 end Cap

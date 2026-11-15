@@ -10,7 +10,7 @@ Capability-identifier freshness across owners, disposal entitlements recorded pe
 owner, loans and the dispatch of the owner-level transitions over the list are the
 next slice; the single-owner `Cap.Session` exercises the transitions meanwhile.
 -/
-import Cap.Ledger
+import Cap.Join
 
 namespace Cap
 
@@ -187,6 +187,28 @@ theorem Ctx.splitFractionOwner_realizes {C C' : Ctx} {o : Owner} {id id1 id2 : C
       · intro x hx _
         exact hr.1 x hx
     · exact Ctx.update_nodup (Owner.splitFraction?_alloc ho) hr.2
+
+/-- Dispatch a fractional join to the owner of an allocation, replacing that
+owner and leaving the other owners alone. -/
+def Ctx.joinFractionOwner? (C : Ctx) (o : Owner) (node newId : CapId) : Option Ctx :=
+  (o.joinFraction? node newId).map (C.update o.alloc)
+
+theorem Ctx.joinFractionOwner_realizes {C C' : Ctx} {o : Owner} {node newId : CapId}
+    (hmem : o ∈ C.owners)
+    (hs : C.joinFractionOwner? o node newId = some C')
+    (hr : C.Realizes) : C'.Realizes := by
+  unfold Ctx.joinFractionOwner? at hs
+  cases ho : o.joinFraction? node newId with
+  | none => simp [ho] at hs
+  | some o' =>
+    simp [ho] at hs
+    cases hs
+    refine ⟨?_, ?_⟩
+    · apply Ctx.update_covered
+      · exact Owner.joinFraction_covered ho (hr.1 o hmem)
+      · intro x hx _
+        exact hr.1 x hx
+    · exact Ctx.update_nodup (Owner.joinFraction_alloc ho) hr.2
 
 /-- Allocation of a fresh root and disposal identifier keeps the capability
 identifiers distinct. -/

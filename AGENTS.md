@@ -156,7 +156,11 @@
   `World.splitAtChecked_sound` names the owner, the freshness facts and the
   resulting context; `World.update_storage` keeps the heap agreement through a
   same-length owner replacement; and `World.splitAtChecked_wf` preserves the
-  bundle. Loans and disposal uniqueness are not in this layer yet.
+  bundle. `World.splitFractionChecked`/`World.joinChecked` are the checked
+  fractional split and join, with `_wf` preservation; the context-side join
+  preservation is `Ctx.joinFractionOwner_wellFormed` (in `Cap/Invariant.lean`,
+  using `Ctx.update_ids_nodup_of_sub` and `Owner.joinFraction?_wellFormed`).
+  Loans and disposal uniqueness are not in this layer yet.
 - `Cap/Invariant.lean` is the stronger owner/context invariant: `Owner.LeavesWithin`
   (every leaf lies in the owner's allocation and extent), `Owner.WellFormed`
   (coverage, leaves within, disposal recorded), and `Ctx.WellFormed` (realization,
@@ -176,8 +180,9 @@
   allocation (`free_realizes`). `Ctx.update` replaces an owner, with
   `update_preserves_other`, `update_covered` and `update_nodup`;
   `splitAtOwner?`/`splitFractionOwner?` dispatch a split to an owner and preserve
-  `Realizes`; `freeWith?` requires the recorded disposal capability and refuses a
-  wrong one (`freeWith?_wrong`). Capability identifiers are collected by
+  `Realizes`; `Ctx.joinFractionOwner?` dispatches the sibling-only fractional join
+  and preserves `Realizes` (`joinFractionOwner_realizes`); `freeWith?` requires the
+  recorded disposal capability and refuses a wrong one (`freeWith?_wrong`). Capability identifiers are collected by
   `Tree.ids`/`Owner.ids`/`Ctx.ids`, with `Ctx.Fresh`; `alloc_ids_nodup` shows a
   fresh root and disposal identifier keep the identifiers distinct. Internal split
   nodes record provenance identifiers that are not access capabilities and are
@@ -190,10 +195,14 @@
   leaf children that agree on allocation, footprint, ceiling and state into one
   leaf of summed share (positivity by `omega`), and `Owner.joinFraction?` preserves
   coverage (`joinFraction_covered`) and the allocation identifier
-  (`joinFraction_alloc`). A join whose children carry the same capability id is
-  refused (`joinChildren?_alias_none`, `Owner.joinFraction_alias_none`). Arbitrary
-  same-resource recombination, the common-partition normaliser and provenance beyond
-  node shape are not implemented.
+  (`joinFraction_alloc`), and the length (`joinFraction?_len`). A join whose
+  children carry the same capability id is refused
+  (`joinChildren?_alias_none`, `Owner.joinFraction_alias_none`). The capability ids
+  of a successful join are characterised: `joinFraction?_ids_perm` is the exact
+  permutation (the two child ids removed, `newId` added), `joinFraction?_ids_sub`
+  the membership bound, and `joinFraction?_ids_nodup` preserves distinctness for a
+  fresh `newId`. Arbitrary same-resource recombination, the common-partition
+  normaliser and provenance beyond node shape are not implemented.
 - `Cap/UFCompress.lean` adds bounded root finding and one-step compression to the
   functional model: `findRootF` chases parents with fuel, `StopsAt` records a
   reached fixed point, `findRootF_root`/`findRootF_reachable` give the root and
@@ -259,7 +268,7 @@
   Indices are ordinary `World` values; there is no hidden-index elaborator, so
   symbolic programs are not inferred.
 - `Cap/Unified.lean` is the first slice of the review's R1: a value-carrying
-  `UCmd` (`write`, `splitAt`, `free`, `alloc`, `nop`), `World.writeChecked`
+  `UCmd` (`write`, `splitAt`, `splitFraction`, `join`, `free`, `alloc`, `nop`), `World.writeChecked`
   which checks the ledger's `writableB` and performs the backend write,
   `World.splitAtChecked` for spatial splits, `World.freeChecked` for disposal
   through the recorded capability, `World.allocChecked` for allocation with

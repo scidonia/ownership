@@ -21,6 +21,8 @@ namespace Cap
 inductive UCmd where
   | write (a : AllocId) (id : CapId) (i : Nat) (v : UInt8)
   | splitAt (a : AllocId) (id id1 id2 : CapId) (k : Nat)
+  | splitFraction (a : AllocId) (id id1 id2 : CapId) (q1 q2 : Nat)
+  | join (a : AllocId) (node newId : CapId)
   | free (a : AllocId) (d : CapId)
   | alloc (n : Nat) (rootId disposal : CapId)
   | nop
@@ -128,6 +130,16 @@ def checkWorld : World → List UCmd → Except String World
     match w.splitAtChecked a id id1 id2 k with
     | .ok w' => checkWorld w' cs
     | .error e => .error e
+  | w, .splitFraction a id id1 id2 q1 q2 :: cs =>
+    if hq : 0 < q1 ∧ 0 < q2 then
+      match w.splitFractionChecked a id id1 id2 q1 q2 hq.1 hq.2 with
+      | .ok w' => checkWorld w' cs
+      | .error e => .error e
+    else .error "split: non-positive share"
+  | w, .join a node newId :: cs =>
+    match w.joinChecked a node newId with
+    | .ok w' => checkWorld w' cs
+    | .error e => .error e
   | w, .free a d :: cs =>
     match w.freeChecked a d with
     | .ok w' => checkWorld w' cs
@@ -167,6 +179,20 @@ theorem checkWorld_wf : ∀ (w w' : World) (cs : List UCmd),
       | ok w'' =>
         simp [checkWorld, hw] at h
         exact ih w'' h (World.splitAtChecked_wf hw hwf)
+    | splitFraction a id id1 id2 q1 q2 =>
+      by_cases hq : 0 < q1 ∧ 0 < q2
+      · cases hw : w.splitFractionChecked a id id1 id2 q1 q2 hq.1 hq.2 with
+        | error e => simp [checkWorld, hq, hw] at h
+        | ok w'' =>
+          simp [checkWorld, hq, hw] at h
+          exact ih w'' h (World.splitFractionChecked_wf hw hwf)
+      · simp [checkWorld, hq] at h
+    | join a node newId =>
+      cases hw : w.joinChecked a node newId with
+      | error e => simp [checkWorld, hw] at h
+      | ok w'' =>
+        simp [checkWorld, hw] at h
+        exact ih w'' h (World.joinChecked_wf hw hwf)
     | free a d =>
       cases hw : w.freeChecked a d with
       | error e => simp [checkWorld, hw] at h
@@ -253,11 +279,9 @@ def uRun : Option (List UInt8) :=
 theorem uRun_snapshot :
     uRun = some (List.replicate 32 (1 : UInt8) ++ List.replicate 32 (2 : UInt8)) := by
   decide
-
 /-- The concrete program is accepted. -/
 theorem uProgram_ok : (checkWorld uWorld uProgram).isOk = true := by
   decide
-
 theorem uProgram_rel : ∃ w, checkWorld uWorld uProgram = .ok w ∧ w.Rel := by
   have hok : (checkWorld uWorld uProgram).isOk = true := by decide
   cases h : checkWorld uWorld uProgram with
@@ -270,13 +294,17 @@ theorem uProgram_rel : ∃ w, checkWorld uWorld uProgram = .ok w ∧ w.Rel := by
   | ok w => exact ⟨w, rfl, checkWorld_rel uWorld w uProgram h uWorld_wf⟩
 
 /-- A lifecycle program through the unified route: allocate a fresh 4-byte
-owner, write one byte, split it spatially, write the left half, then dispose it.
-The pre-existing 64-byte owner is untouched. -/
+owner, write one byte, split it spatially, write the left half, split it
+fractionally, join the halves, write again, then dispose it. The pre-existing
+64-byte owner is untouched. -/
 def uLifecycle : List UCmd :=
   [ .alloc 4 ⟨3⟩ ⟨4⟩,
     .write ⟨1⟩ ⟨3⟩ 0 7,
     .splitAt ⟨1⟩ ⟨3⟩ ⟨5⟩ ⟨6⟩ 2,
     .write ⟨1⟩ ⟨5⟩ 0 8,
+    .splitFraction ⟨1⟩ ⟨5⟩ ⟨7⟩ ⟨8⟩ 32 32,
+    .join ⟨1⟩ ⟨7⟩ ⟨9⟩,
+    .write ⟨1⟩ ⟨9⟩ 1 9,
     .free ⟨1⟩ ⟨4⟩ ]
 
 /-- The lifecycle program is accepted and preserves the pre-existing snapshot. -/

@@ -41,6 +41,10 @@ What is proved:
   context dispatchers `Ctx.splitAtOwner_wellFormed`,
   `Ctx.splitFractionOwner_wellFormed`: spatial and fractional splits preserve the
   invariant.
+* `Owner.joinFraction?_wellFormed` and its context dispatcher
+  `Ctx.joinFractionOwner_wellFormed`: the sibling-only fractional join preserves
+  the invariant, via `Ctx.update_ids_nodup_of_sub` (the replacement owner's
+  identifiers are old ones or the single fresh new identifier).
 * A concrete 64-byte owner (and context) satisfying `Owner.WellFormed`.
 
 Explicit hypotheses of the preservation theorems (beyond the invariant itself):
@@ -534,6 +538,279 @@ theorem Tree.leaves_replace_nodup {t : Tree} {id : CapId} {f : Leaf → Tree}
           simpa only [Tree.replace, hfl, Tree.find?, hlx] using hx
         exact ih x c' hrx
 
+/-- A leaf found inside the located fractional node is found in the whole tree,
+provided the tree's identifiers are distinct (so no earlier leaf shadows it). -/
+theorem Tree.find?_of_findFrac? {t u : Tree} {node x : CapId} {c : Leaf}
+    (hnd : t.ids.Nodup) (hf : t.findFrac? node = some u)
+    (hx : u.find? x = some c) : t.find? x = some c := by
+  induction t with
+  | leaf c' => simp [Tree.findFrac?] at hf
+  | frac i l r ihl ihr =>
+    by_cases hi : i = node
+    · have h1 : Tree.findFrac? node (.frac i l r) = some (.frac i l r) := by
+        simp [Tree.findFrac?, hi]
+      rw [h1] at hf
+      cases hf
+      exact hx
+    · have hndt : (l.ids ++ r.ids).Nodup := hnd
+      obtain ⟨hndl, hndr, hdisj⟩ := List.nodup_append.mp hndt
+      cases hfl : l.findFrac? node with
+      | some w =>
+        have huw : u = w := by
+          have h' : Tree.findFrac? node (.frac i l r) = some w := by
+            simp [Tree.findFrac?, hi, hfl]
+          rw [h'] at hf
+          exact (Option.some.inj hf).symm
+        subst huw
+        have hlf := ihl hndl hfl
+        simp [Tree.find?, hlf]
+      | none =>
+        have hfr : r.findFrac? node = some u := by
+          simpa [Tree.findFrac?, hi, hfl] using hf
+        have hrf := ihr hndr hfr
+        have hxr : x ∈ r.ids := Tree.find?_mem_ids hrf
+        have hln : l.find? x = none := by
+          cases h' : l.find? x with
+          | none => rfl
+          | some d =>
+            have hxl : x ∈ l.ids := Tree.find?_mem_ids h'
+            exact absurd rfl (hdisj x hxl x hxr)
+        simp [Tree.find?, hln, hrf]
+  | spatial i l r ihl ihr =>
+    have hndt : (l.ids ++ r.ids).Nodup := hnd
+    obtain ⟨hndl, hndr, hdisj⟩ := List.nodup_append.mp hndt
+    cases hfl : l.findFrac? node with
+    | some w =>
+      have huw : u = w := by
+        have h' : Tree.findFrac? node (.spatial i l r) = some w := by
+          simp [Tree.findFrac?, hfl]
+        rw [h'] at hf
+        exact (Option.some.inj hf).symm
+      subst huw
+      have hlf := ihl hndl hfl
+      simp [Tree.find?, hlf]
+    | none =>
+      have hfr : r.findFrac? node = some u := by
+        simpa [Tree.findFrac?, hfl] using hf
+      have hrf := ihr hndr hfr
+      have hxr : x ∈ r.ids := Tree.find?_mem_ids hrf
+      have hln : l.find? x = none := by
+        cases h' : l.find? x with
+        | none => rfl
+        | some d =>
+          have hxl : x ∈ l.ids := Tree.find?_mem_ids h'
+          exact absurd rfl (hdisj x hxl x hxr)
+      simp [Tree.find?, hln, hrf]
+
+/-- If every leaf found in `t` has `P`, and every leaf of the replacement has
+`P`, then every leaf found in the node-replaced tree has `P`. Distinctness of
+`t`'s leaf identifiers is needed to know that a leaf found in one child is not
+shadowed by a leaf of the other child. -/
+theorem Tree.leaves_replaceNode_nodup {t : Tree} {node : CapId} {t' : Tree}
+    {P : Leaf → Prop}
+    (hnd : t.ids.Nodup)
+    (ht : ∀ x c, t.find? x = some c → P c)
+    (ht' : ∀ x c, t'.find? x = some c → P c) :
+    ∀ x c', (Tree.replaceNode node t' t).find? x = some c' → P c' := by
+  induction t with
+  | leaf c =>
+    intro x c' hx
+    exact ht x c' hx
+  | frac i l r ihl ihr =>
+    have hndt : (l.ids ++ r.ids).Nodup := hnd
+    obtain ⟨hndl, hndr, hdisj⟩ := List.nodup_append.mp hndt
+    have htl : ∀ x c, l.find? x = some c → P c := by
+      intro x c hx'
+      exact ht x c (by simp [Tree.find?, hx'])
+    have htr : ∀ x c, r.find? x = some c → P c := by
+      intro x c hx'
+      have hlx : l.find? x = none := by
+        cases h' : l.find? x with
+        | none => rfl
+        | some d =>
+          have hd : x ∈ l.ids := Tree.find?_mem_ids h'
+          have hd' : x ∈ r.ids := Tree.find?_mem_ids hx'
+          exact absurd rfl (hdisj x hd x hd')
+      exact ht x c (by simp [Tree.find?, hlx, hx'])
+    by_cases hi : i = node
+    · intro x c' hx
+      have hrep : Tree.replaceNode node t' (.frac i l r) = t' := by
+        simp [Tree.replaceNode, hi]
+      rw [hrep] at hx
+      exact ht' x c' hx
+    · cases hfl : l.findFrac? node with
+      | some w =>
+        intro x c' hx
+        have hrep : Tree.replaceNode node t' (.frac i l r)
+            = .frac i (Tree.replaceNode node t' l) r := by
+          simp [Tree.replaceNode, hi, hfl]
+        rw [hrep] at hx
+        cases hlx : (Tree.replaceNode node t' l).find? x with
+        | some d =>
+          have hcd : d = c' := by
+            simpa only [Tree.find?, hlx, Option.some.injEq] using hx
+          rw [← hcd]
+          exact ihl hndl htl x d hlx
+        | none =>
+          have hrx : r.find? x = some c' := by
+            simpa only [Tree.find?, hlx] using hx
+          exact htr x c' hrx
+      | none =>
+        intro x c' hx
+        have hrep : Tree.replaceNode node t' (.frac i l r)
+            = .frac i l (Tree.replaceNode node t' r) := by
+          simp [Tree.replaceNode, hi, hfl]
+        rw [hrep] at hx
+        cases hlx : l.find? x with
+        | some d =>
+          have hcd : d = c' := by
+            simpa only [Tree.find?, hlx, Option.some.injEq] using hx
+          rw [← hcd]
+          exact htl x d hlx
+        | none =>
+          have hrx : (Tree.replaceNode node t' r).find? x = some c' := by
+            simpa only [Tree.find?, hlx] using hx
+          exact ihr hndr htr x c' hrx
+  | spatial i l r ihl ihr =>
+    have hndt : (l.ids ++ r.ids).Nodup := hnd
+    obtain ⟨hndl, hndr, hdisj⟩ := List.nodup_append.mp hndt
+    have htl : ∀ x c, l.find? x = some c → P c := by
+      intro x c hx'
+      exact ht x c (by simp [Tree.find?, hx'])
+    have htr : ∀ x c, r.find? x = some c → P c := by
+      intro x c hx'
+      have hlx : l.find? x = none := by
+        cases h' : l.find? x with
+        | none => rfl
+        | some d =>
+          have hd : x ∈ l.ids := Tree.find?_mem_ids h'
+          have hd' : x ∈ r.ids := Tree.find?_mem_ids hx'
+          exact absurd rfl (hdisj x hd x hd')
+      exact ht x c (by simp [Tree.find?, hlx, hx'])
+    cases hfl : l.findFrac? node with
+    | some w =>
+      intro x c' hx
+      have hrep : Tree.replaceNode node t' (.spatial i l r)
+          = .spatial i (Tree.replaceNode node t' l) r := by
+        simp [Tree.replaceNode, hfl]
+      rw [hrep] at hx
+      cases hlx : (Tree.replaceNode node t' l).find? x with
+      | some d =>
+        have hcd : d = c' := by
+          simpa only [Tree.find?, hlx, Option.some.injEq] using hx
+        rw [← hcd]
+        exact ihl hndl htl x d hlx
+      | none =>
+        have hrx : r.find? x = some c' := by
+          simpa only [Tree.find?, hlx] using hx
+        exact htr x c' hrx
+    | none =>
+      intro x c' hx
+      have hrep : Tree.replaceNode node t' (.spatial i l r)
+          = .spatial i l (Tree.replaceNode node t' r) := by
+        simp [Tree.replaceNode, hfl]
+      rw [hrep] at hx
+      cases hlx : l.find? x with
+      | some d =>
+        have hcd : d = c' := by
+          simpa only [Tree.find?, hlx, Option.some.injEq] using hx
+        rw [← hcd]
+        exact htl x d hlx
+      | none =>
+        have hrx : (Tree.replaceNode node t' r).find? x = some c' := by
+          simpa only [Tree.find?, hlx] using hx
+        exact ihr hndr htr x c' hrx
+
+/-- Replacing the located fractional node leaves `Tree.find?` at an `x` that
+does not occur under the located node unchanged, provided the replacement does
+not introduce `x`. -/
+theorem Tree.find?_replaceNode_eq {t : Tree} {node x : CapId} {t' : Tree}
+    (hx : ∀ i l r, t.findFrac? node = some (.frac i l r) →
+      x ∉ (Tree.frac i l r).ids)
+    (hx' : t'.find? x = none) :
+    (Tree.replaceNode node t' t).find? x = t.find? x := by
+  induction t with
+  | leaf c => rfl
+  | frac i l r ihl ihr =>
+    by_cases hi : i = node
+    · have hrep : Tree.replaceNode node t' (.frac i l r) = t' := by
+        simp [Tree.replaceNode, hi]
+      have hfind : Tree.findFrac? node (.frac i l r) = some (.frac i l r) := by
+        simp [Tree.findFrac?, hi]
+      have hnot : x ∉ (Tree.frac i l r).ids := hx i l r hfind
+      have hnone : (Tree.frac i l r).find? x = none := by
+        cases h'' : (Tree.frac i l r).find? x with
+        | none => rfl
+        | some d => exact absurd (Tree.find?_mem_ids h'') hnot
+      rw [hrep, hx', hnone]
+    · cases hfl : l.findFrac? node with
+      | some w =>
+        have hxl : ∀ j l' r', l.findFrac? node = some (.frac j l' r') →
+            x ∉ (Tree.frac j l' r').ids := by
+          intro j l' r' hj'
+          exact hx j l' r' (by simp [Tree.findFrac?, hi, hj'])
+        have hrep : Tree.replaceNode node t' (.frac i l r)
+            = .frac i (Tree.replaceNode node t' l) r := by
+          simp [Tree.replaceNode, hi, hfl]
+        rw [hrep]
+        have ih := ihl hxl
+        rw [show (Tree.frac i (Tree.replaceNode node t' l) r).find? x
+            = match (Tree.replaceNode node t' l).find? x with
+              | some c => some c | none => r.find? x from rfl]
+        rw [show (Tree.frac i l r).find? x
+            = match l.find? x with | some c => some c | none => r.find? x from rfl]
+        rw [ih]
+      | none =>
+        have hxr : ∀ j l' r', r.findFrac? node = some (.frac j l' r') →
+            x ∉ (Tree.frac j l' r').ids := by
+          intro j l' r' hj'
+          exact hx j l' r' (by simp [Tree.findFrac?, hi, hfl, hj'])
+        have hrep : Tree.replaceNode node t' (.frac i l r)
+            = .frac i l (Tree.replaceNode node t' r) := by
+          simp [Tree.replaceNode, hi, hfl]
+        rw [hrep]
+        have ih := ihr hxr
+        rw [show (Tree.frac i l (Tree.replaceNode node t' r)).find? x
+            = match l.find? x with
+              | some c => some c | none => (Tree.replaceNode node t' r).find? x from rfl]
+        rw [show (Tree.frac i l r).find? x
+            = match l.find? x with | some c => some c | none => r.find? x from rfl]
+        rw [ih]
+  | spatial i l r ihl ihr =>
+    cases hfl : l.findFrac? node with
+    | some w =>
+      have hxl : ∀ j l' r', l.findFrac? node = some (.frac j l' r') →
+          x ∉ (Tree.frac j l' r').ids := by
+        intro j l' r' hj'
+        exact hx j l' r' (by simp [Tree.findFrac?, hj'])
+      have hrep : Tree.replaceNode node t' (.spatial i l r)
+          = .spatial i (Tree.replaceNode node t' l) r := by
+        simp [Tree.replaceNode, hfl]
+      rw [hrep]
+      have ih := ihl hxl
+      rw [show (Tree.spatial i (Tree.replaceNode node t' l) r).find? x
+          = match (Tree.replaceNode node t' l).find? x with
+            | some c => some c | none => r.find? x from rfl]
+      rw [show (Tree.spatial i l r).find? x
+          = match l.find? x with | some c => some c | none => r.find? x from rfl]
+      rw [ih]
+    | none =>
+      have hxr : ∀ j l' r', r.findFrac? node = some (.frac j l' r') →
+          x ∉ (Tree.frac j l' r').ids := by
+        intro j l' r' hj'
+        exact hx j l' r' (by simp [Tree.findFrac?, hfl, hj'])
+      have hrep : Tree.replaceNode node t' (.spatial i l r)
+          = .spatial i l (Tree.replaceNode node t' r) := by
+        simp [Tree.replaceNode, hfl]
+      rw [hrep]
+      have ih := ihr hxr
+      rw [show (Tree.spatial i l (Tree.replaceNode node t' r)).find? x
+          = match l.find? x with
+            | some c => some c | none => (Tree.replaceNode node t' r).find? x from rfl]
+      rw [show (Tree.spatial i l r).find? x
+          = match l.find? x with | some c => some c | none => r.find? x from rfl]
+      rw [ih]
+
 /-! ### Establishment: allocation -/
 
 /-- The tree produced by a successful fractional split is the two-leaf fractional
@@ -788,6 +1065,96 @@ theorem Owner.splitFraction?_wellFormed {o o' : Owner} {D : Nat} {id id1 id2 : C
    Owner.splitFraction?_leavesWithin hids hs hwf.2.1,
    Owner.splitFraction?_disposalPresent hids hfids hs hwf.2.2⟩
 
+/-! ### Preservation: fractional join -/
+
+/-- A fractional join keeps every leaf inside the owner's allocation and
+extent: the new leaf inherits its allocation and footprint from the joined
+left child. -/
+theorem Owner.joinFraction?_leavesWithin {o o' : Owner} {node newId : CapId}
+    (hids : o.ids.Nodup) (hs : o.joinFraction? node newId = some o')
+    (hw : o.LeavesWithin) : o'.LeavesWithin := by
+  have hroot : o.root.ids.Nodup := (List.nodup_cons.mp hids).2
+  unfold Owner.joinFraction? at hs
+  cases hf : o.root.findFrac? node with
+  | none => simp [hf] at hs
+  | some tn =>
+    cases hj : tn.joinChildren? newId with
+    | none => simp [hf, hj] at hs
+    | some t' =>
+      simp only [hf, hj, Option.some.injEq] at hs
+      subst hs
+      obtain ⟨i, c1, c2, htn, -, -, ht'find⟩ := Tree.joinChildren?_some hj
+      subst htn
+      have hc1find : o.root.find? c1.id = some c1 :=
+        Tree.find?_of_findFrac? hroot hf (by simp [Tree.find?])
+      have hc1w := hw c1.id c1 hc1find
+      intro x c' hx
+      exact Tree.leaves_replaceNode_nodup (t := o.root) (node := node) (t' := t')
+        hroot hw
+        (fun y c hy => by
+          obtain ⟨-, ha, hh⟩ := ht'find y c hy
+          exact ⟨ha.trans hc1w.1, by rw [hh]; exact hc1w.2⟩)
+        x c' hx
+
+/-- A fractional join preserves the disposal branch when the new identifier is
+fresh. -/
+theorem Owner.joinFraction?_disposalPresent {o o' : Owner} {node newId : CapId}
+    (hids : o.ids.Nodup) (hfresh : newId ∉ o.ids)
+    (hs : o.joinFraction? node newId = some o') (hd : o.DisposalPresent) :
+    o'.DisposalPresent := by
+  have hdisp : o.disposal ∉ o.root.ids := (List.nodup_cons.mp hids).1
+  unfold Owner.joinFraction? at hs
+  cases hf : o.root.findFrac? node with
+  | none => simp [hf] at hs
+  | some tn =>
+    cases hj : tn.joinChildren? newId with
+    | none => simp [hf, hj] at hs
+    | some t' =>
+      simp only [hf, hj, Option.some.injEq] at hs
+      subst hs
+      obtain ⟨i, c1, c2, htn, -, ht'ids, ht'find⟩ := Tree.joinChildren?_some hj
+      subst htn
+      have hmemdisp : o.disposal ∈ o.ids := List.mem_cons_self
+      have hdnew : o.disposal ≠ newId := fun hEq => hfresh (hEq ▸ hmemdisp)
+      have hc1mem : c1.id ∈ o.root.ids := Tree.findFrac?_ids_sub hf (by simp [Tree.ids])
+      have hc2mem : c2.id ∈ o.root.ids := Tree.findFrac?_ids_sub hf (by simp [Tree.ids])
+      have hd1 : o.disposal ≠ c1.id := fun hEq => hdisp (hEq ▸ hc1mem)
+      have hd2 : o.disposal ≠ c2.id := fun hEq => hdisp (hEq ▸ hc2mem)
+      have htnone : t'.find? o.disposal = none := by
+        cases htf : t'.find? o.disposal with
+        | none => rfl
+        | some d =>
+          obtain ⟨hxd, -, -⟩ := ht'find o.disposal d htf
+          exact absurd hxd hdnew
+      rcases hd with ⟨c', hc'⟩ | hnot
+      · left
+        refine ⟨c', ?_⟩
+        rw [Tree.find?_replaceNode_eq (t := o.root) (node := node) (t' := t')
+          (x := o.disposal) ?_ htnone]
+        exact hc'
+        intro j l r hfind
+        rw [hf] at hfind
+        cases hfind
+        simp only [Tree.ids, List.mem_append, List.mem_singleton]
+        rintro (h | h)
+        · exact hd1 h
+        · exact hd2 h
+      · right
+        intro hmem
+        rcases Tree.mem_ids_replaceNode hmem with hold | hnew
+        · exact hnot hold
+        · rw [ht'ids] at hnew
+          exact hfresh ((List.mem_singleton.mp hnew) ▸ hmemdisp)
+
+/-- A fractional join preserves the owner invariant. -/
+theorem Owner.joinFraction?_wellFormed {o o' : Owner} {D : Nat} {node newId : CapId}
+    (hids : o.ids.Nodup) (hfresh : newId ∉ o.ids)
+    (hs : o.joinFraction? node newId = some o') (hwf : o.WellFormed D) :
+    o'.WellFormed D :=
+  ⟨Owner.joinFraction_covered hs hwf.1,
+   Owner.joinFraction?_leavesWithin hids hs hwf.2.1,
+   Owner.joinFraction?_disposalPresent hids hfresh hs hwf.2.2⟩
+
 /-! ### Identifier lists after a split -/
 
 /-- A spatial split turns the owner's identifier list into the old list without
@@ -1010,6 +1377,101 @@ theorem Ctx.update_ids_nodup {C : Ctx} {a : AllocId} {o o' : Owner} {id id1 id2 
     List.nodup_append.mpr ⟨hfilter, hsingle, hdisj⟩
   exact (hpermNew.nodup_iff).mpr hnodup
 
+/-- Updating the owner for one allocation keeps the context identifier list
+duplicate-free when the replacement's identifiers are duplicate-free, are drawn
+from the old owner's identifiers or a single new identifier, and the new
+identifier is fresh for the whole list. The conjunction also records that the
+updated list introduces nothing beyond the old list and the new identifier,
+which the induction needs for the disjointness side condition. -/
+theorem flatMap_update_ids_nodup_of_sub (l : List Owner) (a : AllocId) (o o' : Owner)
+    (newId : CapId)
+    (hndAlloc : (l.map (·.alloc)).Nodup)
+    (hidsnd : (l.flatMap Owner.ids).Nodup)
+    (hmem : o ∈ l) (hoa : o.alloc = a)
+    (ho'nd : o'.ids.Nodup)
+    (hsub : ∀ x ∈ o'.ids, x ∈ o.ids ∨ x = newId)
+    (hfresh : newId ∉ l.flatMap Owner.ids) :
+    ((l.map (fun x => if x.alloc = a then o' else x)).flatMap Owner.ids).Nodup ∧
+    ∀ x ∈ (l.map (fun x => if x.alloc = a then o' else x)).flatMap Owner.ids,
+      x ∈ l.flatMap Owner.ids ∨ x = newId := by
+  induction l with
+  | nil => simp at hmem
+  | cons x xs ih =>
+    have hndx : (xs.map (·.alloc)).Nodup := (List.nodup_cons.mp hndAlloc).2
+    have hidsxs : (xs.flatMap Owner.ids).Nodup := (List.nodup_append.mp hidsnd).2.1
+    have hxsnd : x.ids.Nodup := (List.nodup_append.mp hidsnd).1
+    have hdisj : ∀ y ∈ x.ids, ∀ z ∈ xs.flatMap Owner.ids, y ≠ z :=
+      (List.nodup_append.mp hidsnd).2.2
+    have hxfresh : newId ∉ x.ids := fun h => hfresh (List.mem_append_left _ h)
+    have hfreshxs : newId ∉ xs.flatMap Owner.ids :=
+      fun h => hfresh (List.mem_append_right _ h)
+    by_cases hxa : x.alloc = a
+    · have hxo : x = o :=
+        alloc_eq_of_mem hndAlloc List.mem_cons_self hmem (by rw [hxa, hoa])
+      subst x
+      have hoxs : o ∉ xs := by
+        intro ho'
+        have h1 : o.alloc ∈ xs.map (·.alloc) := by
+          rw [List.mem_map]
+          exact ⟨o, ho', rfl⟩
+        exact (List.nodup_cons.mp hndAlloc).1 h1
+      have hxsmap : xs.map (fun y => if y.alloc = a then o' else y) = xs := by
+        have h := List.map_congr_left (l := xs)
+          (f := fun y => if y.alloc = a then o' else y) (g := fun y => y)
+          (fun y hy => by
+            have hya : y.alloc ≠ a := by
+              intro hya
+              have hyo : y = o :=
+                alloc_eq_of_mem (l := o :: xs) (x := y) (y := o) hndAlloc
+                  (List.mem_cons_of_mem o hy) List.mem_cons_self (by rw [hya, hoa])
+              exact hoxs (hyo ▸ hy)
+            simp [hya])
+        simpa using h
+      rw [List.map_cons, ite_eq_left hoa, List.flatMap_cons, hxsmap]
+      refine ⟨List.nodup_append.mpr ⟨ho'nd, hidsxs, ?_⟩, ?_⟩
+      · intro y hy z hz
+        rcases hsub y hy with hyo | rfl
+        · exact hdisj y hyo z hz
+        · exact fun h => hfreshxs (h ▸ hz)
+      · intro w hw
+        rcases List.mem_append.mp hw with hw | hw
+        · rcases hsub w hw with hwo | rfl
+          · exact Or.inl (List.mem_append_left _ hwo)
+          · exact Or.inr rfl
+        · exact Or.inl (List.mem_append_right _ hw)
+    · have hxo : x ≠ o := fun hEq => hxa (by rw [hEq]; exact hoa)
+      have hmem' : o ∈ xs := by
+        rcases List.mem_cons.mp hmem with h | h
+        · exact (hxo h.symm).elim
+        · exact h
+      have ih := ih hndx hidsxs hmem' hfreshxs
+      rw [List.map_cons, ite_eq_right hxa, List.flatMap_cons]
+      refine ⟨List.nodup_append.mpr ⟨hxsnd, ih.1, ?_⟩, ?_⟩
+      · intro y hy z hz
+        rcases ih.2 z hz with hzo | rfl
+        · exact hdisj y hy z hzo
+        · exact fun h => hxfresh (h ▸ hy)
+      · intro w hw
+        rcases List.mem_append.mp hw with hw | hw
+        · exact Or.inl (List.mem_append_left _ hw)
+        · rcases ih.2 w hw with hwo | rfl
+          · exact Or.inl (List.mem_append_right _ hwo)
+          · exact Or.inr rfl
+
+/-- A context update preserves identifier distinctness when the replacement's
+identifiers are duplicate-free, each of them is an old identifier of the
+replaced owner or the single new identifier, and the new identifier is fresh
+for the whole context. This is the join-shaped counterpart of
+`Ctx.update_ids_nodup`. -/
+theorem Ctx.update_ids_nodup_of_sub {C : Ctx} {a : AllocId} {o o' : Owner}
+    {newId : CapId}
+    (hreal : C.Realizes) (hmem : o ∈ C.owners) (halloc : o.alloc = a)
+    (hnd : C.ids.Nodup) (ho'nd : o'.ids.Nodup)
+    (hsub : ∀ x ∈ o'.ids, x ∈ o.ids ∨ x = newId) (hfresh : newId ∉ C.ids) :
+    (C.update a o').ids.Nodup :=
+  (flatMap_update_ids_nodup_of_sub C.owners a o o' newId hreal.2 hnd hmem halloc
+    ho'nd hsub hfresh).1
+
 /-- Owners other than the updated allocation keep their well-formedness. -/
 theorem Ctx.update_wellFormed_owners {C : Ctx} {a : AllocId} {o' : Owner}
     (ho' : o'.WellFormed C.D)
@@ -1107,6 +1569,30 @@ theorem Ctx.splitFractionOwner_wellFormed {C C' : Ctx} {o : Owner}
     · exact Ctx.update_wellFormed_owners ho' (fun x hx _ => hwf.2.1 x hx)
     · exact Ctx.update_ids_nodup hwf.1 hmem rfl hwf.2.2 hidmem
         hperm hfresh1 hfresh2 hfids.2.2
+
+/-- A fractional join dispatched to its owner preserves the context invariant,
+provided the new leaf's identifier is fresh for the whole context. -/
+theorem Ctx.joinFractionOwner_wellFormed {C C' : Ctx} {o : Owner} {node newId : CapId}
+    (hwf : C.WellFormed) (hmem : o ∈ C.owners) (hfresh : newId ∉ C.ids)
+    (hs : C.joinFractionOwner? o node newId = some C') : C'.WellFormed := by
+  have hreal := Ctx.joinFractionOwner_realizes hmem hs hwf.1
+  have hoids : o.ids.Nodup := Ctx.owner_ids_nodup hwf.2.2 hmem
+  have hofresh : newId ∉ o.ids :=
+    fun h => hfresh (List.mem_flatMap.mpr ⟨o, hmem, h⟩)
+  unfold Ctx.joinFractionOwner? at hs
+  cases ho : o.joinFraction? node newId with
+  | none => simp [ho] at hs
+  | some o' =>
+    simp only [ho, Option.map_some, Option.some.injEq] at hs
+    subst hs
+    have hown : o.WellFormed C.D := hwf.2.1 o hmem
+    have ho' : o'.WellFormed C.D := Owner.joinFraction?_wellFormed hoids hofresh ho hown
+    have ho'nd : o'.ids.Nodup := Owner.joinFraction?_ids_nodup hoids hofresh ho
+    have hsub : ∀ x ∈ o'.ids, x ∈ o.ids ∨ x = newId :=
+      fun x hx => (Owner.joinFraction?_ids_sub ho hx).symm
+    refine ⟨hreal, ?_, ?_⟩
+    · exact Ctx.update_wellFormed_owners ho' (fun x hx _ => hwf.2.1 x hx)
+    · exact Ctx.update_ids_nodup_of_sub hwf.1 hmem rfl hwf.2.2 ho'nd hsub hfresh
 
 /-! ### Positive instances -/
 

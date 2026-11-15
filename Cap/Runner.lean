@@ -82,6 +82,20 @@ theorem checkWorld_append : ∀ (cs ds : List UCmd) (w w' : World),
       | ok w'' =>
         simp only [List.cons_append, checkWorld, hw] at h ⊢
         exact ih ds w'' w' h
+    | splitFraction a id id1 id2 q1 q2 =>
+      by_cases hq : 0 < q1 ∧ 0 < q2
+      · cases hw : w.splitFractionChecked a id id1 id2 q1 q2 hq.1 hq.2 with
+        | error e => simp [checkWorld, hq, hw] at h
+        | ok w'' =>
+          simp only [List.cons_append, checkWorld, hq, hw] at h ⊢
+          exact ih ds w'' w' h
+      · simp [checkWorld, hq] at h
+    | join a node newId =>
+      cases hw : w.joinChecked a node newId with
+      | error e => simp [checkWorld, hw] at h
+      | ok w'' =>
+        simp only [List.cons_append, checkWorld, hw] at h ⊢
+        exact ih ds w'' w' h
     | free a d =>
       cases hw : w.freeChecked a d with
       | error e => simp [checkWorld, hw] at h
