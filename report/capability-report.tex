@@ -803,6 +803,12 @@ bytes (\texttt{pure64\_snapshot}, kernel-computed). In-place update at runtime
 is not observable here and is not claimed; that observation problem is the
 subject of the ownership side of this repository.
 
+In one interpreted run on one machine, on the 64-byte fill-and-sum pattern with
+agreeing checksums (\texttt{bench/CapBATiming.lean}): 73,959 ns per repetition
+for the pure list backend, 47,688 for the byte-array backend, 51,956 for the
+reference heap. Interpreted and environment-dependent; no in-place update is
+observed or claimed.
+
 \section{Measurements}
 
 \texttt{bench/CapTiming.lean} times the two pure models on the 64-byte

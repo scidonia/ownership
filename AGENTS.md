@@ -372,7 +372,12 @@ shows the certificate it would have to emit, not proof-producing elaboration.
   agreement with the pure `Backend`; the 64-byte two-range fill refines the pure
   run (`ba64_refines`) whose snapshot is the reference bytes (`pure64_snapshot`
   by `decide`, `ba64_snapshot`). In-place update at runtime is not observable
-  here and is not claimed.
+  here and is not claimed. `bench/CapBATiming.lean` times the list backend, the
+  byte-array backend and the reference heap on the same 64-byte fill-and-sum
+  pattern with agreeing checksums; observed in one interpreted run on this
+  machine: 73,959 ns per repetition (list), 47,688 (byte array), 51,956
+  (reference). Interpreted and environment-dependent; no in-place update is
+  observed or claimed.
 - `Cap/Backend.lean` is the pure mutable-backend model for one allocation:
   `Backend` with a buffer and length proof, `Rel` to the reference heap,
   `empty_rel`, `read_refines`, `write_refines`, `write_preserves_len` and
