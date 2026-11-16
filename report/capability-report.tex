@@ -827,8 +827,8 @@ loans and disposal remain in the \texttt{UCmd} language of
 \section{The indexed interface: programs with post-contexts}
 
 \file{Cap/IProg.lean} adds the indexed form the handoff asks for next:
-\texttt{IProg \\(\Gamma\\) \\(\alpha\\) Q} starts with permission context \\(\Gamma\\),
-returns \\(a : \\alpha\\) and ends with \\(Q\\,a\\). Context-changing constructors carry their
+\texttt{IProg \(\Gamma\) \(\alpha\) Q} starts with permission context \(\Gamma\),
+returns \(a : \\alpha\) and ends with \(Q\\,a\). Context-changing constructors carry their
 evidence, so a stale or refused operation is not a program at all: a split that
 reuses its parent's capability as a child has an uninhabited freshness proof
 (\texttt{stale\_child\_refused}). The fuelled evaluator is total, and the
@@ -840,7 +840,7 @@ spatial split, write, disposal, with every evidence derived --- is accepted
 (\texttt{iLifecycle\_ctx}), well formed (\texttt{iLifecycle\_sound}), with the
 pre-existing backend untouched (\texttt{iLifecycle\_snapshot}). Post-contexts
 use \texttt{getD} so the typing function stays computable; loans are not yet in
-the index because the loan list is world state outside \\(\Gamma\\).
+the index because the loan list is world state outside \(\Gamma\).
 
 \section{Measurements}
 
