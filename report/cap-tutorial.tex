@@ -1,0 +1,556 @@
+\documentclass[10pt,a4paper]{article}
+
+\usepackage[margin=2.0cm]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage{xcolor}
+\usepackage{booktabs}
+\usepackage{enumitem}
+\usepackage{titlesec}
+\usepackage{listings}
+\usepackage{amsmath}
+\usepackage[hidelinks]{hyperref}
+
+\definecolor{rule}{gray}{0.45}
+\definecolor{shade}{gray}{0.94}
+
+\titleformat{\section}{\large\bfseries}{\thesection}{0.6em}{}
+\titleformat{\subsection}{\normalsize\bfseries}{\thesubsection}{0.6em}{}
+\titlespacing*{\section}{0pt}{1.1ex plus .2ex}{0.6ex}
+
+\lstdefinelanguage{Lean4}{
+  morekeywords={def,theorem,structure,class,inductive,instance,namespace,end,
+    import,open,where,deriving,axiom,example,by,intro,cases,rw,simp,exact,
+    unfold,omega,decide,fun,let,in,if,then,else,do,match,with,return,pure,
+    private,partial,Type,Prop,Nat,Bool,UInt8,Array,List,Option,Except},
+  sensitive=true,
+  morecomment=[l]{--},
+  morecomment=[s]{/-}{-/},
+  morestring=[b]",
+}
+\lstset{
+  language=Lean4,
+  basicstyle=\ttfamily\footnotesize,
+  columns=fullflexible,
+  keepspaces=true,
+  breaklines=true,
+  frame=single,
+  rulecolor=\color{rule},
+  framesep=3pt,
+  xleftmargin=4pt,
+  xrightmargin=4pt,
+  aboveskip=0.6em,
+  belowskip=0.3em,
+  commentstyle=\itshape\color{black!65},
+  keywordstyle=\bfseries,
+  showstringspaces=false,
+  extendedchars=true,
+  literate=
+    {×}{{$\times$}}1 {→}{{$\to$}}1 {≤}{{$\le$}}1 {∀}{{$\forall$}}1
+    {¬}{{$\neg$}}1 {∧}{{$\wedge$}}1 {∨}{{$\vee$}}1 {⟨}{{$\langle$}}1
+    {⟩}{{$\rangle$}}1 {α}{{$\alpha$}}1 {β}{{$\beta$}}1 {ρ}{{$\rho$}}1
+    {Γ}{{$\Gamma$}}1 {Σ}{{$\Sigma$}}1 {∈}{{$\in$}}1 {≃}{{$\simeq$}}1
+    {↦}{{$\mapsto$}}1 {←}{{$\leftarrow$}}1 {·}{{$\cdot$}}1 {∃}{{$\exists$}}1
+    {∉}{{$\notin$}}1 {≥}{{$\ge$}}1
+}
+
+\newcommand{\file}[1]{\texttt{#1}}
+\newcommand{\lean}[1]{\texttt{#1}}
+
+\title{The Capability Ledger, From the Ground Up\\{\large A tutorial on the
+\file{Cap/} subsystem}}
+\author{}
+\date{}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+\noindent This is a tutorial on the executable half of the repository: how
+Rust-like ownership rules are enforced in Lean \emph{from outside} the type
+system, by a checked ledger rather than by types. Every declaration named here
+exists in the tree and is kernel-checked; \texttt{scripts/check\_all.sh}
+rebuilds and re-checks everything, and the axiom audit admits only
+\texttt{propext}, \texttt{Classical.choice} and \texttt{Quot.sound}. The code
+listings are the real declarations, shortened only by elision of proof bodies.
+\end{abstract}
+
+\section{The problem}
+
+Lean's type system has no linearity. A program holding a mutable array can keep
+a second reference and observe---or break---an in-place update. Rust solves this
+with ownership and borrowing, enforced by the borrow checker. The question here
+is whether the same rules can be enforced by a \emph{checked data structure}:
+
+\begin{quote}
+A ledger owns all authority. Capabilities are inert names. Every use is checked
+against the current state.
+\end{quote}
+
+A capability is just a number. It does nothing by itself; all power comes from
+the ledger saying, at the moment of use, ``this capability may write these
+bytes''. Copying a name is free and grants nothing, because copying is not using.
+
+The stack, bottom to top, each layer trusting only the ones below it:
+
+\begin{center}\footnotesize\ttfamily
+\begin{tabular}{ll}
+\toprule
+algorithms as clients & \file{Cap/UFRun.lean} \\
+sealed certificates & \file{Cap/Runner.lean} \\
+unified checker/interpreter & \file{Cap/Unified.lean} \\
+suspension (loans) & \file{Cap/Suspend.lean} \\
+the world & \file{Cap/World.lean}, \file{Cap/WorldInvariant.lean} \\
+context and invariants & \file{Cap/Context.lean}, \file{Cap/Invariant.lean} \\
+joins & \file{Cap/Join.lean} \\
+loan bookkeeping & \file{Cap/Loans.lean} \\
+the ledger & \file{Cap/Ledger.lean} \\
+shares & \file{Cap/Share.lean} \\
+footprints & \file{Cap/Footprint.lean} \\
+identities & \file{Cap/Id.lean} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\section{Names are not pointers}
+
+Everything the ledger tracks has its own identity type (\file{Cap/Id.lean}):
+
+\begin{lstlisting}
+structure AllocId where
+  val : Nat
+deriving DecidableEq, Repr
+
+structure CapId where
+  val : Nat
+deriving DecidableEq, Repr
+-- and likewise LoanId, LifetimeId
+\end{lstlisting}
+
+They are distinct tagged naturals --- you write \lean{⟨3⟩} --- and being distinct
+\emph{types} means the checker can never confuse an allocation for a capability.
+
+\section{Shares: who may do what}
+
+A capability's \emph{share} of a resource is a fraction $q/D$: a numerator $q$
+over a context-wide denominator $D$. The whole resource is $D/D$; a half is
+$D/2$ over $D$. \file{Cap/Share.lean} enforces three rules:
+
+\begin{itemize}[leftmargin=1.4em]
+\item a split produces shares that add up to exactly what was there
+  (\lean{Splits});
+\item only the \emph{whole} share may write (\lean{Writable});
+\item so two partial shares can never both write (\lean{no\_two\_writes}).
+\end{itemize}
+
+That is the whole fractional-uniqueness story: writing requires $q = D$, and the
+ledger's accounting makes $q = D$ achievable by at most one capability at a
+time.
+
+\section{Footprints: which bytes}
+
+A footprint is a half-open interval $[lo, hi)$ of an allocation's bytes
+(\file{Cap/Footprint.lean}). \lean{splitAt} cuts an interval in two; the proofs
+say the pieces are disjoint, adjacent and cover the original. A capability's
+authority is a share \emph{and} a footprint together: this much of these bytes.
+
+\section{The ledger: trees of authority}
+
+An \lean{Owner} (one per allocation) holds a tree of leaves
+(\file{Cap/Ledger.lean}). A \lean{Leaf} is a capability with its footprint, its
+share numerator, a ceiling and a state:
+
+\begin{lstlisting}
+inductive CapState where
+  | active
+  | retired
+  | consumed
+
+structure Leaf where
+  id : CapId
+  alloc : AllocId
+  lo : Nat
+  hi : Nat
+  ordered : lo ≤ hi
+  q : Nat
+  pos : 0 < q
+  ceiling : Ceiling
+  state : CapState
+
+inductive Tree where
+  | leaf (c : Leaf)
+  | frac (id : CapId) (l r : Tree)      -- children split the share, same bytes
+  | spatial (id : CapId) (l r : Tree)   -- children split the byte range
+\end{lstlisting}
+
+The measure that makes it all cohere is the \emph{budget}: at byte $x$, the sum
+of shares of all leaves covering $x$.
+
+\begin{lstlisting}
+def Leaf.budget (c : Leaf) (x : Nat) : Nat :=
+  if c.state = .consumed then 0
+  else if c.lo ≤ x ∧ x < c.hi then c.q else 0
+\end{lstlisting}
+
+The design's central invariant is coverage (\file{Cap/Ledger.lean}):
+
+\begin{lstlisting}
+def Owner.Covered (o : Owner) (D : Nat) : Prop :=
+  ∀ x, x < o.len → o.root.budget x = D
+\end{lstlisting}
+
+At every byte the budget is exactly $D$: nothing unaccounted for, nothing
+double-counted. Splits preserve the budget by construction
+(\lean{frac\_split\_budget}, \lean{spatial\_split\_budget}); the sibling-only
+fractional join merges two leaves back into one of summed share and preserves it
+(\lean{joinFraction\_covered}), and is refused if the children carry the same
+capability id (\lean{joinChildren?\_alias\_none}).
+
+The write guard is decidable, and provably the same thing as the logical guard:
+
+\begin{lstlisting}
+def Owner.writableB (o : Owner) (D : Nat) (id : CapId) (i : Nat) : Bool :=
+  match o.root.find? id with
+  | none => false
+  | some c =>
+    decide (c.state = .active ∧ c.q = D ∧ c.ceiling = .readWrite
+              ∧ c.lo ≤ i ∧ i < c.hi)
+
+theorem Owner.writableB_sound
+    (h : o.writableB D id i = true) : o.Writable D id i
+\end{lstlisting}
+
+\lean{writableB\_sound} is small but load-bearing: it is why the executable
+check and the logical predicate can never drift apart.
+
+\section{Many owners: the context}
+
+A \lean{Ctx} is a list of owners, the denominator and a fresh-allocation
+counter (\file{Cap/Context.lean}):
+
+\begin{lstlisting}
+structure Ctx where
+  owners : List Owner
+  D : Nat
+  nextAlloc : Nat
+
+def Ctx.Realizes (C : Ctx) : Prop :=
+  (∀ o ∈ C.owners, o.Covered C.D) ∧ (C.owners.map (·.alloc)).Nodup
+\end{lstlisting}
+
+\file{Cap/Invariant.lean} strengthens this to \lean{Ctx.WellFormed}:
+\lean{Realizes}, plus every owner's leaves inside its own allocation
+(\lean{Owner.LeavesWithin}), plus all capability ids across all owners distinct.
+The important theorems are the \emph{preservation} ones --- allocation,
+disposal, and both splits, dispatched to their owner, all preserve it:
+
+\begin{lstlisting}
+theorem Ctx.splitAtOwner_wellFormed
+    (hwf : C.WellFormed) (hmem : o ∈ C.owners)
+    (hfids : o.FreshIds id1 id2)
+    (hfresh1 : id1 ∉ C.ids) (hfresh2 : id2 ∉ C.ids)
+    (hs : C.splitAtOwner? o id id1 id2 k = some C') :
+    C'.WellFormed
+\end{lstlisting}
+
+Freshness is not a detail: it is what stops a new capability from colliding with
+an old one and inheriting its authority. The join side,
+\lean{Ctx.joinFractionOwner\_wellFormed}, is harder: joining removes two
+capability ids and adds one, so its proof needs an exact permutation of the id
+list (\lean{Owner.joinFraction?\_ids\_perm}).
+
+\section{The world: owners plus bytes}
+
+A \lean{World} (\file{Cap/World.lean}) is the context, the backends (one byte
+buffer per allocation), and the loan bookkeeping:
+
+\begin{lstlisting}
+structure World where
+  ctx : Ctx
+  heaps : AllocId → Option Backend
+  loans : LoanCtx
+\end{lstlisting}
+
+\file{Cap/WorldInvariant.lean} bundles the world invariant:
+
+\begin{lstlisting}
+def World.WellFormed (w : World) : Prop :=
+  w.ctx.WellFormed           -- context invariant
+  ∧ w.ctx.Functional         -- one owner per allocation
+  ∧ w.StorageMatches         -- the found owner's backend has its length
+\end{lstlisting}
+
+The workhorse lemma is \lean{World.update\_storage}: replacing one owner by a
+same-length result keeps the heap agreement. Every command's preservation proof
+ends in it.
+
+\section{The unified language: the checker is the interpreter}
+
+\file{Cap/Unified.lean} gives the command language:
+
+\begin{lstlisting}
+inductive UCmd where
+  | write (a : AllocId) (id : CapId) (i : Nat) (v : UInt8)
+  | splitAt (a : AllocId) (id id1 id2 : CapId) (k : Nat)
+  | splitFraction (a : AllocId) (id id1 id2 : CapId) (q1 q2 : Nat)
+  | join (a : AllocId) (node newId : CapId)
+  | free (a : AllocId) (d : CapId)
+  | alloc (n : Nat) (rootId disposal : CapId)
+  | beginLoan (a : AllocId) (lender : CapId) (loanId : LoanId)
+  | endLoan (a : AllocId) (loanId : LoanId)
+  | nop
+\end{lstlisting}
+
+\lean{checkWorld} runs a command list and returns either an error or the world
+it executed:
+
+\begin{lstlisting}
+def checkWorld : World → List UCmd → Except String World
+  | w, [] => .ok w
+  | w, .nop :: cs => checkWorld w cs
+  | w, .write a id i v :: cs =>
+    match w.writeChecked a id i v with
+    | .ok w' => checkWorld w' cs
+    | .error e => .error e
+  -- and likewise one branch per command
+\end{lstlisting}
+
+One theorem covers all of it:
+
+\begin{lstlisting}
+theorem checkWorld_wf :
+    checkWorld w cs = .ok w' → w.WellFormed → w'.WellFormed
+\end{lstlisting}
+
+Every accepted execution --- allocation, writes, both splits, joins, loans,
+disposal --- preserves the world invariant. \lean{checkWorld\_rel} derives the
+older \lean{World.Rel} from it, and \lean{checkWorld\_append}
+(\file{Cap/Runner.lean}) is what makes sequential composition of certificates
+possible.
+
+\subsection{A walk through the lifecycle}
+
+The concrete fixture runs the whole discipline end to end:
+
+\begin{lstlisting}
+def uLifecycle : List UCmd :=
+  [ .alloc 4 ⟨3⟩ ⟨4⟩             -- fresh 4-byte owner ⟨1⟩; root ⟨3⟩, disposal ⟨4⟩
+  , .write ⟨1⟩ ⟨3⟩ 0 7           -- whole-share write at byte 0
+  , .splitAt ⟨1⟩ ⟨3⟩ ⟨5⟩ ⟨6⟩ 2   -- ⟨5⟩ covers [0,2), ⟨6⟩ covers [2,4)
+  , .write ⟨1⟩ ⟨5⟩ 0 8           -- write through the left half
+  , .splitFraction ⟨1⟩ ⟨5⟩ ⟨7⟩ ⟨8⟩ 32 32  -- two half-shares of [0,2)
+  , .join ⟨1⟩ ⟨7⟩ ⟨9⟩            -- merge back to a whole share ⟨9⟩
+  , .write ⟨1⟩ ⟨9⟩ 1 9           -- writable again: the join restored it
+  , .free ⟨1⟩ ⟨4⟩ ]              -- disposal through the recorded capability
+\end{lstlisting}
+
+Between the fractional split and the join, a write through \lean{⟨7⟩} would be
+\emph{refused} --- a half share cannot write --- and the budget arithmetic is
+what makes that decision sound. The evidence is kernel-computed:
+
+\begin{lstlisting}
+theorem uLifecycle_ok : (checkWorld uWorld uLifecycle).isOk = true := by decide
+
+theorem uLifecycle_wf :
+    ∃ w, checkWorld uWorld uLifecycle = .ok w ∧ w.WellFormed
+
+theorem uLifecycle_snapshot :   -- the untouched 64-byte backend reads back zeros
+    uLifecycleSnapshot = some (some (List.replicate 64 (0 : UInt8))) := by decide
+\end{lstlisting}
+
+\section{Loans: suspension, not tracking}
+
+Loans reuse the leaf state the write guard already consults
+(\file{Cap/Suspend.lean} plus the loan commands in \file{Cap/Unified.lean}).
+\lean{beginLoan} retires the lender's leaf; since \lean{writableB} requires
+\lean{.active}, a write through the lender is then refused \emph{by the same
+guard} --- no parallel machinery:
+
+\begin{lstlisting}
+def Owner.suspendLeaf? (o : Owner) (id : CapId) : Option Owner
+  -- succeeds iff the leaf is .active; sets it to .retired
+
+theorem Owner.suspendLeaf?_not_writable :
+    o.suspendLeaf? id = some o' → ∀ i, o'.writableB D id i = false
+
+theorem Owner.resumeLeaf?_of_suspendLeaf? :
+    -- suspend then resume returns the original owner
+\end{lstlisting}
+
+The refusal is a theorem with a positive control: the same write is accepted
+before the loan (\lean{uLoan\_write\_before}), refused while it is outstanding
+(\lean{uLoan\_suspended\_write\_refused}), and accepted again after
+\lean{endLoan} (\lean{uLoanRun\_ok}).
+
+Stated limits, on purpose: the borrower is the lender's own id (exclusive
+suspension, not a reborrow capability), and the \file{Cap/Policy.lean} liveness
+conjunction is a predicate form the checker does not consult.
+
+\section{Certificates and the sealed boundary}
+
+A \lean{Prog pre} (\file{Cap/Runner.lean}) is a command list packaged with the
+proof that the checker accepts it --- you cannot construct one without the
+derivation:
+
+\begin{lstlisting}
+structure Prog (pre : World) where
+  post : World
+  cmds : List UCmd
+  ok : checkWorld pre cmds = .ok post
+
+theorem checkWorld_append :
+    checkWorld w cs = .ok w' → checkWorld w (cs ++ ds) = checkWorld w' ds
+
+def Prog.seq (p : Prog pre) (q : Prog p.post) : Prog pre
+  -- the second program provably starts in the first's post-world
+\end{lstlisting}
+
+\lean{ClosedProgram} is the sealed form: commands accepted from the canonical
+empty world, with the snapshot as the only observation:
+
+\begin{lstlisting}
+def World.emptyWorld : World
+  -- no owners, no backends, one live root lifetime
+
+structure ClosedProgram where
+  cmds : List UCmd
+  accepted : (checkWorld World.emptyWorld cmds).isOk = true
+
+theorem closed64_snapshot :   -- allocate 64, fill both halves, read back
+    (checkWorld World.emptyWorld closed64.cmds).toOption.map
+      (fun w => (w.heaps ⟨0⟩).map (·.buf))
+      = some (some (List.replicate 32 1 ++ List.replicate 32 2)) := by decide
+\end{lstlisting}
+
+The residual honesty: Lean has no module opacity, so \lean{World} itself remains
+public --- the seal is by discipline, not by the module system.
+
+\section{Algorithms as clients}
+
+Union-find runs over the checked world (\file{Cap/UFRun.lean}). Reads are
+observations of the pure backends --- the discipline constrains writes --- and
+\lean{union} issues its writes through \lean{World.writeChecked}:
+
+\begin{lstlisting}
+def find (w : World) : Nat → Nat → Option Nat
+  | 0, _ => none
+  | fuel + 1, i =>
+    match readParent w i with
+    | none => none
+    | some p => if p = i then some i else find w fuel p
+
+def union (w : World) (i j : Nat) : Except String World :=
+  match find w 8 i, find w 8 j with
+  | some ri, some rj =>
+    if ri = rj then .ok w
+    else w.writeChecked ⟨0⟩ ⟨1⟩ ri rj.toUInt8
+  | _, _ => .error "union: find failed"
+
+theorem union_wf : union w i j = .ok w' → w.WellFormed → w'.WellFormed
+\end{lstlisting}
+
+The concrete trace (attach 1 under 0, 3 under 2, 2 under 0) is accepted, its
+final world well formed, and its backend parent array is exactly the functional
+model's \lean{[0,0,0,2]}, with every pair of the four nodes \lean{Same} in the
+partition relation:
+
+\begin{lstlisting}
+theorem ufTrace_partition :
+    (∃ w', ufTrace ufWorld = .ok w' ∧ w'.WellFormed ∧
+      (w'.heaps ⟨0⟩).map (fun b => (b.buf.take 4).map UInt8.toNat)
+        = some [0, 0, 0, 2]) ∧
+    ∀ x y, x < 4 → y < 4 → UF.Same [0, 0, 0, 2] x y
+\end{lstlisting}
+
+The reachability and one-step-compression facts the client would preserve live
+in \file{Cap/UFPartition.lean} and \file{Cap/UFCompress.lean}
+(\lean{compress\_same\_sound}: compression from a reachable root creates no new
+class pairs).
+
+\section{Two backends, one model}
+
+The pure \lean{Backend} (a byte list with a length proof) is the specification;
+\lean{BackendArr} (\file{Cap/BackendArr.lean}) is the same interface over Lean's
+\lean{ByteArray}:
+
+\begin{lstlisting}
+structure BackendArr where
+  arr : ByteArray
+  len : Nat
+  hlen : arr.size = len
+
+def BackendArr.toBackend (x : BackendArr) : Backend :=
+  { buf := x.arr.data.toList, len := x.len, ... }
+
+theorem BackendArr.write_refines :
+    (x.write i v).map BackendArr.toBackend = Backend.write x.toBackend i v
+
+theorem ba64_refines : ba64.map BackendArr.toBackend = pure64
+theorem ba64_snapshot :   -- the byte-array run lands on the reference bytes
+    (ba64.map BackendArr.toBackend).map Backend.buf
+      = some (List.replicate 32 1 ++ List.replicate 32 2)
+\end{lstlisting}
+
+The tempting next sentence --- ``the byte array is updated in place'' --- is
+exactly the sentence this repository refuses to write here: Lean's runtime
+\emph{may} mutate a uniquely referenced \lean{ByteArray}, but that is not
+observable from inside, so nothing in \file{Cap/} claims it. Observing and
+certifying in-place update is the \file{Ownership/} side's subject. The timing
+observation (\file{bench/CapBATiming.lean}, one interpreted run, agreeing
+checksums) is recorded with the same caveat:
+
+\begin{center}
+\begin{tabular}{lr}
+\toprule
+route & ns / repetition \\
+\midrule
+pure list backend & 73{,}959 \\
+byte-array backend & 47{,}688 \\
+reference heap & 51{,}956 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\section{What is not claimed}
+
+\begin{itemize}[leftmargin=1.4em]
+\item No concurrency, no FFI, no real runtime.
+\item No read discipline: reads are free observations.
+\item Loans are exclusive suspension; no reborrows, no nested lifetimes in the
+  executable language.
+\item The sealed boundary is not module-enforced.
+\item No in-place-update or compiled-performance claim anywhere in \file{Cap/}.
+\item Union-find correctness is the concrete four-node instance, not the
+  general theorem.
+\end{itemize}
+
+\section{The research-scale remainder}
+
+\begin{enumerate}[leftmargin=1.6em]
+\item \textbf{A read discipline} --- fractional read permissions through the
+  guard, and a second, non-suspending loan mode.
+\item \textbf{General union-find correctness} --- termination for compression
+  (a rank potential) plus ownership accounting of the write trace: the first
+  theorem that would use the discipline to prove an algorithm right, not just
+  safe.
+\item \textbf{The in-place observation problem} --- connecting ledger
+  exclusivity to Lean's runtime reference counts; the \file{Ownership/} side
+  carries this.
+\item \textbf{A genuine sealed boundary} --- an opaque runtime or a
+  verified-backend embedding; a policy decision about axioms, not just a proof.
+\item \textbf{Compiled measurements} --- a native binary with a defensible
+  methodology; only interesting once the previous item moves.
+\item \textbf{Full lifecycle bookkeeping} --- non-root lifetimes, distinct
+  borrowers, disposal refused while any loan is outstanding at any owner.
+\end{enumerate}
+
+\section{Reproduce everything}
+
+\begin{lstlisting}[language={},frame=none,backgroundcolor=\color{shade}]
+nix develop -c lake build Cap                -- the whole subsystem
+nix develop -c bash scripts/check_all.sh     -- builds + axioms + census + docs
+lake env lean bench/CapBATiming.lean         -- the three-backend observation
+\end{lstlisting}
+
+\end{document}
