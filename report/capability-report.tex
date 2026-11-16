@@ -777,6 +777,20 @@ loan as positive control), and after the loan the same write is accepted
 liveness conjunction of \file{Cap/Policy.lean} remains a predicate form and is
 not consulted by the checker. A snapshot command is not yet in this language.
 
+\section{Union-find through the checked world}
+
+\file{Cap/UFRun.lean} runs union-find as a client of the checked execution. Reads
+are observations of the pure backends (the discipline constrains writes), and
+\texttt{union} issues its writes through \texttt{World.writeChecked}, so
+\texttt{union\_wf} preserves the world invariant. The concrete trace attaches 1
+under 0, 3 under 2 and 2 under 0; it is accepted (\texttt{ufTrace\_ok}), its
+final world is well formed, its backend parent array is exactly the functional
+model's \texttt{[0,0,0,2]} (\texttt{ufTrace\_backend}), and every pair of the
+four nodes is \texttt{Same} in the functional partition relation
+(\texttt{ufTrace\_partition}). Path compression in the client and a read
+discipline are not claimed; the compression facts the client would preserve live
+in \file{Cap/UFCompress.lean}.
+
 \section{Measurements}
 
 \texttt{bench/CapTiming.lean} times the two pure models on the 64-byte

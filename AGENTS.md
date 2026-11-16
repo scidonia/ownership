@@ -203,6 +203,15 @@
   the membership bound, and `joinFraction?_ids_nodup` preserves distinctness for a
   fresh `newId`. Arbitrary same-resource recombination, the common-partition
   normaliser and provenance beyond node shape are not implemented.
+- `Cap/UFRun.lean` is the union-find client of the checked world: reads are
+  observations of the pure backends (`readParent`, `find` with fuel), and `union`
+  issues writes through `World.writeChecked`, so `union_wf` preserves the world
+  invariant. The concrete trace (1 under 0, 3 under 2, 2 under 0) is accepted
+  (`ufTrace_ok`), its final world is well formed (`ufTrace_wf`), its backend
+  parent array is the functional model's `[0,0,0,2]` (`ufTrace_backend`), and
+  every pair of the four nodes is `Same` in the functional relation
+  (`ufTrace_partition`). No path compression in the client, no read discipline:
+  the checked route governs writes only.
 - `Cap/UFCompress.lean` adds bounded root finding and one-step compression to the
   functional model: `findRootF` chases parents with fuel, `StopsAt` records a
   reached fixed point, `findRootF_root`/`findRootF_reachable` give the root and
