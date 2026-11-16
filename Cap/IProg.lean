@@ -28,6 +28,7 @@ in `UCmd`); termination is fuel; the negative/refusal side lives at the type
 level (ill-evidenced programs do not exist) rather than as runtime errors.
 -/
 import Cap.Unified
+import Cap.Runner
 
 namespace Cap
 
@@ -265,6 +266,43 @@ theorem iLifecycle_ctx {w' : World}
 freshness evidence is uninhabited. -/
 theorem stale_child_refused :
     ¬ (Owner.init ⟨1⟩ 4 64 (by decide) ⟨3⟩ ⟨4⟩).FreshIds ⟨3⟩ ⟨5⟩ := by
+  decide
+
+/-- The context after allocating the closed program's 4-byte owner. -/
+def icCtx1 : Ctx :=
+  World.emptyWorld.ctx.alloc ⟨0⟩ 4 (by decide) ⟨1⟩ ⟨2⟩ (by decide)
+
+/-- The context after disposing it: no owners remain, fresh-id history is kept. -/
+def icCtx3 : Ctx := (icCtx1.freeWith? ⟨0⟩ ⟨2⟩).getD icCtx1
+
+/-- A closed program: allocate a 4-byte owner, write, dispose. Its typed
+post-context has no owners. -/
+def iClosed : IProg World.emptyWorld.ctx Unit (fun _ => icCtx3) :=
+  .bind (.alloc 4 ⟨1⟩ ⟨2⟩ (by decide) (by decide) (by decide)) fun _ =>
+  .bind (.write ⟨0⟩ ⟨1⟩ 0 7) fun _ =>
+  .bind (.free ⟨0⟩ ⟨2⟩ (by decide)) fun _ =>
+  .pure ()
+
+/-- The closed program is accepted. -/
+theorem iClosed_ok : (evalIProg 32 iClosed World.emptyWorld).isSome = true := by
+  decide
+
+/-- A successful closed run ends with no owners: no outstanding resources. -/
+theorem iClosed_closed {w' : World}
+    (h : evalIProg 32 iClosed World.emptyWorld = some ((), w')) : w'.ctx.owners = [] := by
+  have hctx := (evalIProg_post World.emptyWorld 32 iClosed rfl h World.emptyWorld_wf).1
+  rw [hctx]
+  rfl
+
+/-- The closed run's world is well formed. -/
+theorem iClosed_sound {w' : World}
+    (h : evalIProg 32 iClosed World.emptyWorld = some ((), w')) : w'.WellFormed :=
+  (evalIProg_post World.emptyWorld 32 iClosed rfl h World.emptyWorld_wf).2
+
+/-- After the closed run the disposed allocation's backend is gone. -/
+theorem iClosed_freed :
+    (evalIProg 32 iClosed World.emptyWorld).map
+      (fun r => (r.2.heaps ⟨0⟩).isNone) = some true := by
   decide
 
 end Cap

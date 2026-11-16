@@ -213,9 +213,12 @@
   postcondition and preserves the world invariant. `iLifecycle` is the indexed
   lifecycle (alloc, write, split, write, free) with all evidence derived, and
   its run is accepted, well formed, on the typed post-context, and leaves the
-  pre-existing backend untouched. The post-contexts use `getD` so the type
-  function is computable; `beginLoan`/`endLoan` are not indexed yet because the
-  loan list is world state outside `Γ`.
+  pre-existing backend untouched. `iClosed` is the closed-run lifecycle from
+  `World.emptyWorld`: accepted, ends with no owners (`iClosed_closed`), well
+  formed (`iClosed_sound`), and the disposed allocation's backend is gone
+  (`iClosed_freed`). The post-contexts use `getD` so the type function is
+  computable; `beginLoan`/`endLoan` are not indexed yet because the loan list is
+  world state outside `Γ`.
 - `Cap/Typed.lean` is the context-preserving program fragment: `Owned Γ α` gives
   reads, writes and monadic sequencing over a fixed permission context, and
   `evalOwned` is a total fuelled evaluator (exhaustion is a visible `none`).
