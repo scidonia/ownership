@@ -203,6 +203,19 @@
   the membership bound, and `joinFraction?_ids_nodup` preserves distinctness for a
   fresh `newId`. Arbitrary same-resource recombination, the common-partition
   normaliser and provenance beyond node shape are not implemented.
+- `Cap/IProg.lean` is the indexed program interface: `IProg Γ α Q` starts with
+  permission context `Γ`, returns `a : α` and ends with `Q a`; context-changing
+  constructors (`alloc`, `splitAt`, `free`) carry their evidence, so stale or
+  refused operations are not programs (`stale_child_refused` shows a reused
+  parent id makes the freshness evidence uninhabited). `evalIProg` is a total
+  fuelled evaluator, and `evalIProg_post` is the layer's soundness theorem:
+  execution from a world matching the context ends in a world matching the
+  postcondition and preserves the world invariant. `iLifecycle` is the indexed
+  lifecycle (alloc, write, split, write, free) with all evidence derived, and
+  its run is accepted, well formed, on the typed post-context, and leaves the
+  pre-existing backend untouched. The post-contexts use `getD` so the type
+  function is computable; `beginLoan`/`endLoan` are not indexed yet because the
+  loan list is world state outside `Γ`.
 - `Cap/Typed.lean` is the context-preserving program fragment: `Owned Γ α` gives
   reads, writes and monadic sequencing over a fixed permission context, and
   `evalOwned` is a total fuelled evaluator (exhaustion is a visible `none`).

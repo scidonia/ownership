@@ -824,6 +824,24 @@ observations of the pure backends; termination is fuel; allocation, splits,
 loans and disposal remain in the \texttt{UCmd} language of
 \file{Cap/Unified.lean}.
 
+\section{The indexed interface: programs with post-contexts}
+
+\file{Cap/IProg.lean} adds the indexed form the handoff asks for next:
+\texttt{IProg \\(\Gamma\\) \\(\alpha\\) Q} starts with permission context \\(\Gamma\\),
+returns \\(a : \\alpha\\) and ends with \\(Q\\,a\\). Context-changing constructors carry their
+evidence, so a stale or refused operation is not a program at all: a split that
+reuses its parent's capability as a child has an uninhabited freshness proof
+(\texttt{stale\_child\_refused}). The fuelled evaluator is total, and the
+layer's soundness theorem \texttt{evalIProg\_post} states: execution from a world
+matching the typing context ends in a world matching the postcondition and
+preserves the world invariant. The indexed lifecycle --- allocation, write,
+spatial split, write, disposal, with every evidence derived --- is accepted
+(\texttt{iLifecycle\_ok}), ends on its typed post-context
+(\texttt{iLifecycle\_ctx}), well formed (\texttt{iLifecycle\_sound}), with the
+pre-existing backend untouched (\texttt{iLifecycle\_snapshot}). Post-contexts
+use \texttt{getD} so the typing function stays computable; loans are not yet in
+the index because the loan list is world state outside \\(\Gamma\\).
+
 \section{Measurements}
 
 \texttt{bench/CapTiming.lean} times the two pure models on the 64-byte
