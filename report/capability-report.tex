@@ -791,6 +791,18 @@ four nodes is \texttt{Same} in the functional partition relation
 discipline are not claimed; the compression facts the client would preserve live
 in \file{Cap/UFCompress.lean}.
 
+\section{Byte-array backend refinement}
+
+\file{Cap/BackendArr.lean} backs the backend with \texttt{ByteArray} and refines
+the pure list model: \texttt{toBackend} reads the array's data back as a byte
+list, and empty, reads, writes and range fills agree with \texttt{Backend}
+(\texttt{empty\_refines}, \texttt{read\_refines}, \texttt{write\_refines},
+\texttt{fills\_refine}). The 64-byte two-range fill through the byte-array route
+refines the pure run (\texttt{ba64\_refines}), whose snapshot is the reference
+bytes (\texttt{pure64\_snapshot}, kernel-computed). In-place update at runtime
+is not observable here and is not claimed; that observation problem is the
+subject of the ownership side of this repository.
+
 \section{Measurements}
 
 \texttt{bench/CapTiming.lean} times the two pure models on the 64-byte

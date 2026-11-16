@@ -366,6 +366,13 @@ shows the certificate it would have to emit, not proof-producing elaboration.
   with 1 and `[32,64)` with 2, and proves the snapshot is the reference heap's
   (`exampleBackend_snapshot`, `exampleBackend_rel`, both by `decide`). It is a
   concrete run, not the interpreter, an FFI claim or a performance result.
+- `Cap/BackendArr.lean` is the byte-array-backed backend: `BackendArr` stores a
+  `ByteArray`; `toBackend` reads its data back as a byte list; `empty_refines`,
+  `read_refines`, `write_refines` and the fold-level `fills_refine` state
+  agreement with the pure `Backend`; the 64-byte two-range fill refines the pure
+  run (`ba64_refines`) whose snapshot is the reference bytes (`pure64_snapshot`
+  by `decide`, `ba64_snapshot`). In-place update at runtime is not observable
+  here and is not claimed.
 - `Cap/Backend.lean` is the pure mutable-backend model for one allocation:
   `Backend` with a buffer and length proof, `Rel` to the reference heap,
   `empty_rel`, `read_refines`, `write_refines`, `write_preserves_len` and
