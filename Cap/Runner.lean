@@ -110,6 +110,18 @@ theorem checkWorld_append : ∀ (cs ds : List UCmd) (w w' : World),
           simp only [List.cons_append, checkWorld, hpos, hw] at h ⊢
           exact ih ds w'' w' h
       · simp [checkWorld, hpos] at h
+    | beginLoan a lender loanId =>
+      cases hw : w.beginLoanChecked a lender loanId with
+      | error e => simp [checkWorld, hw] at h
+      | ok w'' =>
+        simp only [List.cons_append, checkWorld, hw] at h ⊢
+        exact ih ds w'' w' h
+    | endLoan a loanId =>
+      cases hw : w.endLoanChecked a loanId with
+      | error e => simp [checkWorld, hw] at h
+      | ok w'' =>
+        simp only [List.cons_append, checkWorld, hw] at h ⊢
+        exact ih ds w'' w' h
 
 /-- Sequential composition of certificates: the second program starts in the first
 program's post-world, and the commands are appended. -/
@@ -122,7 +134,8 @@ def Prog.seq (p : Prog pre) (q : Prog p.post) : Prog pre where
 
 /-- The canonical empty world: no owners, no backends. -/
 def World.emptyWorld : World :=
-  { ctx := { owners := [], D := 64, nextAlloc := 0 }, heaps := fun _ => none }
+  { ctx := { owners := [], D := 64, nextAlloc := 0 }, heaps := fun _ => none,
+    loans := .rootOnly }
 
 /-- The empty world is well formed. -/
 theorem World.emptyWorld_wf : World.emptyWorld.WellFormed := by

@@ -25,6 +25,8 @@ inductive UCmd where
   | join (a : AllocId) (node newId : CapId)
   | free (a : AllocId) (d : CapId)
   | alloc (n : Nat) (rootId disposal : CapId)
+  | beginLoan (a : AllocId) (lender : CapId) (loanId : LoanId)
+  | endLoan (a : AllocId) (loanId : LoanId)
   | nop
 
 namespace World
@@ -115,6 +117,108 @@ theorem writeChecked_wf {w w' : World} {a : AllocId} {id : CapId} {i : Nat}
     · refine ⟨b0, ?_, hlen⟩
       simp [hheaps, ha, hb0]
 
+/-- Begin an exclusive-suspension loan: the lender's leaf must exist and be
+active, the loan identifier must be fresh, and the root lifetime `⟨0⟩` must be
+live. The lender's leaf is retired — so the write guard refuses through it
+while the loan is outstanding — and the loan is recorded against the root
+lifetime. The borrower is the lender's own capability identifier: this slice
+implements exclusive suspension, not a reborrow capability, so the distinct
+lender/borrower side condition of `LoanCtx.begin` does not apply and the loan
+list is extended directly. -/
+def beginLoanChecked (w : World) (a : AllocId) (lender : CapId) (loanId : LoanId) :
+    Except String World :=
+  match w.ctx.findOwner? a with
+  | none => .error "beginLoan: no owner for the allocation"
+  | some o =>
+    match o.root.find? lender with
+    | none => .error "beginLoan: no such lender capability"
+    | some c =>
+      if c.state = .active then
+        if loanId ∉ w.loans.loans.map (·.id) then
+          if w.loans.live ⟨0⟩ then
+            match o.suspendLeaf? lender with
+            | none => .error "beginLoan: suspension refused"
+            | some o' =>
+              .ok { w with
+                    ctx := w.ctx.update o.alloc o',
+                    loans := { w.loans with
+                      loans := w.loans.loans ++
+                        [{ id := loanId, lender := lender, borrower := lender,
+                           lifetime := ⟨0⟩ }] } }
+          else .error "beginLoan: the root lifetime is not live"
+        else .error "beginLoan: loan identifier is not fresh"
+      else .error "beginLoan: lender capability is not active"
+
+/-- A successful loan beginning preserves the world invariant: the loans field
+does not enter the invariant and the context change is the suspension. -/
+theorem beginLoanChecked_wf {w w' : World} {a : AllocId} {lender : CapId}
+    {loanId : LoanId} (h : w.beginLoanChecked a lender loanId = .ok w')
+    (hwf : w.WellFormed) : w'.WellFormed := by
+  unfold World.beginLoanChecked at h
+  cases hf : w.ctx.findOwner? a with
+  | none => simp [hf] at h
+  | some o =>
+    cases hfl : o.root.find? lender with
+    | none => simp [hf, hfl] at h
+    | some c =>
+      simp only [hf, hfl] at h
+      by_cases hst : c.state = .active
+      · rw [ite_eq_left hst] at h
+        by_cases hfresh : loanId ∉ w.loans.loans.map (·.id)
+        · rw [ite_eq_left hfresh] at h
+          by_cases hlive : w.loans.live ⟨0⟩ = true
+          · rw [ite_eq_left hlive] at h
+            cases hs : o.suspendLeaf? lender with
+            | none => simp [hs] at h
+            | some o' =>
+              simp only [hs, Except.ok.injEq] at h
+              subst h
+              exact World.suspend_update_wf hwf hf hs
+          · rw [ite_eq_right hlive] at h
+            simp at h
+        · rw [ite_eq_right hfresh] at h
+          simp at h
+      · rw [ite_eq_right hst] at h
+        simp at h
+
+/-- End a loan: the loan must be recorded, and the owner of `a` must still hold
+the lender's leaf, which is restored to active. The record is removed by a list
+filter rather than `LoanCtx.endLoan`: every loan of this slice is bound to the
+shared root lifetime `⟨0⟩`, which must stay live for later loans, so no
+lifetime is ended here. Refuses if the owner or the leaf is gone. -/
+def endLoanChecked (w : World) (a : AllocId) (loanId : LoanId) : Except String World :=
+  match w.loans.findLoan? loanId with
+  | none => .error "endLoan: no such loan"
+  | some loan =>
+    match w.ctx.findOwner? a with
+    | none => .error "endLoan: no owner for the allocation"
+    | some o =>
+      match o.resumeLeaf? loan.lender with
+      | none => .error "endLoan: lender is missing or not suspended"
+      | some o' =>
+        .ok { w with
+              ctx := w.ctx.update o.alloc o',
+              loans := { w.loans with
+                loans := w.loans.loans.filter (fun l => l.id ≠ loanId) } }
+
+/-- A successful loan ending preserves the world invariant: the loans field
+does not enter the invariant and the context change is the resumption. -/
+theorem endLoanChecked_wf {w w' : World} {a : AllocId} {loanId : LoanId}
+    (h : w.endLoanChecked a loanId = .ok w') (hwf : w.WellFormed) : w'.WellFormed := by
+  unfold World.endLoanChecked at h
+  cases hl : w.loans.findLoan? loanId with
+  | none => simp [hl] at h
+  | some loan =>
+    cases hf : w.ctx.findOwner? a with
+    | none => simp [hl, hf] at h
+    | some o =>
+      cases hr : o.resumeLeaf? loan.lender with
+      | none => simp [hl, hf, hr] at h
+      | some o' =>
+        simp only [hl, hf, hr, Except.ok.injEq] at h
+        subst h
+        exact World.resume_update_wf hwf hf hr
+
 end World
 
 /-- The checker is the interpreter: an accepted program returns the world it
@@ -149,7 +253,15 @@ def checkWorld : World → List UCmd → Except String World
       match w.allocChecked n rootId disposal hpos with
       | .ok w' => checkWorld w' cs
       | .error e => .error e
-    else .error "alloc: non-positive denominator" 
+    else .error "alloc: non-positive denominator"
+  | w, .beginLoan a lender loanId :: cs =>
+    match w.beginLoanChecked a lender loanId with
+    | .ok w' => checkWorld w' cs
+    | .error e => .error e
+  | w, .endLoan a loanId :: cs =>
+    match w.endLoanChecked a loanId with
+    | .ok w' => checkWorld w' cs
+    | .error e => .error e
 
 /-- An accepted execution preserves the world invariant. -/
 theorem checkWorld_wf : ∀ (w w' : World) (cs : List UCmd),
@@ -207,6 +319,18 @@ theorem checkWorld_wf : ∀ (w w' : World) (cs : List UCmd),
           simp [checkWorld, hpos, hw] at h
           exact ih w'' h (World.allocChecked_wf hw hwf)
       · simp [checkWorld, hpos] at h
+    | beginLoan a lender loanId =>
+      cases hw : w.beginLoanChecked a lender loanId with
+      | error e => simp [checkWorld, hw] at h
+      | ok w'' =>
+        simp [checkWorld, hw] at h
+        exact ih w'' h (World.beginLoanChecked_wf hw hwf)
+    | endLoan a loanId =>
+      cases hw : w.endLoanChecked a loanId with
+      | error e => simp [checkWorld, hw] at h
+      | ok w'' =>
+        simp [checkWorld, hw] at h
+        exact ih w'' h (World.endLoanChecked_wf hw hwf)
 
 /-- An accepted execution preserves the world relation, provided the input world
 is well formed. -/
@@ -221,7 +345,8 @@ def uOwner : Owner := Owner.init ⟨0⟩ 64 64 (by decide) ⟨1⟩ ⟨2⟩
 /-- The concrete world: one 64-byte owner and its backend. -/
 def uWorld : World :=
   { ctx := { owners := [uOwner], D := 64, nextAlloc := 1 },
-    heaps := fun a => if a = ⟨0⟩ then some (Backend.empty 64) else none }
+    heaps := fun a => if a = ⟨0⟩ then some (Backend.empty 64) else none,
+    loans := .rootOnly }
 
 /-- The concrete 64-byte world is well formed. -/
 theorem uWorld_wf : uWorld.WellFormed := by
@@ -331,5 +456,53 @@ theorem uLifecycle_wf : ∃ w, checkWorld uWorld uLifecycle = .ok w ∧ w.WellFo
     rw [h] at hok
     cases hok
   | ok w => exact ⟨w, rfl, checkWorld_wf uWorld w uLifecycle h uWorld_wf⟩
+
+/-- The loan prefix: allocate a fresh 4-byte owner and write one byte through
+its root capability. -/
+def uLoanPre : List UCmd := [.alloc 4 ⟨3⟩ ⟨4⟩, .write ⟨1⟩ ⟨3⟩ 0 7]
+
+/-- Positive control: the write at index 1 is accepted before the loan
+begins. -/
+theorem uLoan_write_before :
+    (checkWorld uWorld (uLoanPre ++ [.write ⟨1⟩ ⟨3⟩ 1 9])).isOk = true := by
+  decide
+
+/-- While the loan is outstanding the lender's leaf is retired, so the same
+write through it is refused. -/
+theorem uLoan_suspended_write_refused :
+    (checkWorld uWorld
+      (uLoanPre ++ [.beginLoan ⟨1⟩ ⟨3⟩ ⟨0⟩, .write ⟨1⟩ ⟨3⟩ 1 9])).isOk = false := by
+  decide
+
+/-- The loan run: allocate and write, begin a loan on the root capability, end
+it, write again — accepted now that the leaf is active — and dispose. -/
+def uLoanRun : List UCmd :=
+  uLoanPre ++
+    [.beginLoan ⟨1⟩ ⟨3⟩ ⟨0⟩, .endLoan ⟨1⟩ ⟨0⟩, .write ⟨1⟩ ⟨3⟩ 1 9, .free ⟨1⟩ ⟨4⟩]
+
+/-- The loan run is accepted. -/
+theorem uLoanRun_ok : (checkWorld uWorld uLoanRun).isOk = true := by
+  decide
+
+/-- The loan run's final world is well formed. -/
+theorem uLoanRun_wf : ∃ w, checkWorld uWorld uLoanRun = .ok w ∧ w.WellFormed := by
+  have hok : (checkWorld uWorld uLoanRun).isOk = true := uLoanRun_ok
+  cases h : checkWorld uWorld uLoanRun with
+  | error e =>
+    rw [h] at hok
+    cases hok
+  | ok w => exact ⟨w, rfl, checkWorld_wf uWorld w uLoanRun h uWorld_wf⟩
+
+/-- The loan run's snapshot of the pre-existing 64-byte backend. -/
+def uLoanSnapshot : Option (Option (List UInt8)) :=
+  match checkWorld uWorld uLoanRun with
+  | .ok w => some ((w.heaps ⟨0⟩).map (fun b => b.buf))
+  | .error _ => none
+
+/-- The loan run leaves the pre-existing 64-byte backend at its initial value:
+the commands act only on the freshly allocated owner. -/
+theorem uLoan_snapshot :
+    uLoanSnapshot = some (some (List.replicate 64 (0 : UInt8))) := by
+  decide
 
 end Cap

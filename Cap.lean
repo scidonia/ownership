@@ -5,6 +5,7 @@ import Cap.Admission
 import Cap.Ledger
 import Cap.Bytes
 import Cap.Loans
+import Cap.Suspend
 import Cap.Session
 import Cap.Context
 import Cap.Policy

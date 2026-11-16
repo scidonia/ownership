@@ -58,6 +58,7 @@ this file only imports them.
 -/
 import Cap.World
 import Cap.Invariant
+import Cap.Suspend
 
 namespace Cap
 
@@ -364,7 +365,8 @@ def World.allocChecked (w : World) (n : Nat) (rootId disposal : CapId)
     (pos : 0 < w.ctx.D) : Except String World :=
   if hf : (⟨w.ctx.nextAlloc⟩ : AllocId) ∉ w.ctx.owners.map (·.alloc) then
     if hfresh : rootId ∉ w.ctx.ids ∧ disposal ∉ w.ctx.ids ∧ rootId ≠ disposal then
-      .ok { ctx := w.ctx.alloc ⟨w.ctx.nextAlloc⟩ n pos rootId disposal hf,
+      .ok { w with
+            ctx := w.ctx.alloc ⟨w.ctx.nextAlloc⟩ n pos rootId disposal hf,
             heaps := fun x => if x = (⟨w.ctx.nextAlloc⟩ : AllocId) then some (Backend.empty n) else w.heaps x }
     else .error "alloc: capability identifiers are not fresh"
   else .error "alloc: stale allocation identifier"
@@ -514,5 +516,292 @@ theorem World.joinChecked_wf {w w' : World} {a : AllocId} {node newId : CapId}
           exact ⟨hwfC, hfun, World.update_storage hwf hfa ho'alloc ho'len⟩
       · simp at h
     · simp at h
+
+/-! ### Suspension and resumption -/
+
+/-- Suspension keeps the owner's coverage: the budget is unchanged at every
+byte. -/
+theorem Owner.suspendLeaf?_covered {o o' : Owner} {D : Nat} {id : CapId}
+    (h : o.suspendLeaf? id = some o') (hcov : o.Covered D) : o'.Covered D := by
+  obtain ⟨_, _, _, rfl⟩ := Owner.suspendLeaf?_eq h
+  intro x hx
+  rw [Owner.suspendLeaf?_budget h x]
+  exact hcov x hx
+
+/-- Resumption keeps the owner's coverage. -/
+theorem Owner.resumeLeaf?_covered {o o' : Owner} {D : Nat} {id : CapId}
+    (h : o.resumeLeaf? id = some o') (hcov : o.Covered D) : o'.Covered D := by
+  obtain ⟨_, _, _, rfl⟩ := Owner.resumeLeaf?_eq h
+  intro x hx
+  rw [Owner.resumeLeaf?_budget h x]
+  exact hcov x hx
+
+/-- Suspension keeps every leaf inside the owner's allocation and extent: the
+updated leaf keeps its allocation and footprint. -/
+theorem Owner.suspendLeaf?_leavesWithin {o o' : Owner} {id : CapId}
+    (h : o.suspendLeaf? id = some o') (hlw : o.LeavesWithin) : o'.LeavesWithin := by
+  obtain ⟨c, hf, _, rfl⟩ := Owner.suspendLeaf?_eq h
+  intro id' c' hfind
+  replace hfind : (o.root.replace id (fun c => .leaf { c with state := .retired })).find? id'
+      = some c' := hfind
+  by_cases h'id : id' = id
+  · rw [h'id] at hfind
+    rw [Tree.find?_replace_leaf_eq _ _ (fun c => { c with state := .retired }) (fun _ => rfl),
+      hf] at hfind
+    have hc' : c' = { c with state := .retired } := (Option.some.inj hfind).symm
+    subst hc'
+    exact hlw id c hf
+  · rw [Tree.find?_replace_leaf_ne _ _ _ (fun c => { c with state := .retired }) (fun _ => rfl)
+      h'id] at hfind
+    exact hlw id' c' hfind
+
+/-- Resumption keeps every leaf inside the owner's allocation and extent. -/
+theorem Owner.resumeLeaf?_leavesWithin {o o' : Owner} {id : CapId}
+    (h : o.resumeLeaf? id = some o') (hlw : o.LeavesWithin) : o'.LeavesWithin := by
+  obtain ⟨c, hf, _, rfl⟩ := Owner.resumeLeaf?_eq h
+  intro id' c' hfind
+  replace hfind : (o.root.replace id (fun c => .leaf { c with state := .active })).find? id'
+      = some c' := hfind
+  by_cases h'id : id' = id
+  · rw [h'id] at hfind
+    rw [Tree.find?_replace_leaf_eq _ _ (fun c => { c with state := .active }) (fun _ => rfl),
+      hf] at hfind
+    have hc' : c' = { c with state := .active } := (Option.some.inj hfind).symm
+    subst hc'
+    exact hlw id c hf
+  · rw [Tree.find?_replace_leaf_ne _ _ _ (fun c => { c with state := .active }) (fun _ => rfl)
+      h'id] at hfind
+    exact hlw id' c' hfind
+
+/-- Suspension keeps the disposal entitlement present: the disposal capability
+and the identifier list are unchanged. -/
+theorem Owner.suspendLeaf?_disposalPresent {o o' : Owner} {id : CapId}
+    (h : o.suspendLeaf? id = some o') (hd : o.DisposalPresent) : o'.DisposalPresent := by
+  obtain ⟨c, hf, _, rfl⟩ := Owner.suspendLeaf?_eq h
+  rcases hd with ⟨cd, hcd⟩ | hd
+  · left
+    by_cases hdid : o.disposal = id
+    · rw [hdid] at hcd
+      exact ⟨{ cd with state := .retired }, by
+        show (o.root.replace id (fun c => .leaf { c with state := .retired })).find? o.disposal
+            = some _
+        rw [hdid, Tree.find?_replace_leaf_eq _ _ (fun c => { c with state := .retired })
+          (fun _ => rfl), hcd]
+        rfl⟩
+    · exact ⟨cd, by
+        show (o.root.replace id (fun c => .leaf { c with state := .retired })).find? o.disposal
+            = some _
+        rw [Tree.find?_replace_leaf_ne _ _ _ (fun c => { c with state := .retired }) (fun _ => rfl)
+          hdid]
+        exact hcd⟩
+  · right
+    show o.disposal ∉ (o.root.replace id (fun c => .leaf { c with state := .retired })).ids
+    rw [Tree.ids_replace_leaf _ _ (fun c => { c with state := .retired }) (fun _ => rfl)]
+    exact hd
+
+/-- Resumption keeps the disposal entitlement present. -/
+theorem Owner.resumeLeaf?_disposalPresent {o o' : Owner} {id : CapId}
+    (h : o.resumeLeaf? id = some o') (hd : o.DisposalPresent) : o'.DisposalPresent := by
+  obtain ⟨c, hf, _, rfl⟩ := Owner.resumeLeaf?_eq h
+  rcases hd with ⟨cd, hcd⟩ | hd
+  · left
+    by_cases hdid : o.disposal = id
+    · rw [hdid] at hcd
+      exact ⟨{ cd with state := .active }, by
+        show (o.root.replace id (fun c => .leaf { c with state := .active })).find? o.disposal
+            = some _
+        rw [hdid, Tree.find?_replace_leaf_eq _ _ (fun c => { c with state := .active })
+          (fun _ => rfl), hcd]
+        rfl⟩
+    · exact ⟨cd, by
+        show (o.root.replace id (fun c => .leaf { c with state := .active })).find? o.disposal
+            = some _
+        rw [Tree.find?_replace_leaf_ne _ _ _ (fun c => { c with state := .active }) (fun _ => rfl)
+          hdid]
+        exact hcd⟩
+  · right
+    show o.disposal ∉ (o.root.replace id (fun c => .leaf { c with state := .active })).ids
+    rw [Tree.ids_replace_leaf _ _ (fun c => { c with state := .active }) (fun _ => rfl)]
+    exact hd
+
+/-- Suspension preserves the owner invariant. -/
+theorem Owner.suspendLeaf?_wellFormed {o o' : Owner} {D : Nat} {id : CapId}
+    (h : o.suspendLeaf? id = some o') (hwf : o.WellFormed D) : o'.WellFormed D :=
+  ⟨Owner.suspendLeaf?_covered h hwf.1, Owner.suspendLeaf?_leavesWithin h hwf.2.1,
+    Owner.suspendLeaf?_disposalPresent h hwf.2.2⟩
+
+/-- Resumption preserves the owner invariant. -/
+theorem Owner.resumeLeaf?_wellFormed {o o' : Owner} {D : Nat} {id : CapId}
+    (h : o.resumeLeaf? id = some o') (hwf : o.WellFormed D) : o'.WellFormed D :=
+  ⟨Owner.resumeLeaf?_covered h hwf.1, Owner.resumeLeaf?_leavesWithin h hwf.2.1,
+    Owner.resumeLeaf?_disposalPresent h hwf.2.2⟩
+
+/-- Mapping a conditional replacement that never fires over a list is the
+identity. -/
+theorem map_alloc_ite_self (l : List Owner) (a : AllocId) (o' : Owner)
+    (hne : ∀ y ∈ l, y.alloc ≠ a) :
+    l.map (fun y => if y.alloc = a then o' else y) = l := by
+  induction l with
+  | nil => rfl
+  | cons y ys ih =>
+    rw [List.map_cons, if_neg (hne y List.mem_cons_self),
+      ih (fun z hz => hne z (List.mem_cons_of_mem y hz))]
+
+/-- Updating the owner of an allocation whose allocation identifiers are
+distinct by a replacement with the same identifier list keeps the flattened
+identifier list. -/
+theorem flatMap_update_ids_of_same (l : List Owner) (a : AllocId) (o o' : Owner)
+    (hnd : (l.map (·.alloc)).Nodup) (hmem : o ∈ l) (hoa : o.alloc = a)
+    (hids : o'.ids = o.ids) :
+    (l.map (fun x => if x.alloc = a then o' else x)).flatMap Owner.ids
+      = l.flatMap Owner.ids := by
+  induction l with
+  | nil => rfl
+  | cons x xs ih =>
+    have hnd' : (xs.map (·.alloc)).Nodup := (List.nodup_cons.mp hnd).2
+    have hnx : x.alloc ∉ xs.map (·.alloc) := (List.nodup_cons.mp hnd).1
+    by_cases hxa : x.alloc = a
+    · have hxo : x = o := by
+        rcases List.mem_cons.mp hmem with rfl | hmem'
+        · rfl
+        · exact absurd ((hoa.trans hxa.symm) ▸ List.mem_map_of_mem hmem') hnx
+      subst hxo
+      have htail : xs.map (fun y => if y.alloc = a then o' else y) = xs := by
+        apply map_alloc_ite_self
+        intro y hy hya
+        exact hnx ((hya.trans hxa.symm) ▸ List.mem_map_of_mem hy)
+      simp only [List.map_cons, hxa, if_true, List.flatMap_cons]
+      rw [htail, hids]
+    · have hmem' : o ∈ xs := by
+        rcases List.mem_cons.mp hmem with h | hmem'
+        · subst h
+          exact absurd hoa hxa
+        · exact hmem'
+      simp only [List.map_cons, hxa, if_false, List.flatMap_cons]
+      rw [ih hnd' hmem']
+
+/-- A context update whose replacement has the replaced owner's identifier list
+keeps the context's identifier list. -/
+theorem Ctx.update_ids_of_same_ids {C : Ctx} {a : AllocId} {o o' : Owner}
+    (hnd : (C.owners.map (·.alloc)).Nodup) (hmem : o ∈ C.owners) (hoa : o.alloc = a)
+    (hids : o'.ids = o.ids) :
+    (C.update a o').ids = C.ids := by
+  simp only [Ctx.update, Ctx.ids]
+  exact flatMap_update_ids_of_same C.owners a o o' hnd hmem hoa hids
+
+/-- A context update whose replacement has the replaced owner's identifier list
+keeps the context's identifiers distinct. -/
+theorem Ctx.update_ids_nodup_of_same_ids {C : Ctx} {a : AllocId} {o o' : Owner}
+    (hnd : (C.owners.map (·.alloc)).Nodup) (hmem : o ∈ C.owners) (hoa : o.alloc = a)
+    (hids : o'.ids = o.ids) (hidsnodup : C.ids.Nodup) :
+    (C.update a o').ids.Nodup := by
+  rw [Ctx.update_ids_of_same_ids hnd hmem hoa hids]
+  exact hidsnodup
+
+/-- Replacing an owner by its suspension preserves the world invariant. -/
+theorem World.suspend_update_wf {w : World} {a : AllocId} {o o' : Owner} {id : CapId}
+    (hwf : w.WellFormed) (hf : w.ctx.findOwner? a = some o)
+    (hs : o.suspendLeaf? id = some o') :
+    ({ w with ctx := w.ctx.update o.alloc o' } : World).WellFormed := by
+  have hmem : o ∈ w.ctx.owners := List.mem_of_find?_eq_some hf
+  have hoalloc : o.alloc = a := by
+    have h := List.find?_some (p := fun x : Owner => decide (x.alloc = a))
+      (by simpa [Ctx.findOwner?] using hf)
+    simpa using h
+  have ho'alloc : o'.alloc = o.alloc := Owner.suspendLeaf?_alloc hs
+  have ho'len : o'.len = o.len := Owner.suspendLeaf?_len hs
+  have hwfC : (w.ctx.update o.alloc o').WellFormed := by
+    refine ⟨⟨?_, ?_⟩, ?_, ?_⟩
+    · apply Ctx.update_covered
+      · exact Owner.suspendLeaf?_covered hs (hwf.1.1.1 o hmem)
+      · intro x hx _
+        exact hwf.1.1.1 x hx
+    · exact Ctx.update_nodup ho'alloc hwf.1.1.2
+    · exact Ctx.update_wellFormed_owners (Owner.suspendLeaf?_wellFormed hs (hwf.1.2.1 o hmem))
+        (fun x hx _ => hwf.1.2.1 x hx)
+    · exact Ctx.update_ids_nodup_of_same_ids hwf.1.1.2 hmem rfl
+        (Owner.suspendLeaf?_ids hs) hwf.1.2.2
+  have hfun : (w.ctx.update o.alloc o').Functional :=
+    Ctx.update_functional ho'alloc hwf.1.1.2
+  have hfa : w.ctx.findOwner? o.alloc = some o := by
+    simpa [hoalloc] using hf
+  exact ⟨hwfC, hfun, World.update_storage hwf hfa ho'alloc ho'len⟩
+
+/-- Replacing an owner by its resumption preserves the world invariant. -/
+theorem World.resume_update_wf {w : World} {a : AllocId} {o o' : Owner} {id : CapId}
+    (hwf : w.WellFormed) (hf : w.ctx.findOwner? a = some o)
+    (hr : o.resumeLeaf? id = some o') :
+    ({ w with ctx := w.ctx.update o.alloc o' } : World).WellFormed := by
+  have hmem : o ∈ w.ctx.owners := List.mem_of_find?_eq_some hf
+  have hoalloc : o.alloc = a := by
+    have h := List.find?_some (p := fun x : Owner => decide (x.alloc = a))
+      (by simpa [Ctx.findOwner?] using hf)
+    simpa using h
+  have ho'alloc : o'.alloc = o.alloc := Owner.resumeLeaf?_alloc hr
+  have ho'len : o'.len = o.len := Owner.resumeLeaf?_len hr
+  have hwfC : (w.ctx.update o.alloc o').WellFormed := by
+    refine ⟨⟨?_, ?_⟩, ?_, ?_⟩
+    · apply Ctx.update_covered
+      · exact Owner.resumeLeaf?_covered hr (hwf.1.1.1 o hmem)
+      · intro x hx _
+        exact hwf.1.1.1 x hx
+    · exact Ctx.update_nodup ho'alloc hwf.1.1.2
+    · exact Ctx.update_wellFormed_owners (Owner.resumeLeaf?_wellFormed hr (hwf.1.2.1 o hmem))
+        (fun x hx _ => hwf.1.2.1 x hx)
+    · exact Ctx.update_ids_nodup_of_same_ids hwf.1.1.2 hmem rfl
+        (Owner.resumeLeaf?_ids hr) hwf.1.2.2
+  have hfun : (w.ctx.update o.alloc o').Functional :=
+    Ctx.update_functional ho'alloc hwf.1.1.2
+  have hfa : w.ctx.findOwner? o.alloc = some o := by
+    simpa [hoalloc] using hf
+  exact ⟨hwfC, hfun, World.update_storage hwf hfa ho'alloc ho'len⟩
+
+/-- A checked suspension: retire the leaf `id` of the owner of `a`, so the
+write guard refuses through it while the suspension is outstanding. -/
+def World.suspendChecked (w : World) (a : AllocId) (id : CapId) : Except String World :=
+  match w.ctx.findOwner? a with
+  | none => .error "suspend: no owner for the allocation"
+  | some o =>
+    match o.suspendLeaf? id with
+    | some o' => .ok { w with ctx := w.ctx.update o.alloc o' }
+    | none => .error "suspend: leaf is missing or not active"
+
+/-- A successful suspension preserves the world invariant. -/
+theorem World.suspendChecked_wf {w w' : World} {a : AllocId} {id : CapId}
+    (h : w.suspendChecked a id = .ok w') (hwf : w.WellFormed) : w'.WellFormed := by
+  unfold World.suspendChecked at h
+  cases hf : w.ctx.findOwner? a with
+  | none => simp [hf] at h
+  | some o =>
+    cases hs : o.suspendLeaf? id with
+    | none => simp [hf, hs] at h
+    | some o' =>
+      simp only [hf, hs, Except.ok.injEq] at h
+      subst h
+      exact World.suspend_update_wf hwf hf hs
+
+/-- A checked resumption: restore the leaf `id` of the owner of `a` to
+active. -/
+def World.resumeChecked (w : World) (a : AllocId) (id : CapId) : Except String World :=
+  match w.ctx.findOwner? a with
+  | none => .error "resume: no owner for the allocation"
+  | some o =>
+    match o.resumeLeaf? id with
+    | some o' => .ok { w with ctx := w.ctx.update o.alloc o' }
+    | none => .error "resume: leaf is missing or not retired"
+
+/-- A successful resumption preserves the world invariant. -/
+theorem World.resumeChecked_wf {w w' : World} {a : AllocId} {id : CapId}
+    (h : w.resumeChecked a id = .ok w') (hwf : w.WellFormed) : w'.WellFormed := by
+  unfold World.resumeChecked at h
+  cases hf : w.ctx.findOwner? a with
+  | none => simp [hf] at h
+  | some o =>
+    cases hr : o.resumeLeaf? id with
+    | none => simp [hf, hr] at h
+    | some o' =>
+      simp only [hf, hr, Except.ok.injEq] at h
+      subst h
+      exact World.resume_update_wf hwf hf hr
 
 end Cap

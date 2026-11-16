@@ -764,8 +764,18 @@ preservation is \texttt{Ctx.joinFractionOwner\_wellFormed}, using an exact
 permutation of the capability ids (the two child ids removed, the fresh id added).
 The concrete lifecycle program runs alloc, write, spatial split, write, fractional
 split, join, write and free through the unified route and leaves the pre-existing
-backend at its initial zeros (\texttt{uLifecycle\_snapshot}). Loans and a
-snapshot command are not yet in this language.
+backend at its initial zeros (\texttt{uLifecycle\_snapshot}).
+
+Loans are the suspension discipline: \texttt{beginLoan} retires the lender's leaf
+and records the loan in the world's loan context (the borrower is the lender's own
+identifier --- exclusive suspension, not a reborrow capability), and
+\texttt{endLoan} removes the record and restores the leaf. While the loan is
+outstanding a write through the lender is refused by the existing guard
+(\texttt{uLoan\_suspended\_write\_refused}, with the accepted write before the
+loan as positive control), and after the loan the same write is accepted
+(\texttt{uLoanRun\_ok}); both transitions preserve the world invariant. The
+liveness conjunction of \file{Cap/Policy.lean} remains a predicate form and is
+not consulted by the checker. A snapshot command is not yet in this language.
 
 \section{Measurements}
 

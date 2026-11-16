@@ -218,7 +218,7 @@ theorem DisposalState.free?_legal {s : DisposalState} {a : AllocId} {d : CapId}
   have hc : c.state = .active ∧ c.q = s.world.ctx.D ∧ c.alloc = a ∧
       c.lo = 0 ∧ c.hi = o.len :=
     ⟨hstate, hq, halloc.trans hoalloc, hlo, hhi⟩
-  let w : World := { ctx := s.world.ctx.free a, heaps := fun x => if x = a then none else s.world.heaps x }
+  let w : World := { s.world with ctx := s.world.ctx.free a, heaps := fun x => if x = a then none else s.world.heaps x }
   have hw : s.world.freeWith? a d = some w := by
     dsimp only [w]
     unfold World.freeWith? Ctx.freeWith?
@@ -296,7 +296,8 @@ def owner : Owner :=
 /-- The example world: one owner and its backend. -/
 def world : World :=
   { ctx := { owners := [owner], D := 64, nextAlloc := 1 },
-    heaps := fun a => if a = alloc then some (Backend.empty 64) else none }
+    heaps := fun a => if a = alloc then some (Backend.empty 64) else none,
+    loans := .rootOnly }
 
 /-- The example disposal state: no loans are outstanding. -/
 def state : DisposalState := { world := world, loans := ⟨[], []⟩ }

@@ -243,13 +243,21 @@
   and loan refusals, and concrete examples. It is not yet wired into
   `Cap.Unified`, and names are invalidated by owner removal rather than by arena
   generations.
-- `Cap/World.lean` is the world of owners and mutable backends: the heap map is a
-  function from allocations to `Backend`, `World.Rel` combines `Ctx.Realizes` with
-  the per-owner buffer length, `write?` takes the owner's `Writable` guard as a
+- `Cap/World.lean` is the world of owners, mutable backends and loans: the heap
+  map is a function from allocations to `Backend`, the world also carries a
+  `LoanCtx` (seeded everywhere with `LoanCtx.rootOnly`: one live root lifetime,
+  no loans), `World.Rel` combines `Ctx.Realizes` with the per-owner buffer
+  length, `write?` takes the owner's `Writable` guard as a
   proof and replaces the backend, and `freeWith?` dispatches through the context's
   disposal check and clears the backend. `write_rel` and `freeWith_rel` preserve the
   relation. It is a pure world, not the interpreter, an FFI path or a concurrency
   claim.
+- `Cap/Suspend.lean` is leaf suspension and restoration: `Owner.suspendLeaf?`
+  retires an active leaf and `Owner.resumeLeaf?` reactivates a retired one, with
+  the find/replace/ids/budget characterisations, the budget preservation (only
+  `.consumed` zeroes), the round trip (`resumeLeaf?_of_suspendLeaf?`), and the
+  guard facts: a suspended leaf is not writable (`suspendLeaf?_not_writable`) and
+  restoration returns the original writability (`resumeLeaf?_writable`).
 - `Cap/Runner.lean` is the sealed certificate form the runner handoff accepts:
   `Prog pre` packages a command list with `checkWorld pre cmds = .ok post`, so it
   cannot exist without the checker's derivation; `Prog.snapshot` observes only an
@@ -274,7 +282,8 @@
   Indices are ordinary `World` values; there is no hidden-index elaborator, so
   symbolic programs are not inferred.
 - `Cap/Unified.lean` is the first slice of the review's R1: a value-carrying
-  `UCmd` (`write`, `splitAt`, `splitFraction`, `join`, `free`, `alloc`, `nop`), `World.writeChecked`
+  `UCmd` (`write`, `splitAt`, `splitFraction`, `join`, `free`, `alloc`,
+  `beginLoan`, `endLoan`, `nop`), `World.writeChecked`
   which checks the ledger's `writableB` and performs the backend write,
   `World.splitAtChecked` for spatial splits, `World.freeChecked` for disposal
   through the recorded capability, `World.allocChecked` for allocation with

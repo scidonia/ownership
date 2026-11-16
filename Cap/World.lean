@@ -12,12 +12,21 @@ interpreter (see `Cap.Exec`), not an FFI path and not a concurrency claim.
 -/
 import Cap.Context
 import Cap.Backend
+import Cap.Loans
 
 namespace Cap
 
 structure World where
   ctx : Ctx
   heaps : AllocId → Option Backend
+  /-- Outstanding loans and the lifetimes they are bound to. -/
+  loans : LoanCtx
+
+/-- The loan context of a fresh world: one live root lifetime and no loans.
+Every loan begun through `World.beginLoanChecked` is bound to this root
+lifetime. -/
+def LoanCtx.rootOnly : LoanCtx :=
+  { lifetimes := [{ id := ⟨0⟩, parent := none, state := .live }], loans := [] }
 
 def World.Rel (w : World) : Prop :=
   Ctx.Realizes w.ctx ∧
@@ -41,7 +50,7 @@ def World.write? (w : World) (a : AllocId) (id : CapId) (i : Nat) (v : UInt8)
 def World.freeWith? (w : World) (a : AllocId) (d : CapId) : Option World :=
   match w.ctx.freeWith? a d with
   | none => none
-  | some ctx' => some { ctx := ctx', heaps := fun x => if x = a then none else w.heaps x }
+  | some ctx' => some { w with ctx := ctx', heaps := fun x => if x = a then none else w.heaps x }
 
 theorem World.write_rel {w w' : World} {a : AllocId} {id : CapId} {i : Nat}
     {v : UInt8} {hg : ∀ o, w.ctx.findOwner? a = some o → o.Writable w.ctx.D id i}
