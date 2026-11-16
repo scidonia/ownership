@@ -1,0 +1,578 @@
+% Paper: a sealed ownership discipline in Lean 4.
+%
+% LIPIcs article, class lipics-v2021; build from this directory:
+%   latexmk -pdf -interaction=nonstopmode sealed-ownership.tex
+%
+% Status note: this is a draft written against the implementation at the time of
+% writing. Sections 3--7 describe checked Lean declarations; Section 8 (the C
+% backend) and the parts marked *planned* are not implemented and are labelled as
+% such in the text. Claims are tied to evidence in a table in Section 9.
+
+\documentclass[a4paper,UKenglish,cleveref]{lipics-v2021}
+
+\usepackage{booktabs}
+\usepackage{tikz}
+\usetikzlibrary{positioning,arrows,calc}
+
+\setlength{\emergencystretch}{3em}
+\tolerance=300
+
+\makeatletter
+\def\leansep{\penalty\z@}
+\makeatother
+\ExplSyntaxOn
+\NewDocumentCommand{\lean}{m}{
+  \tl_set:Nn \l_tmpa_tl {#1}
+  \tl_replace_all:Nnn \l_tmpa_tl {\_} {\textunderscore\leansep}
+  \tl_replace_all:Nnn \l_tmpa_tl {/} {/\leansep}
+  \tl_replace_all:Nnn \l_tmpa_tl {.} {.\leansep}
+  \texttt{\tl_use:N \l_tmpa_tl}
+}
+\ExplSyntaxOff
+
+\DeclareUnicodeCharacter{2264}{\ensuremath{\leq}}
+\DeclareUnicodeCharacter{2260}{\ensuremath{\neq}}
+\DeclareUnicodeCharacter{2261}{\ensuremath{\equiv}}
+\DeclareUnicodeCharacter{0393}{\ensuremath{\Gamma}}
+\DeclareUnicodeCharacter{03B1}{\ensuremath{\alpha}}
+\DeclareUnicodeCharacter{03B2}{\ensuremath{\beta}}
+\DeclareUnicodeCharacter{03C1}{\ensuremath{\rho}}
+
+\lstset{
+  basicstyle=\ttfamily\small,
+  columns=fullflexible,
+  keepspaces=true,
+  breaklines=true,
+  breakatwhitespace=false,
+  extendedchars=true,
+  frame=leftline,
+  framesep=3mm,
+  rulecolor=\color{black!25},
+  backgroundcolor=\color{black!1},
+  xleftmargin=2mm,
+  tabsize=2,
+  literate=
+    {→}{{$\rightarrow$}}2
+    {∧}{{$\wedge$}}2
+    {∀}{{$\forall$}}2
+    {∃}{{$\exists$}}2
+    {≤}{{$\leq$}}2
+    {≠}{{$\neq$}}2
+    {∈}{{$\in$}}2
+    {⟨}{{$\langle$}}2
+    {⟩}{{$\rangle$}}2
+    {…}{{$\ldots$}}2
+    {Γ}{{$\Gamma$}}2
+    {α}{{$\alpha$}}2
+    {β}{{$\beta$}}2
+    {≡}{{$\equiv$}}2
+    {¬}{{$\neg$}}2
+}
+
+\title{Borrowing Without Linear Types: A Sealed Ownership Discipline in Lean}
+\titlerunning{A Sealed Ownership Discipline in Lean}
+\author{Gavin Mendel-Gleason}{Scidonia Limited}{gavin@scidonia.ai}{}{}
+\authorrunning{G. Mendel-Gleason}
+\Copyright{Gavin Mendel-Gleason}
+\DOIPrefix{}
+\ccsdesc[500]{Theory of computation~Logic and verification}
+\ccsdesc[300]{Software and its engineering~Software verification and validation}
+\keywords{ownership, borrowing, Lean~4, permission calculi, verified systems}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+Linear type systems forbid aliasing by construction. We ask whether the same
+discipline can be enforced \emph{from outside} the host type system, by a checked
+data structure, and connected to real mutation. We present a borrowing
+discipline embedded in ordinary dependent type theory (Lean~4): handles are
+freely copyable names with no authority of their own; a ledger of fractional
+shares and byte footprints owns all authority; every operation is checked against
+the current execution state. The discipline is realised by an executable checker
+that is also the interpreter, with a machine-checked theorem that every accepted
+execution preserves the world invariant, and by a second, result-returning
+interface in which stale or refused operations are not even well-typed programs.
+We report the current state of the implementation: a spatially and fractionally
+splitting ledger with byte budgets, a command language with allocation, writes,
+splits, joins, loans and disposal, sealed certificates with sequential
+composition, a closed-run lifecycle, and union-find as a client, including a
+path-compressing search that runs as a program in the discipline. The paper also
+states precisely what is \emph{not} yet established: reads are observations, loans
+are exclusive suspension rather than reborrowing, termination is fuel, module
+encapsulation is not enforced by Lean, and the C backend with its representation
+relation remains to be implemented. We argue that the proved core is enough to
+make the sealed-ownership claim precise, and we separate the three trust levels
+(abstract model, C implementation, compiled execution) that the full claim
+requires.
+\end{abstract}
+
+\section{Introduction}
+
+A verified functional specification with controlled low-level mutation is a
+familiar tension. In Lean~4, arrays are persistent in their specification but
+copy-on-write in their runtime: an unshared array is updated in place, a shared
+one is copied. The observable behaviour is the same; the cost is not, and the
+compiler's decision depends on reference counts that the type system does not
+mention.
+
+A complementary line of work studies that decision directly: static accounting
+for reference-count-one updates, with proofs about the runtime representation.
+This paper asks a different question. Suppose we do not modify the compiler at
+all. Can we enforce an \emph{ownership discipline} in ordinary Lean — aliasing
+rules, exclusive mutation, fractional reads, loans and disposal — such that a
+program written against the discipline is checked, and its execution is licensed
+by the checker? And can that be done without linear host types, in a language
+where every value may be copied?
+
+Our answer is a ledger. A \emph{handle} (allocation identifier, capability
+identifier) is a name; names carry no authority. All authority lives in a
+permission context that the operations consult. Copying a name is free and
+grants nothing, because copying is not using: a duplicate name is just another
+integer, and the next operation is checked against the current state. A stale
+proof about an earlier state cannot authorise a live mutation.
+
+\paragraph{Contributions.}
+\begin{enumerate}
+\item A permission calculus in Lean: shares over a context denominator,
+  byte-footprint intervals, a decomposition tree with a byte-wise budget, a
+  decidable write guard proved equal to its logical form, and a multi-owner
+  context whose invariant (coverage, leaves within their allocation, distinct
+  capability identifiers, one owner per allocation, storage agreement) is
+  preserved by every transition (Sections~\ref{sec:calculus}--\ref{sec:world}).
+\item An executable command language whose checker is its interpreter and a
+  theorem that every accepted execution preserves the world invariant
+  (Section~\ref{sec:unified}).
+\item A result-returning, indexed program interface in which reads and
+  data-dependent control flow compose; context-changing constructors carry their
+  evidence, so refused operations are untypable rather than failing at run time
+  (Section~\ref{sec:programs}).
+\item Sealed certificates: programs packaged with their acceptance derivation,
+  sequential composition through the actual intermediate world, and a closed-run
+  lifecycle from the canonical empty world with snapshots as the only
+  observation (Section~\ref{sec:sealed}).
+\item Case studies: a spatial fill lifecycle, union-find through the checked
+  route with a path-compressing search as a program, loans as suspension, and a
+  byte-array backend refined against a pure model (Sections~\ref{sec:cases}).
+\item An explicit map of the trust boundary: what is proved, what is
+  assumed, and what the C backend would require (Sections~\ref{sec:c} and
+  \ref{sec:limits}).
+\end{enumerate}
+
+The implementation is ordinary Lean with no axioms beyond the standard three
+(\lean{propext}, \lean{Classical.choice}, \lean{Quot.sound}); an axiom audit
+checks every headline theorem, and no proof uses \lean{sorry}. Statements quoted
+below are the declarations in the development, with hypotheses shortened where
+marked.
+
+\section{Handles, authority, and the shape of the discipline}
+\label{sec:design}
+
+The design separates three things that linear types conflate:
+
+\begin{itemize}
+\item \textbf{identity}: allocation, capability, loan and lifetime identifiers
+  are distinct types of tagged naturals (\lean{AllocId}, \lean{CapId},
+  \lean{LoanId}, \lean{LifetimeId}); distinct types mean the checker cannot
+  confuse an allocation for a capability;
+\item \textbf{authority}: fractional shares over a context denominator, byte
+  footprints, a ceiling and a capability state, stored in a ledger;
+\item \textbf{state}: heap contents, kept separate from permissions, because
+  contents change without permissions changing and vice versa.
+\end{itemize}
+
+A program is a sequence of operations over a \emph{world} (permission context,
+backends, loans). The checker is the interpreter: an accepted execution returns
+the world it executed. This is the sense in which the discipline is sealed at the
+level of the pure model; Section~\ref{sec:limits} is explicit about what sealing
+does and does not mean in Lean.
+
+\section{The permission calculus}
+\label{sec:calculus}
+
+\paragraph{Shares.} A capability's share of a resource is a fraction $q/D$: a
+numerator over a context-wide denominator. Only the whole share $q=D$ may write;
+splits produce shares that add to exactly the parent's share; hence two partial
+shares can never both write. The arithmetic is not a convention: the write guard
+requires \lean{c.q = D}, and the budget invariant below makes $q = D$
+achievable by at most one capability at a time.
+
+\paragraph{Footprints.} A footprint is a half-open byte interval $[lo,hi)$ of
+one allocation. Splits cut an interval into two; disjointness, adjacency and
+coverage are proved.
+
+\paragraph{The ledger.} One \lean{Owner} per allocation holds a tree of leaves.
+A leaf is a capability: footprint, share numerator, ceiling, state
+(\lean{active}, \lean{retired}, \lean{consumed}). Internal nodes are
+\emph{spatial} (children split the byte range) or \emph{fractional} (children
+split the share over the same range). The key measure is the \emph{budget}: at a
+byte $x$, the sum of shares of all leaves covering $x$. Coverage is:
+
+\begin{lstlisting}
+def Owner.Covered (o : Owner) (D : Nat) : Prop :=
+  ∀ x, x < o.len → o.root.budget x = D
+\end{lstlisting}
+
+Every byte is exactly accounted for. Splits preserve the budget by
+construction; the sibling-only fractional join merges children of summed share
+and preserves it, and is refused when the children carry the same capability
+identifier.
+
+The write guard is decidable, and provably the same predicate the proofs use:
+
+\begin{lstlisting}
+def Owner.writableB (o : Owner) (D : Nat) (id : CapId) (i : Nat) : Bool :=
+  match o.root.find? id with
+  | none => false
+  | some c =>
+    decide (c.state = .active ∧ c.q = D ∧ c.ceiling = .readWrite
+              ∧ c.lo ≤ i ∧ i < c.hi)
+
+theorem Owner.writableB_sound :
+    o.writableB D id i = true → o.Writable D id i
+\end{lstlisting}
+
+That small theorem is load-bearing: the executable check and the logical guard
+cannot drift.
+
+\section{Contexts and the world}
+\label{sec:world}
+
+A \lean{Ctx} is a list of owners, the denominator, and a fresh-allocation
+counter. \lean{Ctx.Realizes} requires every owner to be covered and allocation
+identifiers to be distinct. The stronger \lean{Ctx.WellFormed} adds that every
+owner's leaves lie inside its own allocation, and that capability identifiers
+across all owners are distinct.
+
+Freshness is enforced, not assumed: both split dispatch and the join require the
+new identifiers to be absent from the whole context, and allocation requires its
+root and disposal identifiers fresh and distinct. This is what stops a new
+capability from colliding with an old one and inheriting its authority.
+
+The world adds the byte backends and the loan bookkeeping, with the bundle
+
+\begin{lstlisting}
+def World.WellFormed (w : World) : Prop :=
+  w.ctx.WellFormed           -- coverage, leaves within, identifiers distinct
+  ∧ w.ctx.Functional         -- one owner per allocation
+  ∧ w.StorageMatches         -- the found owner's backend has its length
+\end{lstlisting}
+
+\lean{World.update\_storage} is the workhorse: replacing one owner by a
+same-length result keeps the heap agreement, so every command's preservation
+proof ends there.
+
+\section{The unified checker and interpreter}
+\label{sec:unified}
+
+The executable language is a command list; the checker folds it over the world:
+
+\begin{lstlisting}
+inductive UCmd where
+  | write (a : AllocId) (id : CapId) (i : Nat) (v : UInt8)
+  | splitAt (a : AllocId) (id id1 id2 : CapId) (k : Nat)
+  | splitFraction (a : AllocId) (id id1 id2 : CapId) (q1 q2 : Nat)
+  | join (a : AllocId) (node newId : CapId)
+  | free (a : AllocId) (d : CapId)
+  | alloc (n : Nat) (rootId disposal : CapId)
+  | beginLoan (a : AllocId) (lender : CapId) (loanId : LoanId)
+  | endLoan (a : AllocId) (loanId : LoanId)
+  | nop
+\end{lstlisting}
+
+One theorem covers every command:
+
+\begin{lstlisting}
+theorem checkWorld_wf :
+    checkWorld w cs = .ok w' → w.WellFormed → w'.WellFormed
+\end{lstlisting}
+
+Accepted execution preserves coverage, freshness, owner uniqueness and storage
+agreement — through allocation, writes, spatial and fractional splits, joins,
+loans and disposal. The older relation \lean{World.Rel} follows from it.
+
+\paragraph{Loans are suspension.} Beginning a loan retires the lender's leaf.
+Because the write guard requires an \lean{active} leaf, a write through the
+lender is then refused by the \emph{same} guard — there is no parallel loan
+machinery to keep in sync. Ending the loan restores the leaf. The refusal is a
+theorem with a positive control: the write is accepted before the loan, refused
+while it is outstanding, and accepted again after restoration.
+
+\section{Programs with post-contexts}
+\label{sec:programs}
+
+The command language is a trace language: a fixed list of operations. An
+algorithm with data-dependent control flow — union-find's search, which reads a
+parent and decides where to go next — cannot be a list. We therefore add two
+interfaces.
+
+\paragraph{The context-preserving fragment.} \lean{Owned Γ α} is reads, writes
+and monadic binding over a fixed permission context. The fuelled evaluator is
+total, with exhaustion a visible \lean{none}. Two theorems: a successful run
+preserves the world invariant, and it leaves the context unchanged, realising the
+fragment's constant index.
+
+\paragraph{The indexed interface.} \lean{IProg Γ α Q} starts with context
+\lean{Γ}, returns \lean{a : α} and ends with \lean{Q a}. Context-changing
+constructors carry their evidence: allocation needs fresh identifiers, a spatial
+split needs the ledger transition to succeed, disposal needs the disposal check.
+A refused operation is therefore not a program at all. For example, the
+freshness evidence for reusing a parent capability as a child is uninhabited:
+
+\begin{lstlisting}
+theorem stale_child_refused :
+    ¬ (Owner.init ⟨1⟩ 4 64 (by decide) ⟨3⟩ ⟨4⟩).FreshIds ⟨3⟩ ⟨5⟩
+\end{lstlisting}
+
+The evaluator is total by fuel, and the layer's soundness theorem is:
+
+\begin{lstlisting}
+theorem evalIProg_post :
+    w.ctx = Γ → evalIProg fuel p w = some (a, w') → w.WellFormed →
+    w'.ctx = Q a ∧ w'.WellFormed
+\end{lstlisting}
+
+Execution from a world matching the typing context ends in a world matching the
+postcondition, with the invariant preserved. Post-contexts are computed with
+\lean{Option.getD} so the type function stays computable while the evidence
+records success.
+
+\paragraph{Recursion and loops.} Recursion does not create a new loan: a
+recursive call can sequentially use the existing exclusive capability while its
+caller is suspended on the stack. Because the *host* recursion builds the program
+and the evaluator runs it, a fuel-bounded search is an ordinary program:
+
+\begin{lstlisting}
+def findCompress (Γ : Ctx) (a : AllocId) (id : CapId) :
+    Nat → Nat → Owned Γ (Except Unit Nat)
+  | 0, _ => .pure (.error ())
+  | fuel + 1, x =>
+    .bind (.read a id x) fun
+      | none => .pure (.error ())
+      | some p =>
+        if p.toNat = x then .pure (.ok x)
+        else .bind (findCompress Γ a id fuel p.toNat) fun
+          | .error e => .pure (.error e)
+          | .ok root => .bind (.write a id x root.toUInt8)
+                          fun _ => .pure (.ok root)
+\end{lstlisting}
+
+On the four-node union-find world with parents \lean{[0,0,0,2]}, the search from
+node 3 returns root 0 and compresses the path to \lean{[0,0,0,0]}, with the final
+world well formed and its context unchanged. Safety (every access permitted,
+invariant preserved) and functional correctness (the root returned, the
+compression written) are separate theorems; termination is the fuel, and for
+valid forests a termination theorem is future work.
+
+\section{Sealed execution}
+\label{sec:sealed}
+
+\paragraph{Certificates.} \lean{Prog pre} packages a command list with the proof
+that the checker accepts it from \lean{pre}; it cannot exist without the
+derivation. Sequential composition runs an appended list from the first part's
+result, so the second program provably starts in the first's post-world.
+
+\paragraph{Closed runs.} \lean{ClosedProgram} packages commands accepted from the
+canonical empty world, whose only observation is a snapshot of the final world.
+The indexed interface has the matching closed form: a program that allocates,
+writes and disposes, typed as ending with no owners, accepted, well formed, with
+the disposed allocation's backend gone.
+
+\paragraph{Failure.} Allocation failure, explicit algorithm errors and
+nontermination are modelled separately: the evaluator's fuel exhaustion and the
+checker's errors are visible outcomes, not silent defaults. Resource-preserving
+failure results for the C backend are part of the planned work
+(Section~\ref{sec:c}).
+
+\section{Case studies}
+\label{sec:cases}
+
+\paragraph{A spatial and fractional lifecycle.} A program allocates a fresh
+4-byte owner, writes through the root capability, splits spatially, writes the
+left half, splits that half fractionally into two half-shares, joins them back
+into a whole share, writes again, and disposes. The fractional split leaves two
+half-shares, neither writable; the join restores the whole share and the second
+write is accepted again. The lifecycle is accepted, ends well formed, and leaves
+a pre-existing 64-byte backend untouched.
+
+\paragraph{Union-find.} We treat union-find as the \emph{witness} for the
+discipline rather than as a correctness target: it is the algorithm whose cost
+distinguishes unique from shared access. Three layers exist. (i) The functional
+model: reachability, \lean{Same} as an equivalence, simple union, the concrete
+partition \lean{[0,0,0,2]} with every pair \lean{Same}, bounded root finding and
+one-step compression with preservation of \lean{Same}. (ii) The checked trace:
+unions issued through \lean{World.writeChecked} land on a backend whose parent
+array is exactly the functional model's \lean{[0,0,0,2]}, and the world remains
+well formed. (iii) The program: the path-compressing search of
+Section~\ref{sec:programs} runs in the context-preserving fragment.
+\emph{Planned}: the representation relation between world bytes and the
+functional parent array, the forest invariant (parent bounds, valid forest) with
+its preservation, and the general theorem that the program's result agrees with
+the functional finder. Today these are separate; the representation layer is the
+next step.
+
+\paragraph{Backends.} Two implementations share one model. The pure backend is a
+byte list with a length proof; the byte-array backend is the same interface over
+Lean's \lean{ByteArray}. The refinement (empty, reads, writes, range fills) is
+proved, and the 64-byte two-range fill through the byte-array route produces the
+reference bytes. The tempting sentence — ``the byte array is updated in place''
+— is exactly what is \emph{not} observable from inside, and we do not claim it.
+
+\section{The C backend: boundary and trust}
+\label{sec:c}
+
+The sealed-ownership claim ultimately concerns real mutation. The planned
+architecture retains Lean control flow and supplies a narrow C interface for
+allocation, validated reads and writes, snapshots and disposal, with no raw
+pointers as ordinary client values:
+
+\begin{lstlisting}[language=C]
+/* Design sketch, not a Lean FFI declaration. */
+status buffer_alloc(arena *, size_t count, buffer_id *out);
+status buffer_read(arena *, buffer_id, size_t index, word *out);
+status buffer_write(arena *, buffer_id, size_t index, word value);
+status buffer_free(arena *, buffer_id);
+\end{lstlisting}
+
+The proof obligation is a representation relation \lean{BackendRel concrete
+model} and, per primitive, that every permitted model execution is implemented by
+the concrete step and the relation is preserved: extent, layout, alignment,
+index arithmetic and overflow; live identity, generation and pointer validity;
+initialised reads and permitted writes; no use after disposal and no double
+disposal; confinement of inputs and outputs and independent immutable snapshots;
+allocation failure and error cleanup; and the sequential-execution assumption,
+including callbacks and reentrancy.
+
+Three levels of evidence must stay distinct, and only the first exists today:
+(1) the abstract backend model proves the intended primitives preserve ownership
+and observations; (2) the implemented C primitives satisfy those contracts under
+a chosen semantics or explicit assumptions — \emph{not implemented}; (3) the
+compiler, runtime and ABI preserve behaviour — either proved or named as trusted.
+A Lean theorem about an abstract external operation does not verify the C body.
+The manuscript must say whether the C implementation is verified,
+translation-validated, or trusted; tests support engineering confidence but do
+not replace that distinction. Two implementation routes are available: Lean
+control flow with C primitives (recommended first), or a custom lowering of the
+fragment with a simulation proof (additional compiler work).
+
+\section{Evaluation and evidence ledger}
+\label{sec:eval}
+
+What is mechanically checked today (all by the repository's gate: builds, axiom
+audit admitting only the standard three, and the paper/document builds):
+
+\begin{center}\small
+\begin{tabular}{@{}p{0.46\linewidth}p{0.44\linewidth}@{}}
+\toprule
+Claim & Evidence \\
+\midrule
+Checker and interpreter are one; accepted runs preserve the invariant &
+\lean{checkWorld\_wf}, \lean{checkWorld\_rel} \\
+Refused operations are untypable in the indexed interface &
+\lean{stale\_child\_refused}, evidence-carrying constructors \\
+Execution realises the typed post-context &
+\lean{evalIProg\_post} \\
+Closed runs start from nothing and end with no owners &
+\lean{iClosed\_ok}, \lean{iClosed\_closed}, \lean{iClosed\_freed} \\
+Union-find's compression search is a program; result and compression proved &
+\lean{findCompress\_run\_root}, \lean{findCompress\_compresses} \\
+The checked union trace lands on the functional parent array &
+\lean{ufTrace\_backend}, \lean{ufTrace\_partition} \\
+Byte-array backend refines the pure model &
+\lean{empty\_refines}, \lean{write\_refines}, \lean{ba64\_snapshot} \\
+Loans: suspended write refused, restored write accepted &
+\lean{uLoan\_suspended\_write\_refused}, \lean{uLoanRun\_ok} \\
+\midrule
+Representation relation world$\leftrightarrow$array, forest invariant & planned \\
+General find/union correctness with compression & planned \\
+C primitives and their refinement & planned \\
+Compiled performance evidence & planned \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\paragraph{Timing.} One interpreted observation on the 64-byte fill-and-sum
+pattern, with agreeing checksums: 73,959~ns per repetition for the pure list
+backend, 47,688 for the byte-array backend, 51,956 for the reference heap. Because
+the run is interpreted, these numbers include the evaluator's own overhead; they
+are environment-dependent and say nothing about compiled execution, in-place
+update, or a real runtime. We report them as an observation, not a claim.
+
+\section{Limitations and threats to validity}
+\label{sec:limits}
+
+\begin{itemize}
+\item \textbf{Reads are observations.} The discipline constrains writes. A read
+  through an unheld capability is not refused, and fractional read permissions
+  are not yet distinguished from free observation. This is the largest gap on the
+  ownership side.
+\item \textbf{Loans are exclusive suspension.} The borrower is the lender's own
+  identifier; there is no reborrow capability, no non-root lifetime in the
+  executable language, and the policy-level liveness conjunction is not consulted
+  by the checker.
+\item \textbf{Termination is fuel.} Programs are total by fuel; exhaustion is a
+  visible outcome. Termination for valid forests and for the general loops is
+  future work.
+\item \textbf{No module opacity.} Lean has no module boundary that hides a
+  definition; the seal is by discipline, not enforced by the language. A safe
+  result type and an opaque runtime are future work.
+\item \textbf{One invariant, not the whole design invariant.} Coverage, leaves
+  within, distinct identifiers, owner uniqueness and storage agreement are
+  maintained. Provenance roles of internal split nodes, identifier recycling
+  policy after disposal, and loan-to-capability relationships are not yet part of
+  a preserved invariant.
+\item \textbf{Union-find correctness is partial.} The representation layer and
+  the general partition correspondence are planned; today's theorems concern the
+  concrete four-node instance and the search program.
+\item \textbf{No verification of C.} The backend exists as a Lean model and a
+  ByteArray refinement only.
+\end{itemize}
+
+\section{Related work}
+
+Borrow checking in Rust enforces aliasing rules in the compiler; we enforce an
+analogous discipline in a proof assistant without changing the compiler.
+Linear and uniqueness type systems (Linear Haskell, Clean's uniqueness types)
+make the discipline part of typing; our handles are freely copyable and the
+discipline lives in state. Separation logic and its implementations (Iris,
+RefinedC) reason about heap ownership with resource algebras very much like our
+shares and footprints; we differ in target (an executable, sealed runner inside
+Lean) and in the explicit trust boundary with C. Verified compilers (CompCert)
+prove preservation of whole-program semantics; our claim is an ownership
+discipline plus a boundary specification, and we do not claim compiler
+verification. The companion work in this repository studies static
+reference-count-one accounting for in-place updates at the compiler level; this
+paper is the dual: the discipline that a runtime checker can enforce when the
+compiler is unchanged.
+
+\section{Conclusion}
+
+A borrowing discipline need not be a type system. Handles as names, a ledger of
+fractional shares and footprints, and a checker that is also the interpreter give
+an ownership discipline in ordinary Lean, with machine-checked preservation and
+a program interface whose refused operations do not typecheck. The remaining work
+is well-defined: a representation relation and forest invariant for union-find,
+fractional reads and real reborrowing, module-level sealing, and the C backend
+with its three trust levels made explicit.
+
+\begin{thebibliography}{9}
+\bibitem{lean4} L. de Moura and S. Ullrich. The Lean~4 theorem prover and
+programming language. \emph{Automated Deduction -- CADE 28}, 2021.
+\bibitem{rust} S. Klabnik and C. Nichols. \emph{The Rust Programming Language}.
+No Starch Press, 2019.
+\bibitem{linearhaskell} J.-P. Bernardy, M. Boespflug, R. Newton, S. Peyton Jones,
+and A. Spiwack. Linear Haskell: practical linearity in a higher-order polymorphic
+language. \emph{POPL 2018}.
+\bibitem{clean} E. Barendsen and S. Smetsers. Uniqueness typing for functional
+languages with graph rewriting. \emph{Term Graph Rewriting}, 1993.
+\bibitem{iris} R. Jung, R. Krebbers, J.-H. Jourdan, A. Bizjak, L. Birkedal, and
+D. Dreyer. Iris from the ground up. \emph{JFP} 28, 2018.
+\bibitem{refinedc} M. Sammler et al. RefinedC: automating the foundational
+verification of C code with refined ownership types. \emph{PLDI 2021}.
+\bibitem{compcert} X. Leroy. Formal verification of a realistic compiler.
+\emph{CACM} 52(7), 2009.
+\bibitem{companion} G. Mendel-Gleason. Ownership for in-place unobservable
+updates in Lean~4. Companion manuscript, this repository.
+\end{thebibliography}
+
+\end{document}
