@@ -183,7 +183,49 @@ The design separates three things that linear types conflate:
   contents change without permissions changing and vice versa.
 \end{itemize}
 
-A program is a sequence of operations over a \emph{world} (permission context,
+\subsection{Identifiers}
+
+The four kinds of name are four distinct structure types over the same payload:
+
+\begin{lstlisting}
+structure AllocId    where val : Nat deriving DecidableEq, Repr
+structure CapId      where val : Nat deriving DecidableEq, Repr
+structure LoanId     where val : Nat deriving DecidableEq, Repr
+structure LifetimeId where val : Nat deriving DecidableEq, Repr
+\end{lstlisting}
+
+The payload is a natural only for readability in the reference model; the module
+states that generation handling belongs to the arena that issues names, not to
+this layer. What the types buy is rejection at elaboration: the checker cannot
+pass an allocation where a capability is expected, and a reused number does not
+silently denote a different kind of thing. Each type has exactly one job:
+
+\begin{itemize}
+\item \lean{AllocId} \emph{names an allocation}. It is the first argument of every
+  command (\lean{write a id i v}, \lean{alloc}, \lean{splitAt a ...},
+  \lean{free a d}), the key of the permission context's lookup
+  \lean{Ctx.findOwner?} and of the heap map
+  \lean{World.heaps : AllocId → Option Backend}, the field \lean{Owner.alloc},
+  the subject of the allocation-distinctness conjunct of \lean{Ctx.Realizes},
+  and the value returned by allocation.
+\item \lean{CapId} \emph{names a capability}. It is the leaf field \lean{Leaf.id},
+  the guard's argument (\lean{writableB D id i}), the children's identifiers
+  \lean{id1 id2} of a split and \lean{newId} of a join, the owner's root and
+  disposal identifiers, and both the \lean{lender} and \lean{borrower} fields of
+  a loan. The distinctness invariant is stated over
+  \lean{Ctx.ids : List CapId}. Internal split nodes also carry a \lean{CapId} as
+  provenance, which is deliberately excluded from \lean{Owner.ids}: a node is
+  bookkeeping, never something a client may use to reach bytes.
+\item \lean{LoanId} \emph{names a loan record}. It is \lean{Loan.id}, the key in
+  the loan context's list, the freshness condition when a loan begins, and the
+  argument of \lean{endLoan}, which removes the record and restores the lender.
+\item \lean{LifetimeId} \emph{names a lifetime}. It is \lean{Lifetime.id}, the
+  parent link (\lean{Option LifetimeId}) that makes lifetimes a tree, the field
+  \lean{Loan.lifetime} binding a loan to its lifetime, and the key the policy
+  consults for liveness.
+\end{itemize}
+
+A program is a sequence of operations over a \\emph{world} (permission context,
 backends, loans). The checker is the interpreter: an accepted execution returns
 the world it executed. This is the sense in which the discipline is sealed at the
 level of the pure model; Section~\ref{sec:limits} is explicit about what sealing
@@ -204,10 +246,38 @@ one allocation. Splits cut an interval into two; disjointness, adjacency and
 coverage are proved.
 
 \paragraph{The ledger.} One \lean{Owner} per allocation holds a tree of leaves.
-A leaf is a capability: footprint, share numerator, ceiling, state
-(\lean{active}, \lean{retired}, \lean{consumed}). Internal nodes are
-\emph{spatial} (children split the byte range) or \emph{fractional} (children
-split the share over the same range). The key measure is the \emph{budget}: at a
+A leaf is a capability; internal nodes are \emph{spatial} (children split the
+byte range) or \emph{fractional} (children split the share over the same range):
+
+\begin{lstlisting}
+inductive CapState where
+  | active
+  | retired
+  | consumed
+
+structure Leaf where
+  id : CapId
+  alloc : AllocId
+  lo : Nat
+  hi : Nat
+  ordered : lo ≤ hi
+  q : Nat
+  pos : 0 < q
+  ceiling : Ceiling
+  state : CapState
+
+inductive Tree where
+  | leaf (c : Leaf)
+  | frac (id : CapId) (l r : Tree)
+  | spatial (id : CapId) (l r : Tree)
+\end{lstlisting}
+
+A leaf carries its capability identifier, the allocation it belongs to, its
+footprint, its share numerator (positive), its ceiling and state. The node
+identifiers in \lean{frac} and \lean{spatial} are provenance, not access; the
+three states are reused by different features: \lean{active} is what the write
+guard requires, \lean{retired} is what a loan does to its lender (Section~%
+\ref{sec:unified}), and \lean{consumed} zeroes the byte budget. The key measure is the \emph{budget}: at a
 byte $x$, the sum of shares of all leaves covering $x$. Coverage is:
 
 \begin{lstlisting}
@@ -521,9 +591,24 @@ Accepted execution preserves coverage, freshness, owner uniqueness and storage
 agreement — through allocation, writes, spatial and fractional splits, joins,
 loans and disposal. The older relation \lean{World.Rel} follows from it.
 
-\paragraph{Loans are suspension.} Beginning a loan retires the lender's leaf.
-Because the write guard requires an \lean{active} leaf, a write through the
-lender is then refused by the \emph{same} guard — there is no parallel loan
+\paragraph{Loans are suspension.} A loan record names its own identifier, the
+lender and borrower capabilities, and the lifetime it is bound to:
+
+\begin{lstlisting}
+structure Lifetime where
+  id : LifetimeId
+  parent : Option LifetimeId
+  state : LifeState      -- live | ended
+structure Loan where
+  id : LoanId
+  lender : CapId
+  borrower : CapId
+  lifetime : LifetimeId
+\end{lstlisting}
+
+Beginning a loan retires the lender's leaf. Because the write guard requires an
+\lean{active} leaf, a write through the lender is then refused by the \emph{same}
+guard — there is no parallel loan
 machinery to keep in sync. Ending the loan restores the leaf. The refusal is a
 theorem with a positive control: the write is accepted before the loan, refused
 while it is outstanding, and accepted again after restoration.
