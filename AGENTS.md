@@ -203,6 +203,17 @@
   the membership bound, and `joinFraction?_ids_nodup` preserves distinctness for a
   fresh `newId`. Arbitrary same-resource recombination, the common-partition
   normaliser and provenance beyond node shape are not implemented.
+- `Cap/Typed.lean` is the context-preserving program fragment: `Owned Γ α` gives
+  reads, writes and monadic sequencing over a fixed permission context, and
+  `evalOwned` is a total fuelled evaluator (exhaustion is a visible `none`).
+  `evalOwned_wf` preserves the world invariant and `evalOwned_ctx` shows the
+  fragment realises its constant context index. `findCompress` is the
+  fuel-bounded union-find chase with path compression as a *program*: the run
+  from node 3 on the `[0,0,0,2]` world returns root 0 (`findCompress_run_root`),
+  compresses the path to `[0,0,0,0]` (`findCompress_compresses`), and ends well
+  formed with the context unchanged (`findCompress_run_wf`, `_ctx`). Reads are
+  observations; termination is fuel; context-changing transitions remain in
+  `UCmd`.
 - `Cap/UFRun.lean` is the union-find client of the checked world: reads are
   observations of the pure backends (`readParent`, `find` with fuel), and `union`
   issues writes through `World.writeChecked`, so `union_wf` preserves the world

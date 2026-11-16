@@ -809,6 +809,21 @@ for the pure list backend, 47,688 for the byte-array backend, 51,956 for the
 reference heap. Interpreted and environment-dependent; no in-place update is
 observed or claimed.
 
+\section{Result-returning programs: the context-preserving fragment}
+
+\file{Cap/Typed.lean} gives the program interface the sealed-paper direction
+requires first: \texttt{Owned \(\Gamma\) \(\alpha\)} is reads, writes and monadic
+sequencing over a fixed permission context, and \texttt{evalOwned} is a total
+fuelled evaluator, so a data-dependent chase is a program rather than a host
+loop around checked writes. \texttt{evalOwned\_wf} preserves the world invariant
+and \texttt{evalOwned\_ctx} shows the fragment realises its constant context
+index. The fuel-bounded union-find chase with path compression runs as a program
+(\texttt{findCompress}): it returns root 0, compresses the parent array to
+\texttt{[0,0,0,0]}, and ends well formed with the context unchanged. Reads are
+observations of the pure backends; termination is fuel; allocation, splits,
+loans and disposal remain in the \texttt{UCmd} language of
+\file{Cap/Unified.lean}.
+
 \section{Measurements}
 
 \texttt{bench/CapTiming.lean} times the two pure models on the 64-byte
