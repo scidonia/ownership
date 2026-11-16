@@ -67,6 +67,9 @@
     {β}{{$\beta$}}2
     {≡}{{$\equiv$}}2
     {¬}{{$\neg$}}2
+    {∨}{{$\vee$}}2
+    {∉}{{$\notin$}}2
+    {·}{{$\cdot$}}2
 }
 
 \title{Borrowing Without Linear Types: A Sealed Ownership Discipline in Lean}
@@ -116,10 +119,9 @@ one is copied. The observable behaviour is the same; the cost is not, and the
 compiler's decision depends on reference counts that the type system does not
 mention.
 
-A complementary line of work studies that decision directly: static accounting
-for reference-count-one updates, with proofs about the runtime representation.
-This paper asks a different question. Suppose we do not modify the compiler at
-all. Can we enforce an \emph{ownership discipline} in ordinary Lean — aliasing
+This paper asks whether that runtime decision can be brought under a discipline
+we can check in the proof assistant, without modifying the compiler at all. Can
+we enforce an \emph{ownership discipline} in ordinary Lean — aliasing
 rules, exclusive mutation, fractional reads, loans and disposal — such that a
 program written against the discipline is checked, and its execution is licensed
 by the checker? And can that be done without linear host types, in a language
@@ -235,32 +237,260 @@ theorem Owner.writableB_sound :
 That small theorem is load-bearing: the executable check and the logical guard
 cannot drift.
 
-\section{Contexts and the world}
+\section{Contexts: permissions as data}
 \label{sec:world}
 
-A \lean{Ctx} is a list of owners, the denominator, and a fresh-allocation
-counter. \lean{Ctx.Realizes} requires every owner to be covered and allocation
-identifiers to be distinct. The stronger \lean{Ctx.WellFormed} adds that every
-owner's leaves lie inside its own allocation, and that capability identifiers
-across all owners are distinct.
+A program in the discipline never holds authority itself. Authority lives in a
+\emph{permission context}, a value that every operation consults and that the
+checker threads through execution. This section describes that value in detail:
+what it contains, what its invariant says, where identifiers come from, which
+transitions preserve it, and how programs are indexed by it.
 
-Freshness is enforced, not assumed: both split dispatch and the join require the
-new identifiers to be absent from the whole context, and allocation requires its
-root and disposal identifiers fresh and distinct. This is what stops a new
-capability from colliding with an old one and inheriting its authority.
+\subsection{The data}
 
-The world adds the byte backends and the loan bookkeeping, with the bundle
+A context is a flat list of owners, the shared denominator and a
+fresh-allocation counter:
 
 \begin{lstlisting}
-def World.WellFormed (w : World) : Prop :=
-  w.ctx.WellFormed           -- coverage, leaves within, identifiers distinct
-  ∧ w.ctx.Functional         -- one owner per allocation
-  ∧ w.StorageMatches         -- the found owner's backend has its length
+structure Ctx where
+  owners : List Owner
+  D : Nat
+  nextAlloc : Nat
+
+structure Owner where
+  alloc : AllocId
+  len : Nat
+  root : Tree        -- the capability decomposition of this allocation
+  disposal : CapId   -- the entitlement that authorises disposal
 \end{lstlisting}
 
-\lean{World.update\_storage} is the workhorse: replacing one owner by a
-same-length result keeps the heap agreement, so every command's preservation
-proof ends there.
+One owner per allocation, holding the tree of capabilities over that
+allocation's bytes. The tree is where authority is decomposed (Sections~
+\ref{sec:calculus}); the context is the collection of allocations and the
+context-wide facts that tie them together. Why a list rather than a map? Because
+every theorem about the context is a statement about its elements --- coverage,
+identifier distinctness, lookup --- and lists give those facts by structural
+induction. Lookup is the one derived operation:
+
+\begin{lstlisting}
+def Ctx.findOwner? (C : Ctx) (a : AllocId) : Option Owner :=
+  C.owners.find? (fun o => o.alloc = a)
+\end{lstlisting}
+
+The heap contents are \emph{not} here. Contexts mention permissions, not bytes;
+the world pairs a context with backends (Section~\ref{sec:world}).
+
+\subsection{The invariant, component by component}
+
+Context well-formedness is a conjunction of facts with different jobs:
+
+\begin{lstlisting}
+def Ctx.Realizes (C : Ctx) : Prop :=
+  (∀ o ∈ C.owners, o.Covered C.D)
+  ∧ (C.owners.map (·.alloc)).Nodup
+
+def Owner.LeavesWithin (o : Owner) : Prop :=
+  ∀ (id : CapId) (c : Leaf), o.root.find? id = some c →
+    c.alloc = o.alloc ∧ c.hi ≤ o.len
+
+def Owner.DisposalPresent (o : Owner) : Prop :=
+  (∃ c, o.root.find? o.disposal = some c) ∨ o.disposal ∉ o.root.ids
+
+def Owner.WellFormed (o : Owner) (D : Nat) : Prop :=
+  o.Covered D ∧ o.LeavesWithin ∧ o.DisposalPresent
+
+def Ctx.WellFormed (C : Ctx) : Prop :=
+  C.Realizes
+  ∧ (∀ o ∈ C.owners, o.WellFormed C.D)
+  ∧ C.ids.Nodup
+\end{lstlisting}
+
+Read as four independent guarantees, each of which excludes a different attack:
+
+\begin{itemize}
+\item \textbf{Coverage per owner} (\lean{Covered}, Section~\ref{sec:calculus}):
+  at every byte of the allocation the budget is exactly the denominator. A
+  capability cannot be conjured out of nothing, and no byte is accounted for
+  twice.
+\item \textbf{Leaves within the allocation}: every leaf of an owner's tree has
+  that owner's allocation identifier and its footprint ends inside the owner's
+  length. A capability for one allocation cannot reach into another.
+\item \textbf{Disposal entitlement}: either the disposal identifier names a leaf
+  of the owner's tree, or it is not an access capability of that tree at all. The
+  entitlement is either visible and deliberate, or it cannot be confused with a
+  live name.
+\item \textbf{Distinct identifiers}: allocation identifiers are pairwise
+  distinct (so lookup is unambiguous), and capability identifiers across all
+  owners are distinct (so a name designates at most one capability in the whole
+  context).
+\end{itemize}
+
+The last is what makes \emph{copying harmless}. A name may be duplicated freely,
+but a name occurs in the context at most once, so at most one capability answers
+to it, and every use is checked against that capability's current leaf.
+
+\subsection{Identifiers and freshness}
+
+The context exposes its identifiers and a freshness predicate:
+
+\begin{lstlisting}
+def Ctx.ids (C : Ctx) : List CapId := C.owners.flatMap Owner.ids
+
+def Ctx.Fresh (C : Ctx) (c : CapId) : Prop := c ∉ C.ids
+\end{lstlisting}
+
+\lean{Owner.ids} collects the identifiers that are \emph{access capabilities}:
+the leaves of the tree, plus the owner's root and disposal identifiers. Internal
+split nodes carry a \emph{provenance} identifier, which is deliberately excluded
+from \lean{Owner.ids}: an internal node is bookkeeping, not something a client
+may use to access bytes. One subtlety worth stating: a fractional split names its
+node by its left child's identifier, so a provenance identifier and an access
+identifier may coincide as values, and the invariant does not count the
+occurrence twice. What matters is that a fresh capability identifier is one that
+does not occur in \lean{Ctx.ids}; the internal-node role is what the exclusion
+handles.
+
+Freshness is checked, not assumed. Allocation, both split dispatches and the
+fractional join all take freshness hypotheses about the new identifiers, and the
+coordinates are rejected otherwise:
+
+\begin{lstlisting}
+theorem Ctx.alloc_wellFormed :
+  C.WellFormed → rootId ∉ C.ids → disposal ∉ C.ids → rootId ≠ disposal →
+  (C.alloc a n pos rootId disposal hfresh).WellFormed
+
+theorem Ctx.splitAtOwner_wellFormed :
+  C.WellFormed → o ∈ C.owners → o.FreshIds id1 id2 →
+  id1 ∉ C.ids → id2 ∉ C.ids →
+  C.splitAtOwner? o id id1 id2 k = some C' → C'.WellFormed
+\end{lstlisting}
+
+The same shape holds for the fractional split
+(\lean{Ctx.splitFractionOwner\_wellFormed}) and the join
+(\lean{Ctx.joinFractionOwner\_wellFormed}); the join's proof needs an exact
+permutation of the identifier list, since it removes two capabilities and adds
+one.
+
+\subsection{Transitions}
+
+Contexts change through four transitions, each a total function on a successful
+input:
+
+\begin{lstlisting}
+def Ctx.alloc (C : Ctx) (a : AllocId) (n : Nat) (pos : 0 < C.D)
+    (rootId disposal : CapId) (hfresh : a ∉ C.owners.map (·.alloc)) : Ctx
+
+def Ctx.free (C : Ctx) (a : AllocId) : Ctx
+  -- removes the owner whose allocation is a
+
+def Ctx.update (C : Ctx) (a : AllocId) (o' : Owner) : Ctx
+  -- replaces the owner at a (used by every split and join)
+
+def Ctx.splitAtOwner? (C : Ctx) (o : Owner) (id id1 id2 : CapId)
+    (k : Nat) : Option Ctx
+  -- (o.splitAt? ...).map (fun o' => C.update o.alloc o')
+\end{lstlisting}
+
+Allocation prepends a fresh owner initialised with the root and disposal
+identifiers; disposal filters the owner out by allocation; every split and join
+computes the new owner locally and reinstalls it with \lean{Ctx.update}. Because
+the transitions are local in this way, their preservation proofs have a common
+shape: the context-wide facts factor through a map, and the owner-local facts
+come from the ledger's own split and join theorems.
+
+\subsection{The world}
+
+A context says nothing about heap contents, and the executable language needs
+bytes. The world adds them:
+
+\begin{lstlisting}
+structure World where
+  ctx : Ctx
+  heaps : AllocId → Option Backend
+  loans : LoanCtx
+
+def World.WellFormed (w : World) : Prop :=
+  w.ctx.WellFormed
+  ∧ w.ctx.Functional      -- one owner per allocation
+  ∧ w.StorageMatches      -- the found owner's backend has the owner's length
+
+theorem World.update_storage :
+  -- replacing one owner by a same-length result keeps the heap agreement
+\end{lstlisting}
+
+\lean{StorageMatches} is the bridge between permissions and bytes: if the context
+says an allocation is owned with length $n$, the backend has exactly $n$ bytes.
+Every command's preservation proof ends in \lean{World.update\_storage}, which is
+why split and join preservation reduce to the ledger's budget lemmas.
+
+\subsection{Contexts in programs}
+
+The program interfaces index by the context, which is what makes the discipline
+compositional rather than a global side condition.
+
+\emph{The context-preserving fragment.} \lean{Owned Γ α} fixes the context. The
+typing index never changes; the evaluator returns a world whose context is still
+\lean{Γ}:
+
+\begin{lstlisting}
+theorem evalOwned_ctx :
+    evalOwned fuel p w = some (a, w') → w'.ctx = w.ctx
+\end{lstlisting}
+
+This is the fragment ordinary algorithm code lives in: reads, writes, branching.
+The permission context is a constant of the program's type, so composing two
+fragment programs composes their guarantees without re-checking the context.
+
+\emph{The indexed interface.} \lean{IProg Γ α Q} changes the context: the program
+starts at \lean{Γ} and ends at \lean{Q a}, where the post-context depends on the
+returned value. Allocation's post-context is the allocated context; a split's is
+the dispatch result; disposal's is the freed context. The evaluator carries the
+realization hypothesis \lean{w.ctx = Γ}, and the soundness theorem is exactly the
+statement that the context the program runs in is the one its type names, and
+that the context it ends in is the one its type promises:
+
+\begin{lstlisting}
+theorem evalIProg_post :
+    w.ctx = Γ → evalIProg fuel p w = some (a, w') → w.WellFormed →
+    w'.ctx = Q a ∧ w'.WellFormed
+\end{lstlisting}
+
+\lean{bind} is where the threading is visible: the continuation is typed at
+\lean{Q a}, and its execution is licensed by the first stage's postcondition,
+which the induction obtains from the same theorem. This is the sense in which
+stale operations cannot compose: a continuation whose context does not match the
+first stage's result is not a well-typed program, and the evidence inside each
+context-changing constructor refers to the exact context in which it is used.
+
+\emph{Post-contexts as data.} A post-context must be computable for the type to
+be informative, but the transition is partial. We therefore use
+
+\begin{lstlisting}
+(fun _ => (Γ.splitAtOwner? o id id1 id2 k).getD Γ)
+\end{lstlisting}
+
+as the post-context, with a separate \lean{isSome} evidence field recording that
+the transition succeeds. The type stays computable (so concrete programs can
+derive their evidence by \lean{decide}), while success is still part of the
+typing. The soundness theorem relates the two: execution realises the
+\lean{getD} context precisely when the evidence was honest.
+
+\emph{Closed runs.} The canonical empty context --- no owners, denominator fixed,
+counter zero --- is the starting point for a closed program, whose typed
+post-context has no owners. The context index is what lets the type, not a
+comment, state that the run ends with nothing outstanding.
+
+\subsection{Pure data, and what sealing means}
+
+Contexts are ordinary Lean values, and their definitions are public. This is a
+deliberate split: \emph{reasoning} needs the definitions, and the theorems above
+are statements about them. What the discipline seals is \emph{authority}: a
+client cannot manufacture a capability's permissions because every operation
+consults the context and every context-changing operation is indexed by its
+result. What Lean does not give us is module opacity, so a hostile client could
+still unfold the definitions and fabricate a context value. Section~
+\ref{sec:limits} states this precisely: the seal is a property of the checked
+operations, not of the module system.
 
 \section{The unified checker and interpreter}
 \label{sec:unified}
@@ -540,10 +770,8 @@ shares and footprints; we differ in target (an executable, sealed runner inside
 Lean) and in the explicit trust boundary with C. Verified compilers (CompCert)
 prove preservation of whole-program semantics; our claim is an ownership
 discipline plus a boundary specification, and we do not claim compiler
-verification. The companion work in this repository studies static
-reference-count-one accounting for in-place updates at the compiler level; this
-paper is the dual: the discipline that a runtime checker can enforce when the
-compiler is unchanged.
+verification. Our concern is the discipline a runtime checker can enforce when
+the compiler is unchanged, and the boundary at which that enforcement stops.
 
 \section{Conclusion}
 
@@ -571,8 +799,6 @@ D. Dreyer. Iris from the ground up. \emph{JFP} 28, 2018.
 verification of C code with refined ownership types. \emph{PLDI 2021}.
 \bibitem{compcert} X. Leroy. Formal verification of a realistic compiler.
 \emph{CACM} 52(7), 2009.
-\bibitem{companion} G. Mendel-Gleason. Ownership for in-place unobservable
-updates in Lean~4. Companion manuscript, this repository.
 \end{thebibliography}
 
 \end{document}
