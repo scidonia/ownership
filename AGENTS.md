@@ -203,6 +203,11 @@
   the membership bound, and `joinFraction?_ids_nodup` preserves distinctness for a
   fresh `newId`. Arbitrary same-resource recombination, the common-partition
   normaliser and provenance beyond node shape are not implemented.
+- `Cap/Ledger.lean`'s `Tree.find?_replace_ne`: replacing the leaf `id` by a
+  subtree that does not contain `id'` leaves the lookup of `id'` unchanged. This
+  is the structural fact the loan invariant's preservation needs for splits and
+  joins: a suspended lender's leaf is elsewhere (and the replacement's
+  identifiers are fresh), so its lookup survives.
 - `Cap/Context.lean`'s `Ctx` carries `issued : List CapId`, the issuance history.
   The world-level split, fractional-split and join check a new identifier
   against it (as well as against the live set) and extend it on success, so a

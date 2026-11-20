@@ -141,6 +141,54 @@ def Tree.replace (id : CapId) (f : Leaf → Tree) : Tree → Tree
     | some _ => .spatial i (replace id f l) r
     | none => .spatial i l (replace id f r)
 
+/-- Replacing the leaf `id` by a subtree that does not contain `id'` leaves the
+lookup of `id'` unchanged. -/
+theorem Tree.find?_replace_ne (t : Tree) (id id' : CapId) (f : Leaf → Tree)
+    (hne : id' ≠ id)
+    (hrep : ∀ c, t.find? id = some c → (f c).find? id' = none) :
+    (t.replace id f).find? id' = t.find? id' := by
+  induction t with
+  | leaf c =>
+    simp only [Tree.replace, Tree.find?]
+    by_cases hc : c.id = id
+    · have hc' : ¬ (c.id = id') := by
+        intro h; exact hne (h.symm.trans hc)
+      rw [if_pos hc]
+      rw [hrep c (by simp [Tree.find?, hc])]
+      rw [if_neg hc']
+    · rw [if_neg hc]
+      simp only [Tree.find?]
+  | frac i l r ihl ihr =>
+    simp only [Tree.replace, Tree.find?]
+    cases hl : l.find? id with
+    | some c =>
+      dsimp only
+      have hrepL : ∀ c', l.find? id = some c' → (f c').find? id' = none :=
+        fun c' hc' => hrep c' (by simp [Tree.find?, hc'])
+      simp only [Tree.find?]
+      rw [ihl hrepL]
+    | none =>
+      dsimp only
+      have hrepR : ∀ c', r.find? id = some c' → (f c').find? id' = none :=
+        fun c' hc' => hrep c' (by simp [Tree.find?, hl, hc'])
+      simp only [Tree.find?]
+      rw [ihr hrepR]
+  | spatial i l r ihl ihr =>
+    simp only [Tree.replace, Tree.find?]
+    cases hl : l.find? id with
+    | some c =>
+      dsimp only
+      have hrepL : ∀ c', l.find? id = some c' → (f c').find? id' = none :=
+        fun c' hc' => hrep c' (by simp [Tree.find?, hc'])
+      simp only [Tree.find?]
+      rw [ihl hrepL]
+    | none =>
+      dsimp only
+      have hrepR : ∀ c', r.find? id = some c' → (f c').find? id' = none :=
+        fun c' hc' => hrep c' (by simp [Tree.find?, hl, hc'])
+      simp only [Tree.find?]
+      rw [ihr hrepR]
+
 /-- Replacing a leaf preserves the budget at every byte whenever the replacement
 has the replaced leaf's budget at that byte. -/
 theorem Tree.budget_replace (t : Tree) (id : CapId) (f : Leaf → Tree) (x : Nat)
@@ -245,6 +293,8 @@ each other and absent from the owner's identifiers (which include the parent). -
 def Owner.FreshIds (o : Owner) (id1 id2 : CapId) : Prop :=
   id1 ∉ o.ids ∧ id2 ∉ o.ids ∧ id1 ≠ id2
 
+/-- Can we steal ids from frac or spatial since they don't appear in ids?
+    Will this be a problem for later joins if we do so? -/
 instance (o : Owner) (id1 id2 : CapId) : Decidable (o.FreshIds id1 id2) := by
   unfold Owner.FreshIds
   infer_instance
