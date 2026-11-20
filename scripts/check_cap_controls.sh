@@ -60,6 +60,7 @@ check_fail CapSurfaceReject.lean "splitFraction refused"
 check_fail OwnedReject.lean "used 2 times"
 check_fail OwnedNoAccess.lean "is private"
 check_fail CapSealReject.lean "Cap.Sealed.mk"
+check_fail CapSealReject.lean "Cap.Sealed.ofRun"
 check_fail CapSealPeekReject.lean "is private"
 
 if [ "$fail" -ne 0 ]; then

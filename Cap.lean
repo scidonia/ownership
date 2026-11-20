@@ -39,5 +39,6 @@ import Cap.Exclusivity
 import Cap.History
 import Cap.TopInvariant
 import Cap.LoansInv
+import Cap.FullInv
 import Cap.Reborrow
 import Cap.Sealed

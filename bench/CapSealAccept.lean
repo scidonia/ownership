@@ -1,12 +1,10 @@
 import Cap.Sealed
 open Cap
 
--- A sealed world is obtainable only from an accepted run, and its only
--- observation is a snapshot of one allocation.
-example : Sealed :=
-  Sealed.ofRun uWorld [] uWorld (by rfl)
+-- The canonical sealed state is the empty world; running an empty command list
+-- is accepted, and its only observation is a snapshot.
+example : Sealed := Sealed.empty
 
-example :
-    (Sealed.ofRun uWorld [] uWorld (by rfl)).snapshot ⟨0⟩ =
-      some (List.replicate 64 0) := by
-  rfl
+example : (Sealed.empty.run []).isOk = true := by rfl
+
+example : Sealed.empty.snapshot ⟨0⟩ = none := by rfl

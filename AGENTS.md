@@ -460,32 +460,46 @@ shows the certificate it would have to emit, not proof-producing elaboration.
   only, not surface elaboration, not a heap semantics, and acceptance is checker
   acceptance rather than execution safety.
 - `Cap/Reborrow.lean` is the delegation-chain bookkeeping: a `Link` records one
-  outstanding loan (allocation, lender, distinct borrower, lifetime), `Chain base
-  ls` requires each link's lender to be the chain's current holder, and `holder`
-  names the innermost borrower (or the base). `delegate` appends a link and
-  `retract` ends the innermost one; `holder_delegate` and
-  `holder_retract_delegate` show the holder moves to the new borrower and back.
-  `weight D base chain c` gives the holder the whole share `D` and every other
-  name zero; `delegate_moves_share` proves delegation moves `D` from the previous
-  holder (now zero) to the new borrower, and `retract_restores` returns it.
-  `nested_two_level` and `nested_two_level_unwind` are the two-level reborrow:
-  base lends to `b1`, `b1` lends to `b2` while the outer loan is outstanding, and
-  two retractions unwind to base. Each link carries a loan identifier and the
-  chain maps to loan-context records (`Chain.toLoans`); a well-formed chain's
-  names are duplicate-free, so its lenders are
-  (`Chain.lenders_nodup`), and ending the innermost link is exactly the
+  outstanding loan (loan identifier, allocation, lender, distinct borrower,
+  lifetime), `Chain base ls` requires each link's lender to be the chain's current
+  holder, and `holder` names the innermost borrower (or the base). `delegate`
+  appends a link and `retract` ends the innermost one; the holder moves to the
+  new borrower and back, and `weight D base chain c` gives the holder the whole
+  share `D` and every other name zero (`delegate_moves_share`,
+  `retract_restores`). Freshness counts each introduced identity once: a chain is
+  fresh when it is connected and `base :: borrowers chain` is duplicate-free
+  (`Chain.Fresh`), and the earlier predicate that counted each link's lender *and*
+  borrower is recorded as `LegacyFresh` with `legacy_fresh_uninhabited` — it was
+  inconsistent with every nonempty chain because it repeated the base. The full
+  chain invariant `Chain.WF` adds one allocation, distinct loan identifiers,
+  world-level borrower freshness and nested lifetimes; the concrete one-loan and
+  two-level instances satisfy it, and the controls reject a base borrower, an
+  already-issued borrower, a reused loan id, a wrong allocation and an invalid
+  lifetime parent. `Chain.Fresh_delegate` preserves freshness under extension,
+  `Chain.Fresh_retract_delegate` under retraction, and
+  `Chain.Fresh.lenders_nodup` gives the loan invariant's lender distinctness.
+  `endLink` closes only the innermost scope (`endLink_inner`) and refuses an outer
+  loan while an inner one is outstanding (`endLink_outer_none`). Links map to
+  loan-context records (`Chain.toLoans`), and ending the innermost link is the
   identifier filter `endLoanChecked` performs (`toLoans_filter_retract`). It is a
   name model: no ledger leaves, footprints or heaps are threaded, and what the
   borrower does inside its scope is not claimed.
 - `Cap/Sealed.lean` is the sealed execution boundary: `Sealed` has a private
-  constructor and a private representation field, so outside the module a sealed
-  world can be held and observed but not manufactured or read
-  (`bench/CapSealReject.lean` and `bench/CapSealPeekReject.lean` must fail to
-  elaborate, `bench/CapSealAccept.lean` builds one from an accepted run). A
-  sealed world is obtained only from `Sealed.ofRun` over a command list the
-  checker accepted, running more commands is `Sealed.run`, and the only
-  observation is `Sealed.snapshot` of one allocation. `Sealed.ofRun_wf` carries
-  the world invariant and `Sealed.snapshot_eq` reads the represented backend.
+  constructor, a private representation field and a private invariant proof, so
+  outside the module a sealed world can be held and observed but not manufactured,
+  read or stripped of its invariant. There is no arbitrary-world entry point: the
+  canonical state starts from the empty world (`Sealed.empty`), a proof-facing
+  certified import requires the full invariant (`Sealed.importCertified`), and a
+  run yields a sealed state only when the checker accepts (`Sealed.run`), carrying
+  `World.checkWorld_fullInv` through. The only observation is
+  `Sealed.snapshot` of one allocation, an immutable list. The old `Sealed.ofRun`
+  (arbitrary pre/post world plus an accepted empty run) is removed;
+  `bench/CapSealReject.lean` checks both the constructor and `ofRun` are
+  unavailable, `bench/CapSealPeekReject.lean` checks the field, and
+  `bench/CapSealAccept.lean` builds and runs the canonical state.
+  `Sealed.invariant`, `Sealed.empty_invariant`, `Sealed.importCertified_invariant`
+  and `Sealed.run_invariant` state the carried invariant; `Sealed.snapshot_eq`
+  reads the represented backend.
   `boundaryClaims` lists the executable-edge claims with their status: the
   checker's execution and invariant are proved, while the C store trace, physical
   reference counts and physical storage independence are runtime contracts and
@@ -493,6 +507,12 @@ shows the certificate it would have to emit, not proof-producing elaboration.
   claim is marked proved. Lean has no module opacity, so this seals the
   *construction* path, not physical storage: the pure model's backends are
   shared by copied programs, which is the C runner's contract, not a theorem.
+- `Cap/FullInv.lean` is the combined invariant this stage carries:
+  `World.FullInv w := w.TopInv ∧ w.LoansOK` (world well-formedness, issuance
+  history and the loan state). `World.checkWorld_fullInv` proves it preserved by
+  whole executions, command by command, and `World.emptyWorld_fullInv` is the
+  canonical initial state. The delegation invariant is not yet part of the bundle
+  because reborrowing is not yet an executable operation.
 - `Cap/Nested.lean` is the two-level borrow model: `Lender` with active/suspended
   states, `beginBorrow` suspending the lender and issuing a borrower, `endBorrow`
   restoring the suspended lender without returning the borrower, and

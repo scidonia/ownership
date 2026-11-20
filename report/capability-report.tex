@@ -146,7 +146,7 @@ Review item & Change in this revision \\
 \midrule
 R1 & \file{Cap/Unified.lean}: a value-carrying command language --- write, both splits, join, free, alloc, loan begin/end and no-op --- with the checker as interpreter and the world relation preserved; the 64-byte and lifecycle runs go through it. Observations are taken from the post-world; a snapshot command is not a command of this language. \\
 R2 & Access-capability ids separated from internal split-node provenance; \texttt{Owner.FreshIds} and a freshness branch in the checker refusing duplicate and reused-parent identifiers (\texttt{msgFresh}); regressions in \texttt{bench/CapFreshness.lean}. The full invariant is still open. \\
-R3 & A begun loan is bound to the lifetime it inserts and requires distinct lender/borrower capabilities; \texttt{endLoan} refuses while a recorded descendant loan exists. \texttt{Cap/Reborrow.lean} adds the delegation chain: each borrower is the next loan's lender, the holder and the whole share move to the new borrower (\texttt{delegate\_moves\_share}) and back (\texttt{retract\_restores}), and a two-level reborrow unwinds. The chain maps to loan-context records (\texttt{Chain.toLoans}); a well-formed chain has distinct lenders (\texttt{Chain.lenders\_nodup}), and ending the innermost loan is exactly the identifier filter \texttt{endLoanChecked} performs (\texttt{toLoans\_filter\_retract}). Integrating the chain with ledger leaves and the world's live loan field is still absent. \\
+R3 & A begun loan is bound to the lifetime it inserts and requires distinct lender/borrower capabilities; \texttt{endLoan} refuses while a recorded descendant loan exists. \texttt{Cap/Reborrow.lean} adds the delegation chain: each borrower is the next loan's lender, the holder and the whole share move to the new borrower (\texttt{delegate\_moves\_share}) and back (\texttt{retract\_restores}), and a two-level reborrow unwinds. Freshness counts each introduced identity once (\texttt{Chain.Fresh}: the base plus the borrowers); the earlier predicate, which counted each lender and borrower and so repeated the base, is recorded with a proof that it was uninhabited (\texttt{LegacyFresh}, \texttt{legacy\_fresh\_uninhabited}). The full chain invariant adds one allocation, distinct loan identifiers, world-level borrower freshness and nested lifetimes (\texttt{Chain.WF}), the one-loan and two-level instances inhabit it, and the controls reject a base borrower, an issued borrower, a reused loan id, a wrong allocation and an invalid lifetime parent. The chain maps to loan-context records (\texttt{Chain.toLoans}); a fresh chain has distinct lenders (\texttt{Chain.Fresh.lenders\_nodup}), and ending the innermost loan is exactly the identifier filter \texttt{endLoanChecked} performs (\texttt{toLoans\_filter\_retract}). Integrating the chain with ledger leaves and the world's live loan field is still absent. \\
 R4 & \file{Cap/Disposal.lean}: one \texttt{Legal} predicate (entitlement, coverage, reconstructed root, empty loans) and a checked \texttt{free?}; not yet a command of the unified language. \\
 R5 & Not done: the complete split/borrow/fill/read/rejoin/restore/snapshot/free trace. \\
 Validation & \texttt{scripts/check\_cap\_controls.sh} requires each negative fixture to fail with its intended diagnostic; \texttt{check\_all} runs it. \\
@@ -577,18 +577,26 @@ the second program start in the first one's post-world. \texttt{Cap/Indexed.lean
 specification type by comparison: its `run` field alone does not establish a
 post-relation, which is now stated in that module. \file{Cap/Sealed.lean}
 seals the construction path and the representation: \texttt{Sealed} has a
-private constructor and a private field, a sealed world is obtainable only from
-\texttt{Sealed.ofRun} over an accepted command list, and the only observation is
-\texttt{Sealed.snapshot} of one allocation (\texttt{bench/CapSealReject.lean}
-and \texttt{bench/CapSealPeekReject.lean} show construction and reading the
-field are unavailable).
+private constructor, a private representation field and a private invariant
+proof; the canonical state starts from the empty world
+(\texttt{Sealed.empty}), a proof-facing certified import requires the combined
+invariant (\texttt{Sealed.importCertified}), and a run yields a sealed state only
+on acceptance, carrying \texttt{World.checkWorld\_fullInv} through
+(\texttt{Sealed.run\_invariant}). The arbitrary-world constructor
+\texttt{Sealed.ofRun} is removed; \texttt{bench/CapSealReject.lean} checks both
+it and the constructor, and \texttt{bench/CapSealPeekReject.lean} the field. The
+only observation is \texttt{Sealed.snapshot} of one allocation, an immutable
+list.
 \texttt{boundaryClaims} lists the executable-edge claims with their status: the
 checker's execution, the world invariant and the snapshot interface are proved,
 while the C store trace, physical reference counts and physical storage
 independence are runtime contracts and concurrency is excluded. Physical storage
 independence is not a theorem of the pure model --- copied programs share
 backends --- so the C runner's contract and the complete command set remain
-open (the runner handoff's P0).
+open (the runner handoff's P0). The invariant the sealed state carries is
+\texttt{World.FullInv = World.TopInv \u2227 World.LoansOK}
+(\file{Cap/FullInv.lean}), preserved by whole executions
+(\texttt{World.checkWorld\_fullInv}) and initialized at the empty world.
 
 \section{Surface checker and certificates}
 

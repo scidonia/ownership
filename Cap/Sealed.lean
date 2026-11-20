@@ -17,35 +17,39 @@ and nothing here says two executed programs have independent physical storage.
 That is the C runner's contract (`runtime-bridge/`), stated as a runtime
 assumption, not a theorem of this model.
 -/
-import Cap.Unified
+import Cap.FullInv
 
 namespace Cap
 
-/-- A world reachable only through this module's constructor. -/
+/-- A world reachable only through this module's constructors, carrying the
+combined invariant. -/
 structure Sealed where
   private mk ::
   private w : World
+  private h : World.FullInv w
 
-/-- Seal a world. Private to this module. -/
-private def mkSealed (w : World) : Sealed := Sealed.mk w
+private def mkSealed (w : World) (h : World.FullInv w) : Sealed := Sealed.mk w h
 
-/-- Open a sealed world. Private to this module. -/
 private def openSealed (s : Sealed) : World := s.w
 
-/-- The only way to obtain a sealed world: from a command list the checker
-accepts, starting at a given world. -/
-def Sealed.ofRun (pre : World) (cmds : List UCmd) (post : World)
-    (h : checkWorld pre cmds = .ok post) : Sealed :=
-  mkSealed post
+/-- The canonical sealed state starts from the empty world. -/
+def Sealed.empty : Sealed := mkSealed World.emptyWorld World.emptyWorld_fullInv
 
-/-- Run more commands inside the sealed boundary; only an accepted run yields a
-sealed world. -/
+/-- A certified imported model state, for proofs that need to start elsewhere.
+The full invariant is required, so malformed worlds cannot enter. This is the
+proof-facing API; executable clients start from `Sealed.empty`. -/
+def Sealed.importCertified (w : World) (h : w.FullInv) : Sealed := mkSealed w h
+
+/-- Run commands inside the sealed boundary. The invariant is carried by the
+constructor, so an accepted run yields a sealed world that satisfies it; a
+refused run yields no state. -/
 def Sealed.run (s : Sealed) (cmds : List UCmd) : Except String Sealed :=
-  match checkWorld (openSealed s) cmds with
-  | .ok w' => .ok (mkSealed w')
+  match h : checkWorld (openSealed s) cmds with
+  | .ok w' => .ok (mkSealed w' (World.checkWorld_fullInv _ _ _ h s.h))
   | .error e => .error e
 
-/-- The only observation: the bytes of one allocation. -/
+/-- The only observation: a copy of one allocation's bytes. The result is an
+immutable list, so a snapshot cannot alias a mutable buffer. -/
 def Sealed.snapshot (s : Sealed) (a : AllocId) : Option (List UInt8) :=
   (openSealed s).heaps a |>.map (·.buf)
 
@@ -57,17 +61,20 @@ theorem Sealed.snapshot_eq (s : Sealed) (a : AllocId) (b : Backend)
   rw [hb]
   rfl
 
-/-- A sealed world obtained from an accepted run is well formed whenever the
-starting world was and the run preserves the invariant. -/
-theorem Sealed.ofRun_wf {pre post : World} {cmds : List UCmd}
-    (h : checkWorld pre cmds = .ok post) (hwf : pre.WellFormed) :
-    (Sealed.ofRun pre cmds post h).w.WellFormed :=
-  checkWorld_wf pre post cmds h hwf
+/-- Every sealed state, however obtained, satisfies the combined invariant. -/
+theorem Sealed.invariant (s : Sealed) : s.w.FullInv := s.h
 
-/-- Running the same commands on the same sealed world is deterministic: the
-result is decided by the checker's result. -/
-theorem Sealed.run_deterministic (s : Sealed) (cmds : List UCmd) :
-    s.run cmds = s.run cmds := rfl
+/-- The canonical state satisfies the combined invariant. -/
+theorem Sealed.empty_invariant : Sealed.empty.w.FullInv := Sealed.empty.h
+
+/-- A certified import satisfies the combined invariant. -/
+theorem Sealed.importCertified_invariant (w : World) (h : w.FullInv) :
+    (Sealed.importCertified w h).w.FullInv :=
+  (Sealed.importCertified w h).h
+
+/-- A completed run's sealed state satisfies the combined invariant. -/
+theorem Sealed.run_invariant {s s' : Sealed} {cmds : List UCmd}
+    (h : s.run cmds = .ok s') : s'.w.FullInv := s'.h
 
 /-- The status of a claim at the executable boundary. -/
 inductive TrustLevel where

@@ -874,8 +874,15 @@ Checked compression is the functional compress; no new partition pair &
 Delegation chains: holder and share conservation, loan-record bridge &
 \lean{delegate\_moves\_share}, \lean{retract\_restores},
 \lean{Chain.lenders\_nodup}, \lean{toLoans\_filter\_retract} \\
-Sealed construction and representation; trust statuses &
-\lean{Sealed.ofRun}, \lean{boundary\_no\_physical\_proof} \\
+Sealed construction and representation; invariant carried; trust statuses &
+\lean{Sealed.empty}, \lean{Sealed.run\_invariant},
+\lean{boundary\_no\_physical\_proof} \\
+Combined invariant preserved by whole executions &
+\lean{World.FullInv}, \lean{World.checkWorld\_fullInv} \\
+Chain freshness counts introduced identities once; inhabited two-level invariant &
+\lean{Chain.Fresh}, \lean{Chain.WF}, \lean{legacy\_fresh\_uninhabited} \\
+Inner/outer scope ending accepted/refused &
+\lean{endLink\_inner}, \lean{endLink\_outer\_none} \\
 \midrule
 General partition correspondence at every step; full path compression & planned \\
 C primitives and their refinement & planned \\
@@ -920,27 +927,42 @@ update, or a real runtime. We report them as an observation, not a claim.
   chains with distinct borrowers, nested scopes and share conservation are
   modelled separately (\lean{Cap/Reborrow.lean}) and bridge to loan records,
   but are not yet integrated with ledger leaves or the world's live loan field;
-  the policy-level liveness conjunction is not consulted by the checker.
+  the policy-level liveness conjunction is not consulted by the checker. The
+  chain invariant counts each introduced identity once (the base plus the
+  borrowers); an earlier predicate that also counted each lender was uninhabited
+  for nonempty chains, which is recorded with its proof
+  (\lean{legacy\_fresh\_uninhabited}). The full chain invariant has inhabited
+  one-loan and two-level instances and rejects a base borrower, an issued
+  borrower, a reused loan id, a wrong allocation and an invalid lifetime parent;
+  ending an outer scope while an inner loan is live is refused
+  (\lean{endLink\_outer\_none}).
 \item \textbf{Termination is fuel.} Programs are total by fuel; exhaustion is a
   visible outcome. Termination for valid forests and for the general loops is
   future work.
 \item \textbf{Sealing is per-declaration, not physical.}
-  \lean{Cap/Sealed.lean} makes the sealed world's constructor and representation
-  field private, so outside the module a world can be held and observed but not
-  manufactured or read: a sealed world comes only from an accepted run
-  (\lean{Sealed.ofRun}) and its only observation is a snapshot
-  (\lean{Sealed.snapshot}); two negative fixtures check construction and
-  peeking. Lean has no stronger module abstraction, and nothing here seals
-  physical storage: the pure model's copied programs share backends. The
-  executable-edge claims are listed with an explicit status
-  (\lean{boundaryClaims}, \lean{boundary\_no\_physical\_proof}); a safe,
-  opaque runtime remains future work.
-\item \textbf{One invariant, not the whole design invariant.} The preserved
-  invariant combines coverage, leaves within, distinct identifiers, owner
-  uniqueness and storage agreement (the world bundle) with the issuance history:
-  \lean{World.TopInv} is preserved by every checked command and by whole
-  executions (\lean{checkWorld\_top}). Provenance roles of internal split nodes,
-  loan-to-capability relations and disposal legality are still outside it.
+  \lean{Cap/Sealed.lean} makes the sealed world's constructor, representation
+  field and invariant proof private, so outside the module a world can be held
+  and observed but not manufactured, read or stripped of its invariant. There is
+  no arbitrary-world entry point: the canonical state starts from the empty world
+  (\lean{Sealed.empty}), a proof-facing certified import requires the combined
+  invariant (\lean{Sealed.importCertified}), and a run yields a sealed state only
+  when the checker accepts, carrying the invariant through
+  (\lean{Sealed.run\_invariant}). The former \lean{Sealed.ofRun}, which took a
+  caller-supplied world and an accepted empty run, is removed; three fixtures
+  check construction, the field and the removed entry point. Lean has no
+  stronger module abstraction, and nothing here seals physical storage: the pure
+  model's copied programs share backends. The executable-edge claims are listed
+  with an explicit status (\lean{boundaryClaims},
+  \lean{boundary\_no\_physical\_proof}); a safe, opaque runtime remains future
+  work.
+\item \textbf{One invariant, not the whole design invariant.} The combined
+  invariant is \lean{World.FullInv} = \lean{World.TopInv} $\land$
+  \lean{World.LoansOK}: the world bundle, the issuance history and the loan
+  state, preserved by every checked command and by whole executions
+  (\lean{World.checkWorld\_fullInv}) and initialized at the empty world
+  (\lean{World.emptyWorld\_fullInv}). The sealed state carries it. Provenance
+  roles of internal split nodes, the delegation invariant and disposal legality
+  are still outside it.
 \item \textbf{Disposal's loan half is enforced; reconstruction is not.} The
   recorded disposal capability is checked, removal preserves the world
   invariant, and disposal is refused while a loan's lender remains live in the
