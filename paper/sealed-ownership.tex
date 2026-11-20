@@ -555,39 +555,9 @@ This is the fragment ordinary algorithm code lives in: reads, writes, branching.
 The permission context is a constant of the program's type, so composing two
 fragment programs composes their guarantees without re-checking the context.
 
-\emph{The indexed interface.} \lean{IProg Γ α Q} changes the context: the program
-starts at \lean{Γ} and ends at \lean{Q a}, where the post-context depends on the
-returned value. Allocation's post-context is the allocated context; a split's is
-the dispatch result; disposal's is the freed context. The evaluator carries the
-realization hypothesis \lean{w.ctx = Γ}, and the soundness theorem is exactly the
-statement that the context the program runs in is the one its type names, and
-that the context it ends in is the one its type promises:
-
-\begin{lstlisting}
-theorem evalIProg_post :
-    w.ctx = Γ → evalIProg fuel p w = some (a, w') → w.WellFormed →
-    w'.ctx = Q a ∧ w'.WellFormed
-\end{lstlisting}
-
-\lean{bind} is where the threading is visible: the continuation is typed at
-\lean{Q a}, and its execution is licensed by the first stage's postcondition,
-which the induction obtains from the same theorem. This is the sense in which
-stale operations cannot compose: a continuation whose context does not match the
-first stage's result is not a well-typed program, and the evidence inside each
-context-changing constructor refers to the exact context in which it is used.
-
-\emph{Post-contexts as data.} A post-context must be computable for the type to
-be informative, but the transition is partial. We therefore use
-
-\begin{lstlisting}
-(fun _ => (Γ.splitAtOwner? o id id1 id2 k).getD Γ)
-\end{lstlisting}
-
-as the post-context, with a separate \lean{isSome} evidence field recording that
-the transition succeeds. The type stays computable (so concrete programs can
-derive their evidence by \lean{decide}), while success is still part of the
-typing. The soundness theorem relates the two: execution realises the
-\lean{getD} context precisely when the evidence was honest.
+\emph{The indexed interface.} \lean{IProg Γ α Q} is where the context changes;
+its constructors, evidence, \lean{bind} threading and post-context discipline are
+described with the program interface in Section~\ref{sec:programs}.
 
 \emph{Closed runs.} The canonical empty context --- no owners, denominator fixed,
 counter zero --- is the starting point for a closed program, whose typed
@@ -695,6 +665,21 @@ Execution from a world matching the typing context ends in a world matching the
 postcondition, with the invariant preserved. Post-contexts are computed with
 \lean{Option.getD} so the type function stays computable while the evidence
 records success.
+
+\paragraph{Access evidence.} A certified read or write carries its permission:
+\lean{Ctx.CanWrite Γ a id i} says the owner is found and the ledger's write guard
+accepts; \lean{Ctx.CanRead} says the owner is found and the capability is
+readable at the index. A world that realises the context and satisfies the
+invariant supplies the backing allocation and bounds, so
+\lean{World.read\_succeeds} and \lean{World.write\_succeeds} prove that a
+certified access is never refused, and \lean{World.no\_two\_canwrite} proves
+that two certified writes at one byte of one allocation name the same
+capability. An unauthorised access is therefore not a well-typed program: the
+evidence cannot be manufactured for a capability that may not act there. The
+data-dependent indices of an algorithm are the remaining design point --- they
+require either bounded indices with representation lemmas or checked tests that
+return evidence on success --- and the context-preserving fragment's raw access
+constructors are not yet evidence-bearing.
 
 \paragraph{Recursion and loops.} Recursion does not create a new loan: a
 recursive call can sequentially use the existing exclusive capability while its
@@ -847,6 +832,8 @@ Typed splits are never refused, including the history check &
 \lean{splitAtChecked\_succeeds} \\
 At most one capability is writable at a byte &
 \lean{Owner.no\_two\_writable} \\
+Certified accesses cannot be refused; two certified writes agree &
+\lean{read\_succeeds}, \lean{write\_succeeds}, \lean{no\_two\_canwrite} \\
 \midrule
 Representation relation world$\leftrightarrow$array, forest invariant & planned \\
 General find/union correctness with compression & planned \\
@@ -867,10 +854,13 @@ update, or a real runtime. We report them as an observation, not a claim.
 \label{sec:limits}
 
 \begin{itemize}
-\item \textbf{Reads are observations.} The discipline constrains writes. A read
-  through an unheld capability is not refused, and fractional read permissions
-  are not yet distinguished from free observation. This is the largest gap on the
-  ownership side.
+\item \textbf{Access evidence is partial.} The indexed interface's reads and
+  writes carry \lean{CanRead}/\lean{CanWrite} evidence, so an unauthorised
+  access is untypable there. The context-preserving fragment still has raw access
+  constructors (its compression example is data-dependent and needs either
+  bounded indices with representation lemmas or checked tests returning
+  evidence), and fractional read permissions are not yet distinguished from
+  free observation.
 \item \textbf{Loans are exclusive suspension.} The borrower is the lender's own
   identifier; there is no reborrow capability, no non-root lifetime in the
   executable language, and the policy-level liveness conjunction is not consulted

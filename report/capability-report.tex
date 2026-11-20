@@ -874,6 +874,20 @@ writable capabilities have the same identifier --- at most one writer per byte.
 The proof needs the leaf's own positivity (the denominator is positive), so the
 statement is about well-formed owners, not bare trees.
 
+\section{Access evidence}
+
+\file{Cap/Access.lean} defines the evidence a certified access carries:
+\texttt{Ctx.CanWrite} (owner found and the write guard accepts) and
+\texttt{Ctx.CanRead} (owner found and the capability readable at the index).
+A matching well-formed world supplies the backend and bounds:
+\texttt{World.read\_succeeds} and \texttt{World.write\_succeeds} prove
+certified accesses are never refused, and \texttt{World.no\_two\_canwrite}
+proves two certified writes at one byte name the same capability. In
+\file{Cap/IProg.lean} the \texttt{read} and \texttt{write} constructors carry
+these predicates, so an unauthorised access is not a program; the lifecycle's
+evidence is derived and still decides. The context-preserving fragment's raw
+access constructors and the data-dependent index discipline remain open.
+
 \section{Measurements}
 
 \texttt{bench/CapTiming.lean} times the two pure models on the 64-byte

@@ -29,6 +29,7 @@ level (ill-evidenced programs do not exist) rather than as runtime errors.
 -/
 import Cap.Unified
 import Cap.Runner
+import Cap.Access
 
 namespace Cap
 
@@ -36,8 +37,10 @@ namespace Cap
 inductive IProg : (Γ : Ctx) → (α : Type) → (α → Ctx) → Type 1 where
   | pure (a : α) : IProg Γ α (fun _ => Γ)
   | bind : IProg Γ α Q → ((a : α) → IProg (Q a) β R) → IProg Γ β R
-  | read (a : AllocId) (id : CapId) (i : Nat) : IProg Γ (Option UInt8) (fun _ => Γ)
-  | write (a : AllocId) (id : CapId) (i : Nat) (v : UInt8) : IProg Γ Unit (fun _ => Γ)
+  | read (a : AllocId) (id : CapId) (i : Nat) (h : Ctx.CanRead Γ a id i) :
+      IProg Γ (Option UInt8) (fun _ => Γ)
+  | write (a : AllocId) (id : CapId) (i : Nat) (v : UInt8)
+      (h : Ctx.CanWrite Γ a id i) : IProg Γ Unit (fun _ => Γ)
   | alloc (n : Nat) (rootId disposal : CapId) (pos : 0 < Γ.D)
       (hf : (⟨Γ.nextAlloc⟩ : AllocId) ∉ Γ.owners.map (·.alloc))
       (hfr : rootId ∉ Γ.ids ∧ disposal ∉ Γ.ids ∧ rootId ≠ disposal) :
@@ -53,6 +56,27 @@ inductive IProg : (Γ : Ctx) → (α : Type) → (α → Ctx) → Type 1 where
       (h : (Γ.freeWith? a d).isSome) :
       IProg Γ Unit (fun _ => (Γ.freeWith? a d).getD Γ)
 
+/-- A certified write cannot be refused: a matching world supplies the backend
+and the ledger guard accepts, so the checked write succeeds. -/
+theorem World.write_succeeds {w : World} {Γ : Ctx} {a : AllocId} {id : CapId}
+    {i : Nat} {v : UInt8} (h : Ctx.CanWrite Γ a id i) (hΓ : w.ctx = Γ)
+    (hwf : w.WellFormed) :
+    ∃ w', w.writeChecked a id i v = .ok w' := by
+  obtain ⟨o, hfind, hwb⟩ := h
+  rw [← hΓ] at hfind hwb
+  have hmem : o ∈ w.ctx.owners := List.mem_of_find?_eq_some hfind
+  have hown : o.WellFormed w.ctx.D := hwf.1.2.1 o hmem
+  obtain ⟨c, hfc, _hact, _hq, _hceil, _hlo, hhi⟩ := Owner.writableB_sound hwb
+  have hle : c.hi ≤ o.len := (hown.2.1 id c hfc).2
+  obtain ⟨b, hb, hlen⟩ := hwf.2.2 a o hfind
+  have hlt : i < b.buf.length := by omega
+  unfold World.writeChecked
+  simp only [hfind, hb]
+  rw [dif_pos hwb]
+  unfold Backend.write
+  rw [if_pos hlt]
+  exact ⟨_, rfl⟩
+
 /-- The fuelled evaluator. The permission evidence in the constructors is a
 typing artifact: evaluation re-checks everything at runtime, and the soundness
 theorem proves the checks never fire for a well-evidenced program. -/
@@ -65,8 +89,8 @@ def evalIProg (fuel : Nat) {Γ : Ctx} {α : Type} {Q : α → Ctx} (p : IProg Γ
     match evalIProg fuel q w with
     | none => none
     | some (a, w') => evalIProg fuel (k a) w'
-  | fuel + 1, .read a _ i => some ((w.heaps a).bind (·.read i), w)
-  | fuel + 1, .write a id i v =>
+  | fuel + 1, .read a _ i _ => some ((w.heaps a).bind (·.read i), w)
+  | fuel + 1, .write a id i v _ =>
     match w.writeChecked a id i v with
     | .ok w' => some ((), w')
     | .error _ => none
@@ -186,15 +210,16 @@ theorem evalIProg_post (w : World) (fuel : Nat) :
         simp only [evalIProg, hq] at h
         obtain ⟨hctx1, hwf1⟩ := ih w q hΓ hq hwf
         exact ih w1 (k a1) hctx1 h hwf1
-    | read a0 id0 i0 =>
+    | read a0 id0 i0 hc =>
       simp only [evalIProg] at h
       obtain ⟨-, rfl⟩ := Option.some.inj h
       exact ⟨hΓ, hwf⟩
-    | write a0 id0 i0 v0 =>
+    | write a0 id0 i0 v0 hc =>
       cases hw : w.writeChecked a0 id0 i0 v0 with
       | error e =>
-        simp only [evalIProg, hw] at h
-        nomatch h
+        obtain ⟨w1, hok⟩ := World.write_succeeds hc hΓ hwf
+        rw [hw] at hok
+        nomatch hok
       | ok w1 =>
         simp only [evalIProg, hw] at h
         obtain ⟨-, rfl⟩ := Option.some.inj h
@@ -249,7 +274,8 @@ def iAlloc : IProg uWorld.ctx AllocId (fun _ => ilCtx1) :=
   .alloc 4 ⟨3⟩ ⟨4⟩ (by decide) (by decide) (by decide)
 
 /-- The first write. -/
-def iWrite1 : IProg ilCtx1 Unit (fun _ => ilCtx1) := .write ⟨1⟩ ⟨3⟩ 0 7
+def iWrite1 : IProg ilCtx1 Unit (fun _ => ilCtx1) :=
+  .write ⟨1⟩ ⟨3⟩ 0 7 (by exact ⟨_, rfl, by decide⟩)
 
 /-- The spatial split. -/
 def iSplit : IProg ilCtx1 Unit (fun _ => ilCtx3) :=
@@ -257,7 +283,8 @@ def iSplit : IProg ilCtx1 Unit (fun _ => ilCtx3) :=
     (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
 
 /-- The write through the left half. -/
-def iWrite2 : IProg ilCtx3 Unit (fun _ => ilCtx3) := .write ⟨1⟩ ⟨5⟩ 0 8
+def iWrite2 : IProg ilCtx3 Unit (fun _ => ilCtx3) :=
+  .write ⟨1⟩ ⟨5⟩ 0 8 (by exact ⟨_, rfl, by decide⟩)
 
 /-- The disposal step. -/
 def iFree : IProg ilCtx3 Unit (fun _ => ilCtx5) := .free ⟨1⟩ ⟨4⟩ (by decide)
@@ -308,7 +335,7 @@ def icCtx3 : Ctx := (icCtx1.freeWith? ⟨0⟩ ⟨2⟩).getD icCtx1
 post-context has no owners. -/
 def iClosed : IProg World.emptyWorld.ctx Unit (fun _ => icCtx3) :=
   .bind (.alloc 4 ⟨1⟩ ⟨2⟩ (by decide) (by decide) (by decide)) fun _ =>
-  .bind (.write ⟨0⟩ ⟨1⟩ 0 7) fun _ =>
+  .bind (.write ⟨0⟩ ⟨1⟩ 0 7 (by exact ⟨_, rfl, by decide⟩)) fun _ =>
   .bind (.free ⟨0⟩ ⟨2⟩ (by decide)) fun _ =>
   .pure ()
 

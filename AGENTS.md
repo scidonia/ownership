@@ -298,6 +298,16 @@
   disposal check and clears the backend. `write_rel` and `freeWith_rel` preserve the
   relation. It is a pure world, not the interpreter, an FFI path or a concurrency
   claim.
+- `Cap/Access.lean` gives the access evidence the certified instructions carry:
+  `Ctx.CanWrite` (the owner is found and the write guard accepts) and
+  `Ctx.CanRead` (the owner is found and the capability is readable at the
+  index). A matching well-formed world supplies the backend and bounds:
+  `World.read_succeeds` and `World.write_succeeds` (\(\file{Cap/IProg.lean}\)
+  for the write) prove a certified access is never refused, and
+  `World.no_two_canwrite` proves two certified writes at one byte name the same
+  capability. `IProg.read` and `IProg.write` carry these predicates, so an
+  unauthorised access is not a program. The context-preserving `Owned`
+  fragment's raw access constructors are not yet evidence-bearing.
 - `Cap/Exclusivity.lean` turns coverage into write exclusivity:
   `Tree.budget_leaf_ge` (a present, unconsumed leaf covering a byte contributes
   its share to the budget) and `Tree.budget_two_leaves` (two distinct such
