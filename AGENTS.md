@@ -316,15 +316,24 @@
   preserved by every checked command --- write, both splits, join, free,
   allocation, suspension/restoration and both loan commands --- and by whole
   executions (`checkWorld_top`), with concrete instances (`emptyWorld_top`,
-  `uWorld_top`). Still open: the loan invariant and disposal legality.
+  `uWorld_top`). The loan invariant is `Cap/LoansInv.lean`'s `World.LoansOK`
+  (preserved by every command) and disposal legality is `Cap/Disposal.lean`.
 - `Cap/LoansInv.lean` states the loan-state invariant `World.LoansOK`: loan
   identifiers distinct, lenders distinct, every loan's lifetime live, every
   lender an issued identifier (so it can never equal a freshly minted child or
   join name), and every loan's lender still occurring as a `retired` leaf of a
-  live owner (`World.LenderRetired`). It holds for the empty and concrete 64-byte worlds
-  and is preserved by writes, allocation, disposal and the spatial split; preservation for the remaining
-  commands is the next step, built on `Tree.find?_replace_ne` and the
-  split/join/free guards.
+  live owner (`World.LenderRetired`). It holds for the empty and concrete
+  64-byte worlds and is preserved by every context-changing command: writes,
+  allocation, disposal, both splits, the join, and loan begin/end. The tree
+  ingredients are `Tree.find?_replace_ne`, `Tree.find?_eq_none_of_not_mem_ids`,
+  `Tree.find?_replaceNode_outside`, the leaf-occurrence list `Tree.leaves` with
+  `List.nodup_map_inj` (two leaves of a duplicate-free tree with equal
+  identifiers are equal), `Tree.joinChildren?_active` (a successful join has
+  both children active) and `Ctx.ids_disjoint_of_ne` (distinct owners of a
+  context with distinct identifiers share no capability id). Beginning a loan
+  retires the lender's leaf while the guard requires it active, so no earlier
+  loan shares the lender; ending filters the removed loan and resumes its leaf,
+  and the remaining lenders differ from the resumed one by lender distinctness.
 - `Cap/Access.lean` gives the access evidence the certified instructions carry:
   `Ctx.CanWrite` (the owner is found and the write guard accepts) and
   `Ctx.CanRead` (the owner is found and the capability is readable at the
