@@ -869,11 +869,11 @@ Representation predicate: runtime index to access evidence, bounded reads &
 Checked chase is the functional search; result is a root and reachable &
 \lean{findRootC\_eq\_of\_stops}, \lean{findRootC\_root},
 \lean{findRootC\_reachable} \\
-Checked compression is the functional compress; no new partition pair &
-\lean{compressC\_UFArr}, \lean{compressC\_same\_sound} \\
-Certified find-and-compress: root, representation, invariant, no new pair &
-\lean{findCompressCert}, \lean{stopsAt\_of\_ranked},
-\lean{findRootC\_ranked\_root} \\
+Checked compression is the functional compress and preserves the partition &
+\lean{compressC\_UFArr}, \lean{compressC\_same\_iff} \\
+Certified find-and-compress: root, representation, invariant, partition equivalence &
+\lean{findCompressCert}, \lean{compressC\_same\_iff},
+\lean{stopsAt\_of\_ranked} \\
 Delegation chains: holder and share conservation, loan-record bridge &
 \lean{delegate\_moves\_share}, \lean{retract\_restores},
 \lean{Chain.lenders\_nodup}, \lean{toLoans\_filter\_retract} \\
@@ -981,9 +981,9 @@ update, or a real runtime. We report them as an observation, not a claim.
   compression and termination without fuel are not proved; a certified
   algorithm interface (\lean{Cap/UFCertified.lean}) reads and compresses through
   the representation predicate, with the chase bounded by a forest rank, its
-  result proved a root, the checked compression preserving representation and
-  invariant, and no new partition pair; full path compression and the converse
-  partition direction remain obligations. The Owned-fragment
+  result proved a root, the checked compression preserving representation,
+  invariant and the partition in both directions (orbit linearity and
+  root-reach preservation); full path compression remains an obligation. The Owned-fragment
   search is separate from this checked route.
 \item \textbf{No verification of C.} The backend exists as a Lean model and a
   ByteArray refinement only.

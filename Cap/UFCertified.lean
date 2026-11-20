@@ -106,7 +106,7 @@ noncomputable def findCompressCert (a : AllocId) (id : CapId) (n : Nat) (rank : 
       (fun w0 v w' => ∃ b b', w0.heaps a = some b ∧ w'.heaps a = some b' ∧
         UFRep w' a id n ∧ w'.WellFormed ∧ UF.IsRoot (UFArr b) v ∧
         b'.buf = b.buf.set x v.toUInt8 ∧
-        (∀ p q, UF.Same (UFArr b') p q → UF.Same (UFArr b) p q)) :=
+        (∀ p q, UF.Same (UFArr b') p q ↔ UF.Same (UFArr b) p q)) :=
   fun w hpre => by
     let hrep := hpre.1
     let hwf := hpre.2.1
@@ -134,7 +134,7 @@ noncomputable def findCompressCert (a : AllocId) (id : CapId) (n : Nat) (rank : 
     have hpost : ∃ b b', w.heaps a = some b ∧ w'.heaps a = some b' ∧
         UFRep w' a id n ∧ w'.WellFormed ∧ UF.IsRoot (UFArr b) r ∧
         b'.buf = b.buf.set x r.toUInt8 ∧
-        (∀ p q, UF.Same (UFArr b') p q → UF.Same (UFArr b) p q) := by
+        (∀ p q, UF.Same (UFArr b') p q ↔ UF.Same (UFArr b) p q) := by
       obtain ⟨b0, b', hb0, hb', hbuf⟩ := compressC_backend hw'
       have hb0b : b = b0 := Option.some.inj (hbR.1.symm.trans hb0)
       rw [← hb0b] at hbuf
@@ -151,16 +151,13 @@ noncomputable def findCompressCert (a : AllocId) (id : CapId) (n : Nat) (rank : 
           exact (Option.some.inj h1).symm
         rw [hbb, hlen]
         exact hx
-      have hsound : ∀ p q, UF.Same (UFArr b') p q → UF.Same (UFArr b) p q := by
-        have heq : UFArr b' = UF.compress (UFArr b) x u.toNat :=
-          compressC_UFArr hw' hbR.1 hb'
-        intro p q hpq
-        rw [heq] at hpq
-        have hpq' : UF.Same (UF.compress (UFArr b) x r) p q := by
-          simpa [huEq] using hpq
-        exact UF.compress_same_sound (p := UFArr b) (x := x) (r := r) hxlen hreach hpq'
+      have hiff : ∀ p q, UF.Same (UFArr b') p q ↔ UF.Same (UFArr b) p q := by
+        have hroot' : UF.IsRoot (UFArr b) u.toNat := by simpa [huEq] using hrootp
+        have hreach' : UF.Reach (UFArr b) x u.toNat := by simpa [huEq] using hreach
+        intro p q
+        exact compressC_same_iff (w' := w') (p := p) (q := q) hw' hbR.1 hb' hxlen hreach' hroot'
       exact ⟨b, b', hbR.1, hb', UFRep.compress_preserves hrep hx hu hw',
-        compressC_wf hw' hwf, hrootp, hbuf, hsound⟩
+        compressC_wf hw' hwf, hrootp, hbuf, hiff⟩
     exact ⟨(r, w'), hpost⟩
 
 end Cap

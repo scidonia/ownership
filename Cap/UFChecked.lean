@@ -189,6 +189,124 @@ theorem findRootC_root {w : World} {a : AllocId} {id : CapId} {n : Nat}
   rw [← heq]
   exact UF.findRootF_root hstop
 
+/-! ### The no-split direction for compression to a root
+
+The one-step soundness theorem says compression creates no new `Same` pair. The
+converse needs the orbit to be linear: if a node reaches two nodes, one of them
+reaches the other. Compression to a root preserves every `Same` pair, because
+each node of the component still reaches that root. -/
+
+/-- Orbits are linear: two nodes reached from one node are comparable by
+reachability. -/
+theorem reach_or_reach_of_common {p : UF.Arr} {a b c : Nat}
+    (hab : UF.Reach p a b) (hac : UF.Reach p a c) :
+    UF.Reach p b c ∨ UF.Reach p c b := by
+  obtain ⟨m, hm⟩ := UF.reach_iff_iterate.mp hab
+  obtain ⟨n, hn⟩ := UF.reach_iff_iterate.mp hac
+  rcases Nat.le_total m n with hle | hle
+  · left
+    refine UF.reach_iff_iterate.mpr ⟨n - m, ?_⟩
+    calc UF.iter p (n - m) b
+        = UF.iter p (n - m) (UF.iter p m a) := by rw [hm]
+      _ = UF.iter p (n - m + m) a := by rw [UF.iter_add]
+      _ = UF.iter p n a := by rw [Nat.sub_add_cancel hle]
+      _ = c := hn
+  · right
+    refine UF.reach_iff_iterate.mpr ⟨m - n, ?_⟩
+    calc UF.iter p (m - n) c
+        = UF.iter p (m - n) (UF.iter p n a) := by rw [hn]
+      _ = UF.iter p (m - n + n) a := by rw [UF.iter_add]
+      _ = UF.iter p m a := by rw [Nat.sub_add_cancel hle]
+      _ = b := hm
+
+/-- A root reaches only itself. -/
+theorem root_reach_eq {p : UF.Arr} {r c : Nat} (hr : UF.IsRoot p r)
+    (h : UF.Reach p r c) : c = r := by
+  rcases h with rfl | hreach
+  · rfl
+  · obtain ⟨k, _, hk⟩ := UF.reachable_iff_iterate.mp hreach
+    have hiter : ∀ k, UF.iter p k r = r := by
+      intro k
+      induction k with
+      | zero => rfl
+      | succ k ih =>
+        show UF.step p (UF.iter p k r) = r
+        rw [ih]
+        exact hr
+    rw [← hk, hiter k]
+
+/-- Iterating from a node through a compression to `r` either follows the
+original orbit or has already reached `r`. -/
+theorem iter_compress_root {p : UF.Arr} {x r : Nat} (hx : x < p.length)
+    (hr : UF.IsRoot p r) :
+    ∀ k a, UF.iter (UF.compress p x r) k a = UF.iter p k a ∨
+      UF.iter (UF.compress p x r) k a = r := by
+  intro k
+  induction k with
+  | zero =>
+    intro a
+    exact Or.inl rfl
+  | succ k ih =>
+    intro a
+    rcases ih a with hstep | hstep
+    · -- the compressed iterate is the original one; take one more step
+      by_cases hxk : UF.iter p k a = x
+      · right
+        show UF.step (UF.compress p x r) (UF.iter (UF.compress p x r) k a) = r
+        rw [hstep, hxk]
+        exact UF.compress_step_self hx
+      · left
+        show UF.step (UF.compress p x r) (UF.iter (UF.compress p x r) k a) = UF.step p (UF.iter p k a)
+        rw [hstep]
+        exact UF.compress_step_of_ne hxk
+    · right
+      change UF.step (UF.compress p x r) (UF.iter (UF.compress p x r) k a) = r
+      rw [hstep]
+      by_cases hrx : r = x
+      · subst hrx
+        exact UF.compress_step_self hx
+      · rw [UF.compress_step_of_ne hrx]
+        exact hr
+
+/-- Compression to a root preserves reachability of that root. -/
+theorem reach_root_compress {p : UF.Arr} {x r a : Nat} (hx : x < p.length)
+    (hr : UF.IsRoot p r) (ha : UF.Reach p a r) :
+    UF.Reach (UF.compress p x r) a r := by
+  obtain ⟨k, hk⟩ := UF.reach_iff_iterate.mp ha
+  refine UF.reach_iff_iterate.mpr ⟨k, ?_⟩
+  rcases iter_compress_root hx hr k a with h | h
+  · rw [h, hk]
+  · exact h
+
+/-- Compression to a root preserves `Same` in both directions. -/
+theorem compress_same_iff_of_root {p : UF.Arr} {x r : Nat} (hx : x < p.length)
+    (hr : UF.IsRoot p r) (hxr : UF.Reach p x r) {a b : Nat} :
+    UF.Same (UF.compress p x r) a b ↔ UF.Same p a b := by
+  constructor
+  · exact UF.compress_same_sound hx hxr
+  · rintro ⟨c, hac, hbc⟩
+    by_cases hbar : UF.Reach p a x
+    · have har : UF.Reach p a r := UF.reach_trans hbar hxr
+      have hcr : UF.Reach p c r := by
+        rcases reach_or_reach_of_common hac har with h | h
+        · exact h
+        · have : c = r := root_reach_eq hr h
+          rw [this]
+          exact Or.inl rfl
+      have hbr : UF.Reach p b r := UF.reach_trans hbc hcr
+      exact ⟨r, reach_root_compress hx hr har, reach_root_compress hx hr hbr⟩
+    · by_cases hbbr : UF.Reach p b x
+      · have hbr : UF.Reach p b r := UF.reach_trans hbbr hxr
+        have hcr : UF.Reach p c r := by
+          rcases reach_or_reach_of_common hbc hbr with h | h
+          · exact h
+          · have : c = r := root_reach_eq hr h
+            rw [this]
+            exact Or.inl rfl
+        have har : UF.Reach p a r := UF.reach_trans hac hcr
+        exact ⟨r, reach_root_compress hx hr har, reach_root_compress hx hr hbr⟩
+      · exact UF.compress_preserves_same ⟨c, hac, hbc⟩ hbar hbbr
+
 /-! ### Completion under a ranked forest
 
 A represented parent map may contain cycles, so fuel alone bounds the chase.
@@ -319,6 +437,21 @@ theorem UFRep.compress_preserves {w w' : World} {a : AllocId} {id : CapId} {n : 
       exact ⟨u, rfl, hu⟩
     · rw [if_neg hix]
       exact hdata i hi
+
+/-- The checked one-step compression to a root preserves `Same` in both
+directions. -/
+theorem compressC_same_iff {w w' : World} {a : AllocId} {id : CapId} {n : Nat}
+    {h : UFRep w a id n} {x : Nat} {hx : x < n} {u : UInt8} {w' : World}
+    (hw : compressC w a id n h x hx u = .ok w')
+    {b b' : Backend} (hb : w.heaps a = some b) (hb' : w'.heaps a = some b')
+    (hxlen : x < (UFArr b).length) (hreach : UF.Reach (UFArr b) x u.toNat)
+    (hroot : UF.IsRoot (UFArr b) u.toNat) :
+    ∀ {p q : Nat}, UF.Same (UFArr b') p q ↔ UF.Same (UFArr b) p q := by
+  have heq : UFArr b' = UF.compress (UFArr b) x u.toNat :=
+    compressC_UFArr hw hb hb'
+  intro p q
+  rw [heq]
+  exact compress_same_iff_of_root hxlen hroot hreach
 
 /-- A compression to a reachable node creates no new partition pair: every pair
 `Same` after the checked write was already `Same` in the represented array. -/

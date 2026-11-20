@@ -287,12 +287,15 @@
   `compressCert` performs the checked write and preserves `UFRep` and the world
   invariant; `findCompressCert` runs the chase and compresses the queried node to
   the root it reached, proving the returned value is a root of the represented
-  forest, the representation and invariant survive, and no new `Same` pair is
-  created. It requires a ranked forest and a byte-sized node domain (`n ≤ 256`).
-  `Ranked.reach_lt` bounds reachable nodes, and `stopsAt_of_ranked` bounds the
-  chase by the rank; the rank completion is `findRootC_ranked_root`. Full path
-  compression, the converse partition direction (no existing pair is split) and
-  a general monadic composition remain outside it.
+  forest, the representation and invariant survive, and `Same` is preserved in
+  both directions. It requires a ranked forest and a byte-sized node domain
+  (`n ≤ 256`). `Ranked.reach_lt` bounds reachable nodes, and
+  `stopsAt_of_ranked` bounds the chase by the rank; the rank completion is
+  `findRootC_ranked_root`. The partition equivalence is
+  `compressC_same_iff`/`compress_same_iff_of_root`, built on orbit linearity
+  (`reach_or_reach_of_common`), the root-is-terminal fact (`root_reach_eq`) and
+  root-reach preservation (`reach_root_compress`). Full path compression and a
+  general monadic composition remain outside it.
 - `Cap/UFCompress.lean` adds bounded root finding and one-step compression to the
   functional model: `findRootF` chases parents with fuel, `StopsAt` records a
   reached fixed point, `findRootF_root`/`findRootF_reachable` give the root and
