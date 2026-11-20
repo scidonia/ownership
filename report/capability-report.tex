@@ -849,8 +849,11 @@ directions. \texttt{Cert.pure} and \texttt{Cert.bind} compose computations when
 the continuation's precondition follows from the first postcondition; a
 continuation that needs the read value's proof at construction (a compression to
 the value read) requires a dependently indexed type, which is not provided. The
-byte domain is \texttt{n} $\le$ \texttt{256}; executing the algorithm inside the sealed
-lifecycle remains open.
+byte domain is \texttt{n} $\le$ \texttt{256}. \texttt{UFRunner} is the sealed
+union-find session (private world, combined invariant, representation, backend and
+rank), and \texttt{ufRunner\_findRoot} proves a closed certified execution on the
+concrete 64-byte zero forest returns root 0; exposing a snapshot as the immutable
+observation and deriving the compression path remain open.
 
 \section{Byte-array backend refinement}
 

@@ -304,9 +304,13 @@
   `UF.compressAll`, iterating one-step compression over a supplied path; under a
   root, in-range path nodes that each reach it, `compressAll_same_iff` proves the
   partition preserved in both directions, and the concrete 3→2→1 path lands on
-  the constant array. What remains is deriving the path from the chase
-  automatically, a general monadic composition, and executing the algorithm
-  inside the sealed lifecycle.
+  the constant array. `UFRunner` seals a world with the combined invariant, the
+  representation, its backend and the rank (private fields);
+  `UFRunner.findRoot` runs the algorithm, and `ufRunner_findRoot` proves the
+  closed execution on the concrete 64-byte zero forest returns root 0. What
+  remains is deriving the path from the chase, exposing a snapshot as the
+  immutable observation, a dependently indexed composition, and the world-level
+  borrower and C stages.
 - `Cap/UFCompress.lean` adds bounded root finding and one-step compression to the
   functional model: `findRootF` chases parents with fuel, `StopsAt` records a
   reached fixed point, `findRootF_root`/`findRootF_reachable` give the root and

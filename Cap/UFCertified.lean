@@ -23,6 +23,7 @@ needs a dependently indexed computation type, which this layer does not yet
 provide. Deriving the compression path from the chase and executing the
 algorithm inside the sealed lifecycle remain outside this module.
 -/
+import Cap.FullInv
 import Cap.UFChecked
 
 namespace Cap
@@ -133,7 +134,7 @@ noncomputable def findCompressCert (a : AllocId) (id : CapId) (n : Nat) (rank : 
     Cert (fun w => UFRep w a id n ∧ w.WellFormed ∧
         ∃ b, w.heaps a = some b ∧ Ranked (UFArr b) n rank) Nat
       (fun w0 v w' => ∃ b b', w0.heaps a = some b ∧ w'.heaps a = some b' ∧
-        UFRep w' a id n ∧ w'.WellFormed ∧ UF.IsRoot (UFArr b) v ∧
+        UFRep w' a id n ∧ w'.WellFormed ∧ v < n ∧ UF.IsRoot (UFArr b) v ∧
         b'.buf = b.buf.set x v.toUInt8 ∧
         (∀ p q, UF.Same (UFArr b') p q ↔ UF.Same (UFArr b) p q)) :=
   fun w hpre => by
@@ -161,7 +162,7 @@ noncomputable def findCompressCert (a : AllocId) (id : CapId) (n : Nat) (rank : 
     let w' := Classical.choose hok
     have hw' : compressC w a id n hrep x hx u = .ok w' := Classical.choose_spec hok
     have hpost : ∃ b b', w.heaps a = some b ∧ w'.heaps a = some b' ∧
-        UFRep w' a id n ∧ w'.WellFormed ∧ UF.IsRoot (UFArr b) r ∧
+        UFRep w' a id n ∧ w'.WellFormed ∧ r < n ∧ UF.IsRoot (UFArr b) r ∧
         b'.buf = b.buf.set x r.toUInt8 ∧
         (∀ p q, UF.Same (UFArr b') p q ↔ UF.Same (UFArr b) p q) := by
       obtain ⟨b0, b', hb0, hb', hbuf⟩ := compressC_backend hw'
@@ -186,7 +187,98 @@ noncomputable def findCompressCert (a : AllocId) (id : CapId) (n : Nat) (rank : 
         intro p q
         exact compressC_same_iff (w' := w') (p := p) (q := q) hw' hbR.1 hb' hxlen hreach' hroot'
       exact ⟨b, b', hbR.1, hb', UFRep.compress_preserves hrep hx hu hw',
-        compressC_wf hw' hwf, hrootp, hbuf, hiff⟩
+        compressC_wf hw' hwf, hrlt, hrootp, hbuf, hiff⟩
     exact ⟨(r, w'), hpost⟩
+
+/-! ### The concrete 64-byte union-find instance -/
+
+/-- The empty 64-byte backend is a zero parent array. -/
+theorem uEmpty_step {i : Nat} (hi : i < 64) :
+    UF.step (UFArr (Backend.empty 64)) i = 0 := by
+  unfold UF.step UF.parentOf UFArr Backend.empty
+  rw [List.getD_eq_getElem?_getD, List.getElem?_map, List.getElem?_replicate]
+  simp [hi]
+
+/-- A rank for the zero parent array: node 0 is the root, every other node
+steps to it. -/
+def zeroRank (i : Nat) : Nat := if i = 0 then 0 else 1
+
+/-- The 64-byte world's owner tree is a whole-share read-write leaf. -/
+theorem uWorld_ufRep : UFRep uWorld ⟨0⟩ ⟨1⟩ 64 := by
+  refine ⟨uOwner,
+    { id := ⟨1⟩, alloc := ⟨0⟩, lo := 0, hi := 64, ordered := Nat.zero_le 64,
+      q := 64, pos := by decide, ceiling := .readWrite, state := .active },
+    Backend.empty 64, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+  · simp [uWorld, uOwner, Owner.init, Ctx.findOwner?]
+  · simp [uWorld, uOwner, Owner.init, Tree.find?]
+  · rfl
+  · rfl
+  · rfl
+  · rfl
+  · rfl
+  · simp [uWorld]
+  · simp [Backend.empty]
+  · intro i hi
+    refine ⟨0, ?_, by decide⟩
+    rw [Backend.empty, List.getElem?_replicate]
+    simp [hi]
+
+/-- The zero parent array is a ranked forest of depth one. -/
+theorem uWorld_ranked : Ranked (UFArr (Backend.empty 64)) 64 zeroRank := by
+  constructor
+  · intro i hi
+    rw [uEmpty_step hi]
+    omega
+  · intro i hi
+    by_cases h0 : i = 0
+    · left
+      show UF.step (UFArr (Backend.empty 64)) i = i
+      rw [uEmpty_step hi, h0]
+    · right
+      show zeroRank (UF.step (UFArr (Backend.empty 64)) i) < zeroRank i
+      rw [uEmpty_step hi]
+      simp [zeroRank, h0]
+
+/-- A sealed union-find runner: a world with the combined invariant, the parent
+representation, its backend and the forest rank, again private. -/
+structure UFRunner (a : AllocId) (id : CapId) (n : Nat) (rank : Nat → Nat) where
+  private mk ::
+  private w : World
+  private inv : World.FullInv w
+  private rep : UFRep w a id n
+  private b : Backend
+  private hb : w.heaps a = some b
+  private hrank : Ranked (UFArr b) n rank
+
+/-- Run find-and-compress on node `x` inside the runner, returning the root. -/
+noncomputable def UFRunner.findRoot {a : AllocId} {id : CapId} {n : Nat}
+    {rank : Nat → Nat} (s : UFRunner a id n rank) (x : Nat)
+    (hx : x < n) (hn : n ≤ 256) : Nat :=
+  (findCompressCert a id n rank x hx hn s.w
+    ⟨s.rep, s.inv.1.1, ⟨s.b, s.hb, s.hrank⟩⟩).1.1
+
+/-- The concrete runner over the 64-byte zero forest. -/
+noncomputable def ufRunner : UFRunner ⟨0⟩ ⟨1⟩ 64 zeroRank :=
+  UFRunner.mk uWorld ⟨uWorld_top, uWorld_loansOK⟩ uWorld_ufRep
+    (Backend.empty 64) rfl uWorld_ranked
+
+/-- A closed certified execution: the runner executes find-and-compress at node 3
+of the 64-byte zero forest, and the returned root is 0. -/
+theorem ufRunner_findRoot :
+    ufRunner.findRoot 3 (by decide) (by decide) = 0 := by
+  unfold UFRunner.findRoot ufRunner
+  let r := (findCompressCert ⟨0⟩ ⟨1⟩ 64 zeroRank 3 (by decide) (by decide)
+    uWorld ⟨uWorld_ufRep, uWorld_wf, ⟨Backend.empty 64, rfl, uWorld_ranked⟩⟩)
+  change r.1.1 = 0
+  have hp := r.property
+  obtain ⟨b, b', hb, hb', hrep', hwf', hvlt, hroot, hbuf, hiff⟩ := hp
+  have hbE : b = Backend.empty 64 := by
+    have h1 : uWorld.heaps ⟨0⟩ = some (Backend.empty 64) := by simp [uWorld]
+    rw [h1] at hb
+    exact Option.some.inj hb.symm
+  subst hbE
+  change UF.step (UFArr (Backend.empty 64)) r.1.1 = r.1.1 at hroot
+  rw [uEmpty_step hvlt] at hroot
+  exact hroot.symm
 
 end Cap

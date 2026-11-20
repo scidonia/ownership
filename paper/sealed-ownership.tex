@@ -897,7 +897,7 @@ Chain freshness counts introduced identities once; inhabited two-level invariant
 Inner/outer scope ending accepted/refused &
 \lean{endLink\_inner}, \lean{endLink\_outer\_none} \\
 \midrule
-Automatic path derivation and sealed algorithm execution & planned \\
+Automatic path derivation and snapshot observation & planned \\
 C primitives and their refinement & planned \\
 Compiled performance evidence & planned \\
 \bottomrule
@@ -988,9 +988,10 @@ update, or a real runtime. We report them as an observation, not a claim.
   representation predicate, bounded represented reads, rank-bounded chase
   completion, root correctness, one-step partition equivalence, and full path
   compression over a supplied path (\lean{compressAll\_same\_iff}). Deriving
-  that path from the chase and executing the algorithm inside the sealed
-  lifecycle are not proved; the Owned-fragment search is separate from this
-  checked route.
+  that path from the chase and exposing a snapshot observation are not proved;
+  a sealed runner executes the concrete 64-byte instance and proves its root
+  (\lean{ufRunner\_findRoot}), but the Owned-fragment search is separate from
+  this checked route.
 \item \textbf{No verification of C.} The backend exists as a Lean model and a
   ByteArray refinement only.
 \end{itemize}
