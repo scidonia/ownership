@@ -26,11 +26,13 @@ nothing about what the borrower does inside its scope. Those integrations are
 named non-claims.
 -/
 import Cap.Ledger
+import Cap.Loans
 
 namespace Cap
 
 /-- One outstanding loan in a delegation chain. -/
 structure Link where
+  loanId : LoanId
   alloc : AllocId
   lender : CapId
   borrower : CapId
@@ -80,13 +82,65 @@ theorem holder_retract_delegate {base : CapId} {chain : List Link} {l : Link} :
   unfold retract delegate
   rw [List.dropLast_concat]
 
-/-- A chain's links have distinct lenders and borrowers, so no capability is
-both a lender and a borrower in one chain, and no name repeats. -/
-def Chain.NoDup (base : CapId) : List Link → Prop
-  | [] => True
+/-- Every capability name occurring in a chain, lenders and borrowers together. -/
+def names : List Link → List CapId
+  | [] => []
+  | l :: rest => l.lender :: l.borrower :: names rest
+
+/-- A well-formed chain has no repeated capability name, base included. -/
+def Chain.NoDup (base : CapId) (chain : List Link) : Prop :=
+  (base :: names chain).Nodup
+
+/-- The chain as loan-context records, in the order `endLoanChecked` filters
+them: the outermost loan first. -/
+def Chain.toLoans : List Link → List Loan
+  | [] => []
   | l :: rest =>
-      l.lender = base ∧ l.lender ≠ l.borrower ∧ l.borrower ∉ (base :: rest.flatMap
-        (fun x => [x.lender, x.borrower])) ∧ Chain.NoDup l.borrower rest
+      { id := l.loanId, lender := l.lender, borrower := l.borrower,
+        lifetime := l.lifetime } :: Chain.toLoans rest
+
+/-- The lenders of a chain are a sublist of its names. -/
+theorem lenders_sublist_names : ∀ chain : List Link,
+    (Chain.toLoans chain).map (·.lender) |>.Sublist (names chain)
+  | [] => List.Sublist.slnil
+  | l :: rest => by
+    simp only [Chain.toLoans, names]
+    exact List.Sublist.cons_cons l.lender
+      (List.Sublist.cons l.borrower (lenders_sublist_names rest))
+
+/-- A well-formed chain has distinct lenders: the loan-context invariant's
+lender-distinctness field holds for the chain's records. -/
+theorem Chain.lenders_nodup {base : CapId} {chain : List Link}
+    (h : Chain.NoDup base chain) :
+    (Chain.toLoans chain).map (·.lender) |>.Nodup := by
+  have hn : (names chain).Nodup := (List.nodup_cons.mp h).2
+  exact (lenders_sublist_names chain).nodup hn
+
+/-- The chain's records append, link by link. -/
+theorem toLoans_append (chain : List Link) (l : Link) :
+    Chain.toLoans (chain ++ [l]) = Chain.toLoans chain ++ Chain.toLoans [l] := by
+  induction chain with
+  | nil => simp [Chain.toLoans]
+  | cons x xs ih => simp [Chain.toLoans, ih]
+
+/-- Ending the innermost link is the loan-list filter `endLoanChecked` performs:
+from the chain's records, removing the last loan's identifier leaves exactly the
+records of the retracted chain, provided identifiers are unique. -/
+theorem toLoans_filter_retract {base : CapId} {chain : List Link} {l : Link}
+    (hids : ∀ k ∈ chain, k.loanId ≠ l.loanId) :
+    List.filter (fun x => x.id ≠ l.loanId) (Chain.toLoans (delegate base chain l))
+      = Chain.toLoans chain := by
+  unfold delegate
+  rw [toLoans_append, List.filter_append]
+  have hsingle : List.filter (fun x : Loan => x.id ≠ l.loanId) (Chain.toLoans [l]) = [] := by
+    simp [Chain.toLoans]
+  rw [hsingle, List.append_nil]
+  induction chain with
+  | nil => rfl
+  | cons x xs ih =>
+    simp only [Chain.toLoans, List.filter_cons]
+    rw [if_pos (by simp [hids x (List.mem_cons_self ..)])]
+    rw [ih (fun k hk => hids k (List.mem_cons_of_mem x hk))]
 
 /-- The weight of a capability in a delegation chain: the holder carries the
 whole share `D`, every other name carries zero. -/
@@ -136,8 +190,8 @@ theorem nested_two_level {D : Nat} {base b1 b2 : CapId} {a : AllocId}
     {l1 l2 : LifetimeId} (hne1 : base ≠ b1) (hne2 : b1 ≠ b2) :
     holder base
       (delegate base
-        (delegate base [] { alloc := a, lender := base, borrower := b1, lifetime := l1 })
-        { alloc := a, lender := b1, borrower := b2, lifetime := l2 }) = b2 := by
+        (delegate base [] { loanId := ⟨1⟩, alloc := a, lender := base, borrower := b1, lifetime := l1 })
+        { loanId := ⟨2⟩, alloc := a, lender := b1, borrower := b2, lifetime := l2 }) = b2 := by
   unfold delegate
   simp [holder]
 
@@ -148,8 +202,8 @@ theorem nested_two_level_unwind {D : Nat} {base b1 b2 : CapId} {a : AllocId}
     holder base
       (retract (retract
         (delegate base
-          (delegate base [] { alloc := a, lender := base, borrower := b1, lifetime := l1 })
-          { alloc := a, lender := b1, borrower := b2, lifetime := l2 }))) = base := by
+          (delegate base [] { loanId := ⟨1⟩, alloc := a, lender := base, borrower := b1, lifetime := l1 })
+          { loanId := ⟨2⟩, alloc := a, lender := b1, borrower := b2, lifetime := l2 }))) = base := by
   unfold delegate retract
   simp [holder]
 

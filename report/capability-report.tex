@@ -146,7 +146,7 @@ Review item & Change in this revision \\
 \midrule
 R1 & \file{Cap/Unified.lean}: value-carrying writes with the checker as interpreter; world-relation preservation; the 64-byte run through that route. Splits, snapshot, free and loans are not yet in this language. \\
 R2 & Access-capability ids separated from internal split-node provenance; \texttt{Owner.FreshIds} and a freshness branch in the checker refusing duplicate and reused-parent identifiers (\texttt{msgFresh}); regressions in \texttt{bench/CapFreshness.lean}. The full invariant is still open. \\
-R3 & A begun loan is bound to the lifetime it inserts and requires distinct lender/borrower capabilities; \texttt{endLoan} refuses while a recorded descendant loan exists. \texttt{Cap/Reborrow.lean} adds the delegation chain: each borrower is the next loan's lender, the holder and the whole share move to the new borrower (\texttt{delegate\_moves\_share}) and back (\texttt{retract\_restores}), and a two-level reborrow unwinds. Integrating the chain with ledger leaves and the world's loan context is still absent. \\
+R3 & A begun loan is bound to the lifetime it inserts and requires distinct lender/borrower capabilities; \texttt{endLoan} refuses while a recorded descendant loan exists. \texttt{Cap/Reborrow.lean} adds the delegation chain: each borrower is the next loan's lender, the holder and the whole share move to the new borrower (\texttt{delegate\_moves\_share}) and back (\texttt{retract\_restores}), and a two-level reborrow unwinds. The chain maps to loan-context records (\texttt{Chain.toLoans}); a well-formed chain has distinct lenders (\texttt{Chain.lenders\_nodup}), and ending the innermost loan is exactly the identifier filter \texttt{endLoanChecked} performs (\texttt{toLoans\_filter\_retract}). Integrating the chain with ledger leaves and the world's live loan field is still absent. \\
 R4 & \file{Cap/Disposal.lean}: one \texttt{Legal} predicate (entitlement, coverage, reconstructed root, empty loans) and a checked \texttt{free?}; not yet a command of the unified language. \\
 R5 & Not done: the complete split/borrow/fill/read/rejoin/restore/snapshot/free trace. \\
 Validation & \texttt{scripts/check\_cap\_controls.sh} requires each negative fixture to fail with its intended diagnostic; \texttt{check\_all} runs it. \\
@@ -809,8 +809,16 @@ represented read is proved to return a value below \texttt{n}
 (\texttt{readParent\_lt}) and below 256, and \texttt{findRootC} is the chase
 typed by exactly that evidence. \texttt{compressC} is the one-step checked
 compression, \texttt{compressC\_ok} says it is never refused and
-\texttt{compressC\_wf} preserves the world invariant. Partition-refinement and
-path-compression semantics are still not claimed.
+\texttt{compressC\_wf} preserves the world invariant. Semantically, the backend
+is the functional model's array (\texttt{UFArr}); a read is the model's step
+(\texttt{readParent\_step}), a completed chase is \texttt{UF.findRootF}
+(\texttt{findRootC\_eq\_of\_stops}), its result is a root
+(\texttt{findRootC\_root}) reachable from the start
+(\texttt{findRootC\_reachable}), and the checked compression is exactly
+\texttt{UF.compress} (\texttt{compressC\_UFArr}), so its partition soundness
+transfers: a compression to a reachable node creates no new \texttt{Same} pair
+(\texttt{compressC\_same\_sound}). Full path compression, termination without
+fuel and the amortized analysis are still not claimed.
 
 \section{Byte-array backend refinement}
 

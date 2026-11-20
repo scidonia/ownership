@@ -270,9 +270,16 @@
   what the recursive chase needs for its next index. `findRootC` is the chase
   typed by that evidence, `compressC` the one-step compression through
   `writeChecked`, `compressC_ok` its non-refusal (the guard is the
-  representation's own) and `compressC_wf` invariant preservation. It is the
-  checked read route over the pure backend, not an interpreter, FFI or in-place
-  claim.
+  representation's own) and `compressC_wf` invariant preservation. The backend
+  is read as the functional model's array (`UFArr`): `readParent?_step` makes
+  each read the model's `step`, `findRootC_eq_of_stops` identifies a completed
+  chase with `UF.findRootF`, and `findRootC_root`/`findRootC_reachable` give
+  the result's root and reachability facts. The compression corresponds exactly
+  to `UF.compress` (`compressC_UFArr`), so `compressC_same_sound` transfers the
+  model's partition soundness: a compression to a reachable node creates no new
+  `Same` pair. It is the checked read route over the pure backend, not an
+  interpreter, FFI or in-place claim; full path compression and termination
+  without fuel remain outside it.
 - `Cap/UFCompress.lean` adds bounded root finding and one-step compression to the
   functional model: `findRootF` chases parents with fuel, `StopsAt` records a
   reached fixed point, `findRootF_root`/`findRootF_reachable` give the root and
@@ -463,9 +470,13 @@ shows the certificate it would have to emit, not proof-producing elaboration.
   holder (now zero) to the new borrower, and `retract_restores` returns it.
   `nested_two_level` and `nested_two_level_unwind` are the two-level reborrow:
   base lends to `b1`, `b1` lends to `b2` while the outer loan is outstanding, and
-  two retractions unwind to base. It is a name model: no ledger leaves,
-  footprints, heaps or `LoanCtx` are threaded, and what the borrower does inside
-  its scope is not claimed.
+  two retractions unwind to base. Each link carries a loan identifier and the
+  chain maps to loan-context records (`Chain.toLoans`); a well-formed chain's
+  names are duplicate-free, so its lenders are
+  (`Chain.lenders_nodup`), and ending the innermost link is exactly the
+  identifier filter `endLoanChecked` performs (`toLoans_filter_retract`). It is a
+  name model: no ledger leaves, footprints or heaps are threaded, and what the
+  borrower does inside its scope is not claimed.
 - `Cap/Sealed.lean` is the sealed execution boundary: `Sealed` has a private
   constructor, so outside the module a sealed world can be held and observed but
   not manufactured or destructured (`bench/CapSealReject.lean` must fail to

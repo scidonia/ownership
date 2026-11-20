@@ -111,11 +111,149 @@ def findRootC (w : World) (a : AllocId) (id : CapId) (n : Nat) (h : UFRep w a id
       if r = x then some x
       else findRootC w a id n h fuel r (h.readParent?_lt hx hr)
 
+/-! ### Semantic reading of the chase
+
+The checked chase reads the byte backend. This section reads that backend as the
+functional model's parent array, so the chase inherits the functional search's
+root and reachability facts. -/
+
+/-- The functional parent array a backend represents. -/
+def UFArr (b : Backend) : UF.Arr := b.buf.map UInt8.toNat
+
+/-- An in-range entry of the represented array is the stored byte read as a
+node index. -/
+theorem UFArr_getD {b : Backend} {i : Nat} (hi : i < b.buf.length) :
+    (UFArr b).getD i i = (b.buf[i]).toNat := by
+  unfold UFArr
+  rw [List.getD_eq_getElem?_getD, List.getElem?_map]
+  rw [List.getElem?_eq_getElem hi]
+  rfl
+
+/-- A parent read is the represented array's step. -/
+theorem UFRep.readParent?_step {w : World} {a : AllocId} {id : CapId} {n : Nat}
+    (h : UFRep w a id n) {b : Backend} (hb : w.heaps a = some b)
+    {i : Nat} (hi : i < n) :
+    readParent? w a id i (h.canRead hi) = some (UF.step (UFArr b) i) := by
+  have hlen : b.buf.length = n := by
+    obtain ⟨-, -, b', -, -, -, -, -, -, -, hb', hlen, -⟩ := h
+    rw [hb'] at hb
+    exact (Option.some.inj hb) ▸ hlen
+  have hbi : i < b.buf.length := by omega
+  unfold readParent? UF.step UF.parentOf
+  rw [hb]
+  simp only [Option.bind_some, Backend.read]
+  rw [List.getElem?_eq_getElem hbi, UFArr_getD hbi]
+  rfl
+
+/-- Under the representation predicate and enough fuel to stop, the checked
+chase returns the functional search's result. -/
+theorem findRootC_eq_of_stops {w : World} {a : AllocId} {id : CapId} {n : Nat}
+    (h : UFRep w a id n) {b : Backend} (hb : w.heaps a = some b) :
+    ∀ {fuel x : Nat} (hx : x < n), UF.StopsAt (UFArr b) fuel x →
+      findRootC w a id n h fuel x hx = some (UF.findRootF (UFArr b) fuel x) := by
+  intro fuel
+  induction fuel with
+  | zero =>
+    intro x hx hstop
+    exact (UF.stopsAt_zero (UFArr b) x hstop).elim
+  | succ fuel ih =>
+    intro x hx hstop
+    unfold findRootC
+    split
+    · rename_i hread
+      have hstep := UFRep.readParent?_step h hb hx
+      rw [hstep] at hread
+      cases hread
+    · rename_i r hread
+      have hrstep : r = UF.step (UFArr b) x := by
+        rw [UFRep.readParent?_step h hb hx] at hread
+        exact (Option.some.inj hread).symm
+      cases hrstep
+      rcases (UF.stopsAt_succ (UFArr b) fuel x).mp hstop with hroot | ⟨hnot, htail⟩
+      · have hroot' : UF.step (UFArr b) x = x := hroot
+        rw [if_pos hroot']
+        rw [UF.findRootF_succ, if_pos hroot']
+      · have hnot' : ¬ UF.step (UFArr b) x = x := hnot
+        rw [if_neg hnot']
+        rw [UF.findRootF_succ, if_neg hnot']
+        exact ih (h.readParent?_lt hx hread) htail
+
+/-- A completed checked chase stops at a root of the represented parent array. -/
+theorem findRootC_root {w : World} {a : AllocId} {id : CapId} {n : Nat}
+    (h : UFRep w a id n) {b : Backend} (hb : w.heaps a = some b)
+    {fuel x : Nat} (hx : x < n) (hstop : UF.StopsAt (UFArr b) fuel x) {r : Nat}
+    (hr : findRootC w a id n h fuel x hx = some r) :
+    UF.IsRoot (UFArr b) r := by
+  rw [findRootC_eq_of_stops h hb hx hstop] at hr
+  have heq : UF.findRootF (UFArr b) fuel x = r := Option.some.inj hr
+  rw [← heq]
+  exact UF.findRootF_root hstop
+
 /-- One-step compression through the checked write: `parent[x] := r`, with the
 write guard derived from the representation predicate at the runtime index. -/
 def compressC (w : World) (a : AllocId) (id : CapId) (n : Nat)
     (_h : UFRep w a id n) (x : Nat) (_hx : x < n) (u : UInt8) : Except String World :=
   w.writeChecked a id x u
+
+/-- Writing a byte and reading the array commute: the functional array of the
+written backend is the written functional array. -/
+theorem map_toNat_set {l : List UInt8} {x : Nat} {u : UInt8} :
+    (l.set x u).map UInt8.toNat = (l.map UInt8.toNat).set x u.toNat := by
+  induction l generalizing x with
+  | nil => simp
+  | cons y ys ih =>
+    cases x with
+    | zero => simp
+    | succ x => simp [ih]
+
+/-- An accepted checked compression writes one byte and leaves the rest alone. -/
+theorem compressC_backend {w : World} {a : AllocId} {id : CapId} {n : Nat}
+    {h : UFRep w a id n} {x : Nat} {hx : x < n} {u : UInt8} {w' : World}
+    (hw : compressC w a id n h x hx u = .ok w') :
+    ∃ b b', w.heaps a = some b ∧ w'.heaps a = some b' ∧ b'.buf = b.buf.set x u := by
+  unfold compressC at hw
+  obtain ⟨o, b, b', hfind, hwrit, hb, hwrite, hctx, hheaps⟩ := World.writeChecked_sound hw
+  refine ⟨b, b', hb, ?_, Backend.write_buf hwrite⟩
+  rw [hheaps]
+  simp [hb]
+
+/-- The checked compression writes exactly the functional model's `compress`. -/
+theorem compressC_UFArr {w : World} {a : AllocId} {id : CapId} {n : Nat}
+    {h : UFRep w a id n} {x : Nat} {hx : x < n} {u : UInt8} {w' : World}
+    (hw : compressC w a id n h x hx u = .ok w')
+    {b b' : Backend} (hb : w.heaps a = some b) (hb' : w'.heaps a = some b') :
+    UFArr b' = UF.compress (UFArr b) x u.toNat := by
+  obtain ⟨b0, b0', hb0, hb0', hbuf0⟩ := compressC_backend hw
+  have hbb : b = b0 := Option.some.inj (hb.symm.trans hb0)
+  have hb'b : b' = b0' := Option.some.inj (hb'.symm.trans hb0')
+  subst hbb hb'b
+  unfold UFArr UF.compress
+  rw [hbuf0, map_toNat_set]
+
+/-- A compression to a reachable node creates no new partition pair: every pair
+`Same` after the checked write was already `Same` in the represented array. -/
+theorem compressC_same_sound {w : World} {a : AllocId} {id : CapId} {n : Nat}
+    {h : UFRep w a id n} {x : Nat} {hx : x < n} {u : UInt8} {w' : World}
+    (hw : compressC w a id n h x hx u = .ok w')
+    {b b' : Backend} (hb : w.heaps a = some b) (hb' : w'.heaps a = some b')
+    (hxlen : x < (UFArr b).length) (hreach : UF.Reach (UFArr b) x u.toNat) :
+    ∀ {p q : Nat}, UF.Same (UFArr b') p q → UF.Same (UFArr b) p q := by
+  have heq : UFArr b' = UF.compress (UFArr b) x u.toNat :=
+    compressC_UFArr hw hb hb'
+  intro p q hpq
+  rw [heq] at hpq
+  exact UF.compress_same_sound hxlen hreach hpq
+
+/-- A completed checked chase reaches its result in the represented array. -/
+theorem findRootC_reachable {w : World} {a : AllocId} {id : CapId} {n : Nat}
+    (h : UFRep w a id n) {b : Backend} (hb : w.heaps a = some b)
+    {fuel x : Nat} (hx : x < n) (hstop : UF.StopsAt (UFArr b) fuel x) {r : Nat}
+    (hr : findRootC w a id n h fuel x hx = some r) :
+    UF.Reach (UFArr b) x r := by
+  rw [findRootC_eq_of_stops h hb hx hstop] at hr
+  have heq : UF.findRootF (UFArr b) fuel x = r := Option.some.inj hr
+  rw [← heq]
+  exact UF.findRootF_reachable (UFArr b) fuel x
 
 /-- A represented compression write is never refused: the guard is the
 representation's own and the world invariant supplies the backend bounds. -/
