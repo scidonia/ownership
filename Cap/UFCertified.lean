@@ -257,6 +257,15 @@ noncomputable def UFRunner.findRoot {a : AllocId} {id : CapId} {n : Nat}
   (findCompressCert a id n rank x hx hn s.w
     ⟨s.rep, s.inv.1.1, ⟨s.b, s.hb, s.hrank⟩⟩).1.1
 
+/-- Run find-and-compress and return the root together with a copy of the
+allocation's bytes: an immutable observation of the sealed state. -/
+noncomputable def UFRunner.findRootSnapshot {a : AllocId} {id : CapId} {n : Nat}
+    {rank : Nat → Nat} (s : UFRunner a id n rank) (x : Nat)
+    (hx : x < n) (hn : n ≤ 256) : Nat × List UInt8 :=
+  let r := findCompressCert a id n rank x hx hn s.w
+    ⟨s.rep, s.inv.1.1, ⟨s.b, s.hb, s.hrank⟩⟩
+  (r.1.1, ((r.1.2.heaps a).map (·.buf)).getD [])
+
 /-- The concrete runner over the 64-byte zero forest. -/
 noncomputable def ufRunner : UFRunner ⟨0⟩ ⟨1⟩ 64 zeroRank :=
   UFRunner.mk uWorld ⟨uWorld_top, uWorld_loansOK⟩ uWorld_ufRep
@@ -280,5 +289,31 @@ theorem ufRunner_findRoot :
   change UF.step (UFArr (Backend.empty 64)) r.1.1 = r.1.1 at hroot
   rw [uEmpty_step hvlt] at hroot
   exact hroot.symm
+
+/-- The closed execution's immutable observation on the zero forest: root 0 and
+the unchanged 64 zero bytes. -/
+theorem ufRunner_findRootSnapshot :
+    ufRunner.findRootSnapshot 3 (by decide) (by decide) = (0, List.replicate 64 0) := by
+  unfold UFRunner.findRootSnapshot ufRunner
+  let r := (findCompressCert ⟨0⟩ ⟨1⟩ 64 zeroRank 3 (by decide) (by decide)
+    uWorld ⟨uWorld_ufRep, uWorld_wf, ⟨Backend.empty 64, rfl, uWorld_ranked⟩⟩)
+  change (r.1.1, ((r.1.2.heaps ⟨0⟩).map (·.buf)).getD []) = (0, List.replicate 64 0)
+  have hp := r.property
+  obtain ⟨b, b', hb, hb', hrep', hwf', hvlt, hroot, hbuf, hiff⟩ := hp
+  have hbE : b = Backend.empty 64 := by
+    have h1 : uWorld.heaps ⟨0⟩ = some (Backend.empty 64) := by simp [uWorld]
+    rw [h1] at hb
+    exact Option.some.inj hb.symm
+  subst hbE
+  have hroot0 : r.1.1 = 0 := by
+    change UF.step (UFArr (Backend.empty 64)) r.1.1 = r.1.1 at hroot
+    rw [uEmpty_step hvlt] at hroot
+    exact hroot.symm
+  rw [hroot0] at hbuf
+  have hsnap : ((r.1.2.heaps ⟨0⟩).map (·.buf)).getD [] = b'.buf := by
+    rw [hb']
+    rfl
+  rw [hroot0, hsnap, hbuf]
+  simp [Backend.empty]
 
 end Cap

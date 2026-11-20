@@ -852,8 +852,11 @@ the value read) requires a dependently indexed type, which is not provided. The
 byte domain is \texttt{n} $\le$ \texttt{256}. \texttt{UFRunner} is the sealed
 union-find session (private world, combined invariant, representation, backend and
 rank), and \texttt{ufRunner\_findRoot} proves a closed certified execution on the
-concrete 64-byte zero forest returns root 0; exposing a snapshot as the immutable
-observation and deriving the compression path remain open.
+concrete 64-byte zero forest returns root 0. \texttt{UFRunner.findRootSnapshot}
+returns the root with a copy of the allocation's bytes, and
+\texttt{ufRunner\_findRootSnapshot} proves the observation is \texttt{(0, 64
+zero bytes)}; deriving the compression path and a dependently indexed
+composition remain open.
 
 \section{Byte-array backend refinement}
 
