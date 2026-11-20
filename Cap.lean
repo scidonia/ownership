@@ -30,6 +30,7 @@ import Cap.WorldInvariant
 import Cap.UFCompress
 import Cap.UFRun
 import Cap.UFChecked
+import Cap.UFCertified
 import Cap.BackendArr
 import Cap.Typed
 import Cap.IProg

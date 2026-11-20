@@ -189,6 +189,66 @@ theorem findRootC_root {w : World} {a : AllocId} {id : CapId} {n : Nat}
   rw [← heq]
   exact UF.findRootF_root hstop
 
+/-! ### Completion under a ranked forest
+
+A represented parent map may contain cycles, so fuel alone bounds the chase.
+A rank that strictly decreases at every non-root step is the forest invariant
+under which the chase stops at a root within `rank x + 1` steps. -/
+
+/-- The ranked-forest invariant: every in-range step stays in range, and every
+non-root node steps to a strictly smaller rank. -/
+def Ranked (p : UF.Arr) (n : Nat) (rank : Nat → Nat) : Prop :=
+  (∀ i, i < n → UF.step p i < n) ∧
+    ∀ i, i < n → UF.IsRoot p i ∨ rank (UF.step p i) < rank i
+
+/-- More fuel cannot lose a stop. -/
+theorem stopsAt_mono {p : UF.Arr} : ∀ {fuel x : Nat}, UF.StopsAt p fuel x →
+    ∀ k, UF.StopsAt p (fuel + k) x
+  | 0, x, h => by cases h
+  | fuel + 1, x, h => by
+    intro k
+    rcases (UF.stopsAt_succ (p := p) (fuel := fuel) (x := x)).mp h with root | ⟨nr, tail⟩
+    · have heq : fuel + 1 + k = fuel + k + 1 := by omega
+      rw [heq, UF.stopsAt_succ]
+      exact Or.inl root
+    · have heq : fuel + 1 + k = fuel + k + 1 := by omega
+      rw [heq, UF.stopsAt_succ]
+      exact Or.inr ⟨nr, stopsAt_mono tail k⟩
+
+/-- A ranked forest's chase stops within the rank: every node reaches a fixed
+point in at most `rank x` parent steps. -/
+theorem stopsAt_of_ranked {p : UF.Arr} {n : Nat} {rank : Nat → Nat}
+    (hr : Ranked p n rank) :
+    ∀ m i, i < n → rank i < m → UF.StopsAt p (rank i + 1) i := by
+  intro m
+  induction m with
+  | zero => intro i hi hlt; omega
+  | succ m ih =>
+    intro i hi hlt
+    rw [UF.stopsAt_succ]
+    by_cases hroot : UF.IsRoot p i
+    · exact Or.inl hroot
+    · refine Or.inr ⟨hroot, ?_⟩
+      have hdec : rank (UF.step p i) < rank i :=
+        (hr.2 i hi).resolve_left hroot
+      have hstepn : UF.step p i < n := hr.1 i hi
+      have htail := ih (UF.step p i) hstepn (by omega)
+      have harith : rank (UF.step p i) + 1 +
+          (rank i - (rank (UF.step p i) + 1)) = rank i := by omega
+      have := stopsAt_mono htail (rank i - (rank (UF.step p i) + 1))
+      rwa [harith] at this
+
+/-- A represented, ranked parent map's chase completes: with `rank x + 1` fuel it
+returns a root of the represented forest. -/
+theorem findRootC_ranked_root {w : World} {a : AllocId} {id : CapId} {n : Nat}
+    (h : UFRep w a id n) {b : Backend} (hb : w.heaps a = some b)
+    {rank : Nat → Nat} (hrank : Ranked (UFArr b) n rank)
+    {x : Nat} (hx : x < n) :
+    ∃ r, findRootC w a id n h (rank x + 1) x hx = some r ∧ UF.IsRoot (UFArr b) r := by
+  have hstop := stopsAt_of_ranked hrank (rank x + 1) x hx (by omega)
+  refine ⟨UF.findRootF (UFArr b) (rank x + 1) x,
+    findRootC_eq_of_stops h hb hx hstop, UF.findRootF_root hstop⟩
+
 /-- One-step compression through the checked write: `parent[x] := r`, with the
 write guard derived from the representation predicate at the runtime index. -/
 def compressC (w : World) (a : AllocId) (id : CapId) (n : Nat)
@@ -229,6 +289,36 @@ theorem compressC_UFArr {w : World} {a : AllocId} {id : CapId} {n : Nat}
   subst hbb hb'b
   unfold UFArr UF.compress
   rw [hbuf0, map_toNat_set]
+
+/-- A compression write at a represented index, with a value in range, preserves
+the representation predicate. -/
+theorem UFRep.compress_preserves {w w' : World} {a : AllocId} {id : CapId} {n : Nat}
+    (h : UFRep w a id n) {x : Nat} (hx : x < n) {u : UInt8} (hu : u.toNat < n)
+    (hw : compressC w a id n h x hx u = .ok w') :
+    UFRep w' a id n := by
+  obtain ⟨o, c, b, hfind, hc, hact, hq, hceil, hlo, hhi, hb, hlen, hdata⟩ := h
+  unfold compressC at hw
+  obtain ⟨o', b0, b', hfind', hwrit, hb0, hwrite, hctx, hheaps⟩ :=
+    World.writeChecked_sound hw
+  have hb0b : b = b0 := Option.some.inj (hb.symm.trans hb0)
+  rw [← hb0b] at hwrite
+  have hb' : b'.buf = b.buf.set x u := Backend.write_buf hwrite
+  refine ⟨o, c, b', ?_, hc, hact, ?_, hceil, hlo, hhi, ?_, ?_, ?_⟩
+  · rw [hctx]
+    exact hfind
+  · rw [hctx]
+    exact hq
+  · rw [hheaps]
+    simp [hb]
+  · rw [hb', List.length_set, hlen]
+  · intro i hi
+    rw [hb', List.getElem?_set]
+    by_cases hix : x = i
+    · rw [if_pos hix]
+      rw [if_pos (by omega)]
+      exact ⟨u, rfl, hu⟩
+    · rw [if_neg hix]
+      exact hdata i hi
 
 /-- A compression to a reachable node creates no new partition pair: every pair
 `Same` after the checked write was already `Same` in the represented array. -/

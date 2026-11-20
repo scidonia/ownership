@@ -280,6 +280,19 @@
   `Same` pair. It is the checked read route over the pure backend, not an
   interpreter, FFI or in-place claim; full path compression and termination
   without fuel remain outside it.
+- `Cap/UFCertified.lean` is the certified algorithm-facing interface: a
+  `Cert pre α post` is a total computation from any world satisfying `pre` to a
+  value and world satisfying `post`. `readParentCert` returns a parent value with
+  its range proof and its identity as the functional model's `step`;
+  `compressCert` performs the checked write and preserves `UFRep` and the world
+  invariant; `findCompressCert` runs the chase and compresses the queried node to
+  the root it reached, proving the returned value is a root of the represented
+  forest, the representation and invariant survive, and no new `Same` pair is
+  created. It requires a ranked forest and a byte-sized node domain (`n ≤ 256`).
+  `Ranked.reach_lt` bounds reachable nodes, and `stopsAt_of_ranked` bounds the
+  chase by the rank; the rank completion is `findRootC_ranked_root`. Full path
+  compression, the converse partition direction (no existing pair is split) and
+  a general monadic composition remain outside it.
 - `Cap/UFCompress.lean` adds bounded root finding and one-step compression to the
   functional model: `findRootF` chases parents with fuel, `StopsAt` records a
   reached fixed point, `findRootF_root`/`findRootF_reachable` give the root and
