@@ -884,7 +884,10 @@ update, or a real runtime. We report them as an observation, not a claim.
 \item \textbf{Loans are exclusive suspension.} The borrower is the lender's own
   identifier; there is no reborrow capability, no non-root lifetime in the
   executable language, and the policy-level liveness conjunction is not consulted
-  by the checker.
+  by the checker. A suspended leaf can be neither split (both splitters require an
+  active leaf) nor merged (the join refuses non-active children), and disposal is
+  refused while a loan's lender remains live, so a lender's leaf persists for the
+  life of its loan; the loan-state invariant itself is still to be stated.
 \item \textbf{Termination is fuel.} Programs are total by fuel; exhaustion is a
   visible outcome. Termination for valid forests and for the general loops is
   future work.

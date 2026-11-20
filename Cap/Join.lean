@@ -225,7 +225,8 @@ def joinChildren? (newId : CapId) : Tree → Option Tree
   | .frac _ (.leaf c1) (.leaf c2) =>
     if c1.id = c2.id then none
     else if c1.alloc = c2.alloc ∧ c1.lo = c2.lo ∧ c1.hi = c2.hi ∧
-            c1.ceiling = c2.ceiling ∧ c1.state = c2.state then
+            c1.ceiling = c2.ceiling ∧ c1.state = c2.state ∧
+            c1.state = .active then
       some (.leaf
         { id := newId, alloc := c1.alloc, lo := c1.lo, hi := c1.hi,
           ordered := c1.ordered, q := c1.q + c2.q,
@@ -250,24 +251,40 @@ theorem joinChildren?_budget (node : Tree) (newId : CapId) (t' : Tree)
         by_cases hid : c1.id = c2.id
         · simp [joinChildren?, hid] at h
         · by_cases hg : c1.alloc = c2.alloc ∧ c1.lo = c2.lo ∧ c1.hi = c2.hi ∧
-              c1.ceiling = c2.ceiling ∧ c1.state = c2.state
+              c1.ceiling = c2.ceiling ∧ c1.state = c2.state ∧
+              c1.state = .active
           · have hu : t' = .leaf
-                { id := newId, alloc := c2.alloc, lo := c2.lo, hi := c2.hi,
-                  ordered := c2.ordered, q := c1.q + c2.q,
+                { id := newId, alloc := c1.alloc, lo := c1.lo, hi := c1.hi,
+                  ordered := c1.ordered, q := c1.q + c2.q,
                   pos := by have h1 := c1.pos; have h2 := c2.pos; omega,
-                  ceiling := c2.ceiling, state := c2.state } := by
+                  ceiling := c1.ceiling, state := c1.state } := by
               rw [joinChildren?] at h
-              simp [hid, hg] at h
-              exact h.symm
+              rw [if_neg hid, if_pos hg] at h
+              exact (Option.some.inj h).symm
             rw [hu]
-            obtain ⟨_, hl, hh, _, hs⟩ := hg
+            obtain ⟨hl, hlo, hhi, hc, hs, hact⟩ := hg
             exact frac_join_budget_any_id (i := i)
-              hs rfl hl hh rfl rfl rfl
+              rfl hs.symm rfl rfl hlo.symm hhi.symm rfl
           · simp [joinChildren?, hid, hg] at h
       | frac j l' r' => simp [joinChildren?] at h
       | spatial j l' r' => simp [joinChildren?] at h
     | frac j l' r' => simp [joinChildren?] at h
     | spatial j l' r' => simp [joinChildren?] at h
+
+/-- A join of a retired (suspended or consumed) child is refused, so a lender's
+leaf cannot be merged away while its loan exists. -/
+theorem joinChildren?_retired_none {i newId : CapId} {c1 c2 : Leaf}
+    (hs : c1.state ≠ .active) :
+    joinChildren? newId (.frac i (.leaf c1) (.leaf c2)) = none := by
+  simp only [joinChildren?]
+  by_cases hid : c1.id = c2.id
+  · simp [hid]
+  · rw [if_neg hid]
+    by_cases hg : c1.alloc = c2.alloc ∧ c1.lo = c2.lo ∧ c1.hi = c2.hi ∧
+        c1.ceiling = c2.ceiling ∧ c1.state = c2.state ∧ c1.state = .active
+    · rw [if_pos hg]
+      exact absurd hg.2.2.2.2.2 hs
+    · rw [if_neg hg]
 
 /-- Two children carrying the same capability identifier are never joined. -/
 theorem joinChildren?_alias_none (i newId : CapId) (c1 c2 : Leaf)
@@ -397,15 +414,16 @@ theorem Tree.joinChildren?_some {node : Tree} {newId : CapId} {t' : Tree}
         by_cases hid : c1.id = c2.id
         · simp [joinChildren?, hid] at h
         · by_cases hg : c1.alloc = c2.alloc ∧ c1.lo = c2.lo ∧ c1.hi = c2.hi ∧
-              c1.ceiling = c2.ceiling ∧ c1.state = c2.state
+              c1.ceiling = c2.ceiling ∧ c1.state = c2.state ∧
+              c1.state = .active
           · have hu : t' = .leaf
-                { id := newId, alloc := c2.alloc, lo := c2.lo, hi := c2.hi,
-                  ordered := c2.ordered, q := c1.q + c2.q,
+                { id := newId, alloc := c1.alloc, lo := c1.lo, hi := c1.hi,
+                  ordered := c1.ordered, q := c1.q + c2.q,
                   pos := by have h1 := c1.pos; have h2 := c2.pos; omega,
-                  ceiling := c2.ceiling, state := c2.state } := by
+                  ceiling := c1.ceiling, state := c1.state } := by
               rw [joinChildren?] at h
-              simp [hid, hg] at h
-              exact h.symm
+              rw [if_neg hid, if_pos hg] at h
+              exact (Option.some.inj h).symm
             refine ⟨i, c1, c2, rfl, hid, by rw [hu]; rfl, ?_⟩
             intro x c hx
             rw [hu] at hx
@@ -413,7 +431,7 @@ theorem Tree.joinChildren?_some {node : Tree} {newId : CapId} {t' : Tree}
             · subst hx2
               simp [Tree.find?] at hx
               cases hx
-              exact ⟨rfl, hg.1.symm, hg.2.2.1.symm⟩
+              exact ⟨rfl, rfl, rfl⟩
             · simp [Tree.find?, hx2] at hx
           · simp [joinChildren?, hid, hg] at h
       | frac j l' r' => simp [joinChildren?] at h
