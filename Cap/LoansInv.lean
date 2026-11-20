@@ -124,4 +124,11 @@ theorem World.loansOK_freeChecked {w w' : World} {a : AllocId} {d : CapId}
           exact ⟨o, List.mem_filter.mpr ⟨ho, by simpa using hoalloc⟩, c, hc', hstate⟩
     · simp at hw
 
+/-- An identifier that occurs in no leaf is found by no lookup. -/
+theorem Tree.find?_eq_none_of_not_mem_ids {t : Tree} {id : CapId} (h : id ∉ t.ids) :
+    t.find? id = none := by
+  cases hf : t.find? id with
+  | none => rfl
+  | some c => exact absurd (Tree.mem_ids_of_exists_find? ⟨c, hf⟩) h
+
 end Cap
