@@ -725,11 +725,15 @@ The indexed interface has the matching closed form: a program that allocates,
 writes and disposes, typed as ending with no owners, accepted, well formed, with
 the disposed allocation's backend gone.
 
-\paragraph{Failure.} Allocation failure, explicit algorithm errors and
-nontermination are modelled separately: the evaluator's fuel exhaustion and the
-checker's errors are visible outcomes, not silent defaults. Resource-preserving
-failure results for the C backend are part of the planned work
-(Section~\ref{sec:c}).
+\paragraph{Failure.} Failure is not yet separated by the evaluator's result
+type: it returns \lean{Option}, so fuel exhaustion and a refused check are both
+\lean{none}. What is established is the per-command half: each typed command's
+evidence covers its checker --- \lean{splitAtChecked\_succeeds},
+\lean{World.allocChecked\_succeeds}, \lean{World.freeChecked\_succeeds} and the two
+access success lemmas --- so a typed command is never refused. Splitting the
+result into done, exhausted and refused, and proving the refusal constructor
+unreachable for typed executions, is the remaining step; resource-preserving
+failure results for the C backend are planned work (Section~\ref{sec:c}).
 
 \section{Case studies}
 \label{sec:cases}
@@ -835,8 +839,11 @@ Typed splits are never refused, including the history check &
 \lean{splitAtChecked\_succeeds} \\
 At most one capability is writable at a byte &
 \lean{Owner.no\_two\_writable} \\
-Certified accesses cannot be refused; two certified writes agree &
-\lean{read\_succeeds}, \lean{write\_succeeds}, \lean{no\_two\_canwrite} \\
+Certified commands are never refused (accesses, split, alloc, free) &
+\lean{read\_succeeds}, \lean{write\_succeeds}, \lean{splitAtChecked\_succeeds},
+\lean{allocChecked\_succeeds}, \lean{freeChecked\_succeeds} \\
+Two certified writes at one byte agree &
+\lean{no\_two\_canwrite} \\
 \midrule
 Representation relation world$\leftrightarrow$array, forest invariant & planned \\
 General find/union correctness with compression & planned \\
@@ -860,10 +867,14 @@ update, or a real runtime. We report them as an observation, not a claim.
 \item \textbf{Access evidence is partial.} The indexed interface's reads and
   writes carry \lean{CanRead}/\lean{CanWrite} evidence, so an unauthorised
   access is untypable there. The context-preserving fragment still has raw access
-  constructors (its compression example is data-dependent and needs either
-  bounded indices with representation lemmas or checked tests returning
-  evidence), and fractional read permissions are not yet distinguished from
-  free observation.
+  constructors: its accesses are at indices that arrive from a read at run time,
+  and no static premise can discharge an access at such an index. The fix is
+  type-level, not another premise --- index programs by a representation
+  predicate (the union-find representation layer) so that the runtime value's
+  range certificate comes from the invariant. An evidence-returning test would
+  need the evaluator to carry the realization hypothesis, which the fragment's
+  own soundness theorem is what would license; fractional read permissions are
+  not yet distinguished from free observation.
 \item \textbf{Loans are exclusive suspension.} The borrower is the lender's own
   identifier; there is no reborrow capability, no non-root lifetime in the
   executable language, and the policy-level liveness conjunction is not consulted
