@@ -37,3 +37,4 @@ import Cap.Access
 import Cap.Exclusivity
 import Cap.History
 import Cap.TopInvariant
+import Cap.LoansInv
