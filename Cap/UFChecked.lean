@@ -307,6 +307,46 @@ theorem compress_same_iff_of_root {p : UF.Arr} {x r : Nat} (hx : x < p.length)
         exact ⟨r, reach_root_compress hx hr har, reach_root_compress hx hr hbr⟩
       · exact UF.compress_preserves_same ⟨c, hac, hbc⟩ hbar hbbr
 
+/-- Compress every listed node to `r`, in the given order. -/
+def UF.compressAll (p : UF.Arr) (r : Nat) : List Nat → UF.Arr
+  | [] => p
+  | x :: xs => UF.compressAll (UF.compress p x r) r xs
+
+/-- Compression to a root leaves that root a root. -/
+theorem isRoot_compress {p : UF.Arr} {x r : Nat} (hx : x < p.length)
+    (hr : UF.IsRoot p r) : UF.IsRoot (UF.compress p x r) r := by
+  by_cases hrx : r = x
+  · subst hrx
+    exact UF.compress_step_self hx
+  · show UF.step (UF.compress p x r) r = r
+    rw [UF.compress_step_of_ne hrx]
+    exact hr
+
+/-- Full path compression preserves the partition: compressing a list of
+in-range nodes, each of which reaches the root `r`, preserves `Same` in both
+directions. -/
+theorem compressAll_same_iff {p : UF.Arr} {r : Nat} (hr : UF.IsRoot p r)
+    {ys : List Nat} {a b : Nat}
+    (hys : ∀ y ∈ ys, y < p.length ∧ UF.Reach p y r) :
+    UF.Same (UF.compressAll p r ys) a b ↔ UF.Same p a b := by
+  induction ys generalizing p with
+  | nil => exact Iff.rfl
+  | cons x xs ih =>
+    obtain ⟨hxlen, hxreach⟩ := hys x (List.mem_cons_self ..)
+    have htail : ∀ y ∈ xs, y < (UF.compress p x r).length ∧
+        UF.Reach (UF.compress p x r) y r := by
+      intro y hy
+      obtain ⟨hylen, hyreach⟩ := hys y (List.mem_cons_of_mem x hy)
+      exact ⟨by rwa [UF.compress, List.length_set], reach_root_compress hxlen hr hyreach⟩
+    have hroot : UF.IsRoot (UF.compress p x r) r := isRoot_compress hxlen hr
+    have hstep : UF.Same (UF.compress p x r) a b ↔ UF.Same p a b :=
+      compress_same_iff_of_root hxlen hr hxreach
+    exact (ih hroot htail).trans hstep
+
+/-- Full compression of the concrete path 3 → 2 → 1 to the root 0 lands on the
+constant array. -/
+example : UF.compressAll UF.uf3 0 [3, 2, 1] = [0, 0, 0, 0] := by decide
+
 /-! ### Completion under a ranked forest
 
 A represented parent map may contain cycles, so fuel alone bounds the chase.

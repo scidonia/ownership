@@ -887,7 +887,7 @@ Chain freshness counts introduced identities once; inhabited two-level invariant
 Inner/outer scope ending accepted/refused &
 \lean{endLink\_inner}, \lean{endLink\_outer\_none} \\
 \midrule
-General partition correspondence at every step; full path compression & planned \\
+Automatic path derivation and sealed algorithm execution & planned \\
 C primitives and their refinement & planned \\
 Compiled performance evidence & planned \\
 \bottomrule
@@ -983,7 +983,10 @@ update, or a real runtime. We report them as an observation, not a claim.
   the representation predicate, with the chase bounded by a forest rank, its
   result proved a root, the checked compression preserving representation,
   invariant and the partition in both directions (orbit linearity and
-  root-reach preservation); full path compression remains an obligation. The Owned-fragment
+  root-reach preservation). Full path compression is `UF.compressAll` over a
+  supplied path, with `compressAll_same_iff` preserving the partition both ways;
+  deriving the path from the chase and running the algorithm inside the sealed
+  lifecycle remain obligations. The Owned-fragment
   search is separate from this checked route.
 \item \textbf{No verification of C.} The backend exists as a Lean model and a
   ByteArray refinement only.

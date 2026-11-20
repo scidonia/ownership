@@ -294,8 +294,13 @@
   `findRootC_ranked_root`. The partition equivalence is
   `compressC_same_iff`/`compress_same_iff_of_root`, built on orbit linearity
   (`reach_or_reach_of_common`), the root-is-terminal fact (`root_reach_eq`) and
-  root-reach preservation (`reach_root_compress`). Full path compression and a
-  general monadic composition remain outside it.
+  root-reach preservation (`reach_root_compress`). Full path compression is
+  `UF.compressAll`, iterating one-step compression over a supplied path; under a
+  root, in-range path nodes that each reach it, `compressAll_same_iff` proves the
+  partition preserved in both directions, and the concrete 3→2→1 path lands on
+  the constant array. What remains is deriving the path from the chase
+  automatically, a general monadic composition, and executing the algorithm
+  inside the sealed lifecycle.
 - `Cap/UFCompress.lean` adds bounded root finding and one-step compression to the
   functional model: `findRootF` chases parents with fuel, `StopsAt` records a
   reached fixed point, `findRootF_root`/`findRootF_reachable` give the root and
