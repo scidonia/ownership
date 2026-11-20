@@ -933,8 +933,9 @@ open.
 \section{The loan-state invariant}
 
 \file{Cap/LoansInv.lean} states \texttt{World.LoansOK}: loan identifiers
-distinct, lenders distinct, every loan's lifetime live, and every loan's lender
-still occurring as a \texttt{retired} leaf of a live owner
+distinct, lenders distinct, every loan's lifetime live, every lender an issued
+identifier, and every loan's lender still occurring as a \texttt{retired} leaf
+of a live owner
 (\texttt{World.LenderRetired}). The guards make it maintainable --- a lender's
 leaf cannot be split (splitters require an active leaf), merged (the join
 refuses non-active children) or freed while the lender is live --- and the

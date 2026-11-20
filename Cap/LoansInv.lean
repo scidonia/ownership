@@ -28,11 +28,14 @@ def World.LoansOK (w : World) : Prop :=
   (w.ctx.loans.loans.map (·.id)).Nodup
   ∧ (w.ctx.loans.loans.map (·.lender)).Nodup
   ∧ (∀ l ∈ w.ctx.loans.loans, w.ctx.loans.live l.lifetime = true)
+  ∧ (∀ l ∈ w.ctx.loans.loans, l.lender ∈ w.ctx.issued)
   ∧ w.LenderRetired
 
 /-- The empty world has no loans, so the invariant holds. -/
 theorem World.emptyWorld_loansOK : World.LoansOK World.emptyWorld := by
-  refine ⟨by decide, by decide, ?_, ?_⟩
+  refine ⟨by decide, by decide, ?_, ?_, ?_⟩
+  · intro l hl
+    simp [World.emptyWorld, LoanCtx.rootOnly] at hl
   · intro l hl
     simp [World.emptyWorld, LoanCtx.rootOnly] at hl
   · intro l hl
@@ -40,7 +43,9 @@ theorem World.emptyWorld_loansOK : World.LoansOK World.emptyWorld := by
 
 /-- The concrete 64-byte world has no loans. -/
 theorem uWorld_loansOK : World.LoansOK uWorld := by
-  refine ⟨by decide, by decide, ?_, ?_⟩
+  refine ⟨by decide, by decide, ?_, ?_, ?_⟩
+  · intro l hl
+    simp [uWorld, LoanCtx.rootOnly] at hl
   · intro l hl
     simp [uWorld, LoanCtx.rootOnly] at hl
   · intro l hl
