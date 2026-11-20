@@ -104,6 +104,61 @@ noncomputable def compressCert (a : AllocId) (id : CapId) (n x r : Nat)
 example : Cert (fun _ => True) Nat (fun w a w' => a = 5 ∧ w' = w) :=
   Cert.pure 5
 
+/-- Weaken a computation's precondition. -/
+def Cert.weaken {pre pre' : World → Prop} {α : Type}
+    {post : World → α → World → Prop} (p : Cert pre α post)
+    (h : ∀ w, pre' w → pre w) : Cert pre' α post :=
+  fun w hw => p w (h w hw)
+
+/-- Parallel composition? No: a dependent bind. The continuation is built with
+the first computation's value *and its postcondition*, and runs at the
+intermediate world (`pre = (· = w1)`). This is what a continuation that needs a
+runtime fact at construction (compressing to the value just read) requires. -/
+def Cert.bindDep {pre : World → Prop} {α : Type} {mid : World → α → World → Prop}
+    {β : Type} (post : α → World → β → World → Prop)
+    (p : Cert pre α mid)
+    (k : (a : α) → (w0 w1 : World) → mid w0 a w1 →
+      Cert (fun w => w = w1) β (post a)) :
+    Cert pre β (fun w b w' => ∃ a w1, mid w a w1 ∧ post a w1 b w') :=
+  fun w hw => by
+    let r := p w hw
+    let r2 := k r.1.1 w r.1.2 r.property r.1.2 rfl
+    refine ⟨(r2.1.1, r2.1.2), ?_⟩
+    exact ⟨r.1.1, r.1.2, r.property, r2.property⟩
+
+/-- The compression half of read-then-compress, indexed by the value read; the
+program returns that value. -/
+def readThenCompressInner (a : AllocId) (id : CapId) (n x : Nat)
+    (v : Nat) (w1 : World) (b : Nat) (w' : World) : Prop :=
+  ∃ w2, (UFRep w2 a id n ∧ w2.WellFormed ∧
+      ∃ b0 b1, w1.heaps a = some b0 ∧ w2.heaps a = some b1 ∧
+        b1.buf = b0.buf.set x v.toUInt8) ∧ b = v ∧ w' = w2
+
+/-- The whole postcondition of read-then-compress. -/
+def readThenCompressPost (a : AllocId) (id : CapId) (n x : Nat)
+    (w0 : World) (b : Nat) (w' : World) : Prop :=
+  ∃ v w1, (w1 = w0 ∧ v < n ∧ v < 256 ∧ UFRep w0 a id n ∧ w0.WellFormed ∧
+      ∃ bb, w0.heaps a = some bb ∧ v = UF.step (UFArr bb) x) ∧
+    readThenCompressInner a id n x v w1 b w'
+
+/-- Read a parent and compress the same node to the value read, returning the
+value: the dependent composition the plain bind could not express. -/
+noncomputable def readThenCompressCert (a : AllocId) (id : CapId) (n x : Nat)
+    (hx : x < n) (hn : n ≤ 256) :
+    Cert (fun w => UFRep w a id n ∧ w.WellFormed) Nat
+      (readThenCompressPost a id n x) :=
+  Cert.bindDep (post := readThenCompressInner a id n x)
+    (readParentCert a id n x hx)
+    (fun v w0 w1 hmid => by
+      obtain ⟨hw1, hvlt, hv256, hrep, hwf, -⟩ := hmid
+      have hrep' : UFRep w1 a id n := by rwa [hw1]
+      have hwf' : w1.WellFormed := by rwa [hw1]
+      refine fun w hw => ?_
+      subst hw
+      let r := (compressCert a id n x v hx hvlt hv256) w ⟨hrep', hwf'⟩
+      refine ⟨(v, r.1.2), ?_⟩
+      exact ⟨r.1.2, r.property, rfl, rfl⟩)
+
 /-- Reachability from an in-range node stays in range under the ranked forest
 invariant. -/
 theorem Ranked.reach_lt {p : UF.Arr} {n : Nat} {rank : Nat → Nat}

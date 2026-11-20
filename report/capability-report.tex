@@ -846,9 +846,11 @@ and preserves \texttt{UFRep} and the invariant; \texttt{findCompressCert} finds
 the root and compresses the queried node to it, proving the result a root, the
 representation and invariant survive, and \texttt{Same} is preserved in both
 directions. \texttt{Cert.pure} and \texttt{Cert.bind} compose computations when
-the continuation's precondition follows from the first postcondition; a
-continuation that needs the read value's proof at construction (a compression to
-the value read) requires a dependently indexed type, which is not provided. The
+the continuation's precondition follows from the first postcondition, and
+\texttt{Cert.bindDep} hands the continuation the first value and its
+postcondition with the continuation's post indexed by that value;
+\texttt{readThenCompressCert} reads a parent, compresses the same node to the
+value read and returns it. The
 byte domain is \texttt{n} $\le$ \texttt{256}. \texttt{UFRunner} is the sealed
 union-find session (private world, combined invariant, representation, backend and
 rank), and \texttt{ufRunner\_findRoot} proves a closed certified execution on the

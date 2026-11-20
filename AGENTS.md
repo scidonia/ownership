@@ -292,9 +292,11 @@
   (`n ≤ 256`). Reads additionally return the byte bound `v < 256` and carry
   `UFRep`/`WellFormed` into their postcondition. `Cert.pure` and `Cert.bind`
   give sequential composition when the continuation's precondition follows from
-  the first postcondition; a continuation that needs the read value's runtime
-  proof at construction (a compression to the value read) requires a
-  dependently indexed type, which is not provided. `Ranked.reach_lt` bounds
+  the first postcondition; `Cert.bindDep` additionally hands the continuation the
+  first value *and its postcondition*, with the continuation's post indexed by
+  that value, so a continuation that needs a runtime proof at construction is
+  expressible: `readThenCompressCert` reads a parent and compresses the same node
+  to the value read, returning that value. `Ranked.reach_lt` bounds
   reachable nodes, and
   `stopsAt_of_ranked` bounds the chase by the rank; the rank completion is
   `findRootC_ranked_root`. The partition equivalence is
