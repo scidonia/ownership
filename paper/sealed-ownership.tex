@@ -14,6 +14,7 @@
 \usepackage{tikz}
 \usetikzlibrary{positioning,arrows,calc}
 
+\raggedbottom
 \setlength{\emergencystretch}{3em}
 \tolerance=300
 
@@ -859,6 +860,15 @@ Two certified writes at one byte agree &
 \lean{no\_two\_canwrite} \\
 Disposal refuses with an outstanding loan &
 \lean{freeChecked\_refused\_of\_loan} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\begin{center}\small
+\begin{tabular}{@{}p{0.46\linewidth}p{0.44\linewidth}@{}}
+\toprule
+Claim & Evidence \\
+\midrule
 Typed programs are never refused; completion and exhaustion are the only outcomes &
 \lean{IOutcome}, \lean{evalIProg\_eq\_run}, \lean{runIProg\_no\_refusal} \\
 The loan-state invariant holds and is preserved by every command &
@@ -974,20 +984,13 @@ update, or a real runtime. We report them as an observation, not a claim.
   entitlement per allocation is not part of the invariant, and the full rule
   needs a spatial join for reconstruction, which the ledger does not yet
   provide.
-\item \textbf{Union-find correctness is partial.} The checked-backend route
-  has the representation predicate, the bound on represented reads, the root and
-  reachability facts of the chase, and the partition soundness of the one-step
-  compression. The general partition correspondence at every step, full path
-  compression and termination without fuel are not proved; a certified
-  algorithm interface (\lean{Cap/UFCertified.lean}) reads and compresses through
-  the representation predicate, with the chase bounded by a forest rank, its
-  result proved a root, the checked compression preserving representation,
-  invariant and the partition in both directions (orbit linearity and
-  root-reach preservation). Full path compression is `UF.compressAll` over a
-  supplied path, with `compressAll_same_iff` preserving the partition both ways;
-  deriving the path from the chase and running the algorithm inside the sealed
-  lifecycle remain obligations. The Owned-fragment
-  search is separate from this checked route.
+\item \textbf{Union-find correctness is partial.} The checked route has the
+  representation predicate, bounded represented reads, rank-bounded chase
+  completion, root correctness, one-step partition equivalence, and full path
+  compression over a supplied path (\lean{compressAll\_same\_iff}). Deriving
+  that path from the chase and executing the algorithm inside the sealed
+  lifecycle are not proved; the Owned-fragment search is separate from this
+  checked route.
 \item \textbf{No verification of C.} The backend exists as a Lean model and a
   ByteArray refinement only.
 \end{itemize}
