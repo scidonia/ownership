@@ -131,4 +131,83 @@ theorem Tree.find?_eq_none_of_not_mem_ids {t : Tree} {id : CapId} (h : id ∉ t.
   | none => rfl
   | some c => exact absurd (Tree.mem_ids_of_exists_find? ⟨c, hf⟩) h
 
+/-- A spatial split preserves the loan invariant: the split leaf is active while
+every lender's leaf is retired, the replacement's identifiers are historically
+fresh, and other owners are untouched. -/
+theorem World.loansOK_splitAtChecked {w w' : World} {a : AllocId}
+    {id id1 id2 : CapId} {k : Nat}
+    (hw : w.splitAtChecked a id id1 id2 k = .ok w')
+    (hwf : w.WellFormed) (h : w.LoansOK) : w'.LoansOK := by
+  unfold World.splitAtChecked at hw
+  split at hw
+  · simp at hw
+  · rename_i o hfind
+    split at hw
+    · rename_i hfr
+      split at hw
+      · rename_i C' hs
+        simp only [Except.ok.injEq] at hw
+        cases hw
+        unfold Ctx.splitAtOwner? at hs
+        cases ho : o.splitAt? id id1 id2 k with
+        | none => simp [ho] at hs
+        | some o' =>
+          simp only [ho, Option.map_some, Option.some.injEq] at hs
+          subst C'
+          unfold World.LoansOK World.LenderRetired at h ⊢
+          obtain ⟨hid, hlend, hlife, hiss, hret⟩ := h
+          refine ⟨hid, hlend, hlife, ?_, ?_⟩
+          · intro l hl
+            exact List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (hiss l hl))
+          · intro l hl
+            obtain ⟨own, hown, cl, hcl, hst⟩ := hret l hl
+            have hne1 : l.lender ≠ id1 := fun heq => hfr.2.2.2.1 (heq ▸ hiss l hl)
+            have hne2 : l.lender ≠ id2 := fun heq => hfr.2.2.2.2.1 (heq ▸ hiss l hl)
+            unfold Owner.splitAt? at ho
+            cases hfid : o.root.find? id with
+            | none => simp [hfid] at ho
+            | some csplit =>
+              cases hsp : csplit.splitSpatial? id1 id2 k with
+              | none => simp [hfid, hsp] at ho
+              | some t =>
+                simp only [hfid, hsp, Option.map_some, Option.some.injEq] at ho
+                subst ho
+                obtain ⟨_, _, ht⟩ := Leaf.splitSpatial?_some hsp
+                have htids : t.ids = [id1, id2] := by
+                  rw [ht]
+                  rfl
+                have htnone : t.find? l.lender = none := by
+                  apply Tree.find?_eq_none_of_not_mem_ids
+                  rw [htids]
+                  simp [hne1, hne2]
+                by_cases hownO : own = o
+                · rw [hownO] at hcl hown
+                  have hneid : l.lender ≠ id := by
+                    intro heq
+                    obtain ⟨ca, hca, hca_state⟩ := hfr.2.2.2.2.2
+                    rw [heq] at hcl
+                    have hca_eq : ca = cl := Option.some.inj (hca.symm.trans hcl)
+                    rw [hca_eq] at hca_state
+                    rw [hst] at hca_state
+                    exact absurd hca_state (by decide)
+                  have hrep : ∀ c', o.root.find? id = some c' → t.find? l.lender = none :=
+                    fun _ _ => htnone
+                  have hfind' : (Tree.replace id (fun _ => t) o.root).find? l.lender
+                      = some cl := by
+                    rw [Tree.find?_replace_ne o.root id l.lender (fun _ => t) hneid hrep]
+                    exact hcl
+                  exact ⟨{ o with root := Tree.replace id (fun _ => t) o.root },
+                    List.mem_map.mpr ⟨o, hown, by simp⟩, cl, hfind', hst⟩
+                · have hoalloc : own.alloc ≠ o.alloc := by
+                    intro heq
+                    have hmemO : o ∈ w.ctx.owners := List.mem_of_find?_eq_some hfind
+                    have hfindO : w.ctx.findOwner? own.alloc = some own :=
+                      Ctx.findOwner?_eq_some_of_mem_of_functional hwf.2.1 hown
+                    have := hwf.2.1 own.alloc own o hfindO hmemO heq.symm
+                    exact hownO this.symm
+                  exact ⟨own, List.mem_map.mpr ⟨own, hown, by simp [hoalloc]⟩,
+                    cl, hcl, hst⟩
+      · simp at hw
+    · simp at hw
+
 end Cap
