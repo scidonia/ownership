@@ -594,7 +594,7 @@ independence are runtime contracts and concurrency is excluded. Physical storage
 independence is not a theorem of the pure model --- copied programs share
 backends --- so the C runner's contract and the complete command set remain
 open (the runner handoff's P0). The invariant the sealed state carries is
-\texttt{World.FullInv = World.TopInv \u2227 World.LoansOK}
+\texttt{World.FullInv = World.TopInv} $\land$ \texttt{World.LoansOK}
 (\file{Cap/FullInv.lean}), preserved by whole executions
 (\texttt{World.checkWorld\_fullInv}) and initialized at the empty world.
 
@@ -826,9 +826,31 @@ is the functional model's array (\texttt{UFArr}); a read is the model's step
 (\texttt{findRootC\_root}) reachable from the start
 (\texttt{findRootC\_reachable}), and the checked compression is exactly
 \texttt{UF.compress} (\texttt{compressC\_UFArr}), so its partition soundness
-transfers: a compression to a reachable node creates no new \texttt{Same} pair
-(\texttt{compressC\_same\_sound}). Full path compression, termination without
-fuel and the amortized analysis are still not claimed.
+transfers. The representation survives the checked compression
+(\texttt{UFRep.compress\_preserves}); under a ranked forest
+(\texttt{Ranked}) reachable nodes stay in range and the chase stops at a root
+within the rank (\texttt{stopsAt\_of\_ranked},
+\texttt{findRootC\_ranked\_root}). Orbits are linear, a root reaches only
+itself, and compression to a root preserves the partition in both directions
+(\texttt{compressC\_same\_iff}); full path compression
+(\texttt{UF.compressAll}, \texttt{compressAll\_same\_iff}) preserves the
+partition over a supplied path. Deriving the path from the chase and the
+amortized analysis are still not claimed.
+
+\file{Cap/UFCertified.lean} is the certified algorithm-facing interface: a
+\texttt{Cert pre} $\alpha$ \texttt{post} is a total computation from a world satisfying
+\texttt{pre} to a value and world satisfying \texttt{post}.
+\texttt{readParentCert} returns a parent with its range proof, byte bound and
+identity as the model's step; \texttt{compressCert} performs the checked write
+and preserves \texttt{UFRep} and the invariant; \texttt{findCompressCert} finds
+the root and compresses the queried node to it, proving the result a root, the
+representation and invariant survive, and \texttt{Same} is preserved in both
+directions. \texttt{Cert.pure} and \texttt{Cert.bind} compose computations when
+the continuation's precondition follows from the first postcondition; a
+continuation that needs the read value's proof at construction (a compression to
+the value read) requires a dependently indexed type, which is not provided. The
+byte domain is \texttt{n} $\le$ \texttt{256}; executing the algorithm inside the sealed
+lifecycle remains open.
 
 \section{Byte-array backend refinement}
 

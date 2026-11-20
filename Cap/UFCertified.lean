@@ -15,9 +15,13 @@ the review asks for, specialised here to the operations union-find needs:
   partition pair.
 
 The byte backend bounds the node domain: `findCompressCert` requires `n ≤ 256`
-(the review's domain obligation). Full path compression, termination without a
-rank, and the converse partition direction (no existing pair is split) remain
-outside this module.
+(the review's domain obligation). `Cert.pure` and `Cert.bind` give sequential
+composition when the continuation's precondition is implied by the first
+computation's postcondition; a continuation whose *construction* needs a runtime
+fact (for example a compression whose proof argument is the value just read)
+needs a dependently indexed computation type, which this layer does not yet
+provide. Deriving the compression path from the chase and executing the
+algorithm inside the sealed lifecycle remain outside this module.
 -/
 import Cap.UFChecked
 
@@ -31,22 +35,43 @@ abbrev Cert (pre : World → Prop) (α : Type) (post : World → α → World �
 
 /-- Read one parent entry through the representation predicate. -/
 noncomputable def readParentCert (a : AllocId) (id : CapId) (n x : Nat) (hx : x < n) :
-    Cert (fun w => UFRep w a id n) Nat
-      (fun w0 v w' => w' = w0 ∧ v < n ∧
-        ∃ b, w0.heaps a = some b ∧ v = UF.step (UFArr b) x) :=
-  fun w hrep => by
+    Cert (fun w => UFRep w a id n ∧ w.WellFormed) Nat
+      (fun w0 v w' => w' = w0 ∧ v < n ∧ v < 256 ∧ UFRep w0 a id n ∧
+        w0.WellFormed ∧ ∃ b, w0.heaps a = some b ∧ v = UF.step (UFArr b) x) :=
+  fun w h => by
+    let hrep := h.1
     let hsome := hrep.readParent?_some hx
     let v := Classical.choose hsome
     have hv : readParent? w a id x (hrep.canRead hx) = some v :=
       Classical.choose_spec hsome
     have hlt : v < n := hrep.readParent?_lt hx hv
+    have hbyte : v < 256 := hrep.readParent?_byte_lt hx hv
     have hex : ∃ b, w.heaps a = some b ∧ v = UF.step (UFArr b) x := by
       have hrep' := hrep
       obtain ⟨-, -, b, -, -, -, -, -, -, -, hb, -, -⟩ := hrep'
       refine ⟨b, hb, ?_⟩
       rw [UFRep.readParent?_step hrep hb hx] at hv
       exact (Option.some.inj hv).symm
-    exact ⟨(v, w), rfl, hlt, hex⟩
+    exact ⟨(v, w), rfl, hlt, hbyte, hrep, h.2, hex⟩
+
+/-- The identity computation. -/
+def Cert.pure (a : α) : Cert (fun _ => True) α
+    (fun w a' w' => a' = a ∧ w' = w) :=
+  fun w _ => ⟨(a, w), rfl, rfl⟩
+
+/-- Sequential composition: run `p`, then continue with `k` on its value,
+provided the continuation's precondition is implied by `p`'s postcondition. -/
+def Cert.bind {pre : World → Prop} {α : Type} {mid : World → α → World → Prop}
+    {pre2 : α → World → Prop} {β : Type} {post : World → β → World → Prop}
+    (p : Cert pre α mid) (k : ∀ a, Cert (pre2 a) β post)
+    (h : ∀ w a w', mid w a w' → pre2 a w') :
+    Cert pre β (fun w b w' => ∃ a w1, mid w a w1 ∧ post w1 b w') :=
+  fun w hw => by
+    let r1 := p w hw
+    let w1 := r1.1.2
+    let r2 := k r1.1.1 w1 (h w r1.1.1 w1 r1.property)
+    refine ⟨(r2.1.1, r2.1.2), ?_⟩
+    exact ⟨r1.1.1, w1, r1.property, r2.property⟩
 
 /-- Compress a represented node to a represented target byte, preserving the
 representation predicate and the world invariant. -/
@@ -73,6 +98,10 @@ noncomputable def compressCert (a : AllocId) (id : CapId) (n x r : Nat)
       exact ⟨UFRep.compress_preserves h.1 hx hu hw', compressC_wf hw' h.2,
         b0, b', hb0, hb', hbuf⟩
     exact ⟨((), w'), hpost⟩
+
+/-- The identity computation meets its specification on any world. -/
+example : Cert (fun _ => True) Nat (fun w a w' => a = 5 ∧ w' = w) :=
+  Cert.pure 5
 
 /-- Reachability from an in-range node stays in range under the ranked forest
 invariant. -/

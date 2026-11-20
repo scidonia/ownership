@@ -289,7 +289,13 @@
   the root it reached, proving the returned value is a root of the represented
   forest, the representation and invariant survive, and `Same` is preserved in
   both directions. It requires a ranked forest and a byte-sized node domain
-  (`n ≤ 256`). `Ranked.reach_lt` bounds reachable nodes, and
+  (`n ≤ 256`). Reads additionally return the byte bound `v < 256` and carry
+  `UFRep`/`WellFormed` into their postcondition. `Cert.pure` and `Cert.bind`
+  give sequential composition when the continuation's precondition follows from
+  the first postcondition; a continuation that needs the read value's runtime
+  proof at construction (a compression to the value read) requires a
+  dependently indexed type, which is not provided. `Ranked.reach_lt` bounds
+  reachable nodes, and
   `stopsAt_of_ranked` bounds the chase by the rank; the rank completion is
   `findRootC_ranked_root`. The partition equivalence is
   `compressC_same_iff`/`compress_same_iff_of_root`, built on orbit linearity
