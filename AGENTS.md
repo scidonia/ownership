@@ -298,6 +298,13 @@
   disposal check and clears the backend. `write_rel` and `freeWith_rel` preserve the
   relation. It is a pure world, not the interpreter, an FFI path or a concurrency
   claim.
+- `Cap/Exclusivity.lean` turns coverage into write exclusivity:
+  `Tree.budget_leaf_ge` (a present, unconsumed leaf covering a byte contributes
+  its share to the budget) and `Tree.budget_two_leaves` (two distinct such
+  leaves contribute both shares) give `Owner.no_two_writable`: at a byte of a
+  well-formed owner, two writable capabilities have the same identifier. So the
+  discipline's central "nothing bad" property — at most one writer per byte — is
+  a theorem, not an assumption.
 - `Cap/Suspend.lean` is leaf suspension and restoration: `Owner.suspendLeaf?`
   retires an active leaf and `Owner.resumeLeaf?` reactivates a retired one, with
   the find/replace/ids/budget characterisations, the budget preservation (only

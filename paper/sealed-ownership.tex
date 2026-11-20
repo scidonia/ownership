@@ -313,9 +313,13 @@ holding $D$ there leaves no positive share for any other leaf at that byte;
 consequently a byte has at most one writable capability. This is the property the
 static access discipline needs, and it is deliberately weaker than
 ``no overlap'': fractional readers overlap by construction, and the invariant is
-exact total permission, not disjointness. The uniqueness corollary follows from
-the definition together with the guard's $q = D$ requirement; we do not state it
-here as a mechanised theorem, and the static access work is where it is proved.
+exact total permission, not disjointness. The uniqueness corollary is
+mechanised: \lean{Tree.budget\_leaf\_ge} shows that a present, unconsumed leaf
+covering a byte contributes its share to the budget, \lean{Tree.budget\_two\_leaves} shows that two
+distinct such leaves contribute both shares, and
+\lean{Owner.no\_two\_writable} concludes that two writable capabilities at the
+same byte have the same identifier. (The proof needs the leaf's own positivity,
+so the statement concerns well-formed owners.)
 
 \emph{Preservation.} Because each transition preserves the per-byte total,
 coverage is preserved by spatial and fractional splits and by the sibling-only
@@ -841,6 +845,8 @@ Retired capability identifiers are not reissued by splits/joins &
 \lean{reuseSplit\_refused}, \lean{splitAtChecked\_issued\_sub} \\
 Typed splits are never refused, including the history check &
 \lean{splitAtChecked\_succeeds} \\
+At most one capability is writable at a byte &
+\lean{Owner.no\_two\_writable} \\
 \midrule
 Representation relation world$\leftrightarrow$array, forest invariant & planned \\
 General find/union correctness with compression & planned \\

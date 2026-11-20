@@ -863,6 +863,17 @@ historical-freshness premises the checker tests, and
 \texttt{splitAtChecked\_succeeds} proves that a typed split is never refused:
 the typed interface and the checker agree on the history check.
 
+\section{Exclusivity of write authority}
+
+Coverage becomes the discipline's central safety property by arithmetic.
+\texttt{Tree.budget\_leaf\_ge} shows a present, unconsumed leaf covering a byte
+contributes its share to the budget; \texttt{Tree.budget\_two\_leaves} shows two
+distinct such leaves contribute both shares. Hence
+\texttt{Owner.no\_two\_writable}: at a byte of a well-formed owner, two
+writable capabilities have the same identifier --- at most one writer per byte.
+The proof needs the leaf's own positivity (the denominator is positive), so the
+statement is about well-formed owners, not bare trees.
+
 \section{Measurements}
 
 \texttt{bench/CapTiming.lean} times the two pure models on the 64-byte

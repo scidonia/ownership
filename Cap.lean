@@ -33,3 +33,4 @@ import Cap.BackendArr
 import Cap.Typed
 import Cap.IProg
 import Cap.Issuance
+import Cap.Exclusivity
