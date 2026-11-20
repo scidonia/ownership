@@ -837,6 +837,8 @@ Retired capability identifiers are not reissued by splits/joins &
 \lean{reuseSplit\_refused}, \lean{splitAtChecked\_issued\_sub} \\
 Typed splits are never refused, including the history check &
 \lean{splitAtChecked\_succeeds} \\
+World invariant and history preserved through every command and execution &
+\lean{World.TopInv}, \lean{checkWorld\_top} \\
 At most one capability is writable at a byte &
 \lean{Owner.no\_two\_writable} \\
 Certified commands are never refused (accesses, split, alloc, free) &
@@ -885,13 +887,12 @@ update, or a real runtime. We report them as an observation, not a claim.
 \item \textbf{No module opacity.} Lean has no module boundary that hides a
   definition; the seal is by discipline, not enforced by the language. A safe
   result type and an opaque runtime are future work.
-\item \textbf{One invariant, not the whole design invariant.} Coverage, leaves
-  within, distinct identifiers, owner uniqueness and storage agreement are
-  maintained. Historical issuance is enforced by the world-level splits and
-  join, with growth lemmas, but allocation's identifier check, a
-  history-preservation invariant across every transition, provenance roles of
-  internal split nodes, and loan-to-capability relationships are not yet part of
-  a single preserved invariant.
+\item \textbf{One invariant, not the whole design invariant.} The preserved
+  invariant combines coverage, leaves within, distinct identifiers, owner
+  uniqueness and storage agreement (the world bundle) with the issuance history:
+  \lean{World.TopInv} is preserved by every checked command and by whole
+  executions (\lean{checkWorld\_top}). Provenance roles of internal split nodes,
+  loan-to-capability relations and disposal legality are still outside it.
 \item \textbf{Disposal is entitlement-only in the certified route.} The
   recorded disposal capability is checked and removal preserves the world
   invariant, but the certified disposal does not consult outstanding loans

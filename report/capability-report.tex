@@ -906,6 +906,21 @@ indexed constructor carries the same premises. World-level wrappers, the combine
 top-level invariant, concrete instances, the loan invariant and disposal
 legality remain to be proved.
 
+\section{The top-level invariant}
+
+\file{Cap/TopInvariant.lean} combines the world invariant with the issuance
+history as \texttt{World.TopInv} and proves every checked command preserves it:
+writes, both splits, the join, disposal, allocation, suspension and restoration,
+and beginning and ending a loan (\texttt{historyOK\_write},
+\texttt{historyOK\_splitAtChecked}, \texttt{historyOK\_splitFractionChecked},
+\texttt{historyOK\_joinChecked}, \texttt{historyOK\_freeChecked},
+\texttt{historyOK\_allocChecked}, \texttt{historyOK\_suspendChecked},
+\texttt{historyOK\_resumeChecked}, \texttt{historyOK\_beginLoanChecked},
+\texttt{historyOK\_endLoanChecked}). Whole executions preserve it
+(\texttt{checkWorld\_top}), and the empty and concrete 64-byte worlds satisfy it
+(\texttt{emptyWorld\_top}, \texttt{uWorld\_top}). The loan invariant and
+disposal legality remain open.
+
 \section{Measurements}
 
 \texttt{bench/CapTiming.lean} times the two pure models on the 64-byte

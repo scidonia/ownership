@@ -306,9 +306,12 @@
   unchanged), plus the membership bounds `Owner.splitAt?_ids_sub`,
   `splitFraction?_ids_sub` and `joinFraction?_ids_sub'`. Allocation's checker now
   also tests the history, and the indexed allocation constructor carries the
-  corresponding premises. Still open: world-level wrappers for each checked
-  command, the combined top-level invariant, concrete instances, the loan
-  invariant and disposal legality.
+  corresponding premises. `Cap/TopInvariant.lean` completes it: the top-level
+  invariant `World.TopInv` (well-formedness together with `HistoryOK`) is
+  preserved by every checked command --- write, both splits, join, free,
+  allocation, suspension/restoration and both loan commands --- and by whole
+  executions (`checkWorld_top`), with concrete instances (`emptyWorld_top`,
+  `uWorld_top`). Still open: the loan invariant and disposal legality.
 - `Cap/Access.lean` gives the access evidence the certified instructions carry:
   `Ctx.CanWrite` (the owner is found and the write guard accepts) and
   `Ctx.CanRead` (the owner is found and the capability is readable at the

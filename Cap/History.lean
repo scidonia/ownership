@@ -156,4 +156,81 @@ theorem Owner.joinFraction?_ids_sub' {o o' : Owner} {node newId : CapId}
   · exact Or.inr h
   · exact Or.inl h
 
+/-- Owner replacement with an unchanged identifier set preserves the history,
+given that the old owner is recorded in the context. -/
+theorem Ctx.historyOK_update_owner {C : Ctx} {a : AllocId} {o o' : Owner}
+    (h : C.HistoryOK) (hmem : o ∈ C.owners) (hids : o'.ids = o.ids) :
+    (C.update a o').HistoryOK :=
+  Ctx.historyOK_update_of_ids h (fun c hc => by
+    rw [hids] at hc
+    exact Ctx.owner_ids_sub_ids hmem c hc)
+
+/-- A split's context, with the children appended to the history, preserves the
+history invariant. -/
+theorem Ctx.historyOK_split {C : Ctx} {o o' : Owner}
+    {id id1 id2 : CapId} {k : Nat}
+    (h : C.HistoryOK) (hoids : o.ids.Nodup) (hmem : o ∈ C.owners)
+    (hs : o.splitAt? id id1 id2 k = some o')
+    (hnew1 : id1 ∉ C.issued) (hnew2 : id2 ∉ C.issued) (hne : id1 ≠ id2) :
+    Ctx.HistoryOK { C.update o.alloc o' with issued := id1 :: id2 :: C.issued } := by
+  refine ⟨?_, ?_⟩
+  · exact List.nodup_cons.mpr ⟨by simp [hnew1, hne],
+      List.nodup_cons.mpr ⟨hnew2, h.1⟩⟩
+  · intro c hc
+    have hsub : c ∈ C.ids ∨ c ∈ o'.ids := Ctx.ids_update_sub c hc
+    rcases hsub with hold | hnew
+    · simp only [List.mem_cons]
+      exact Or.inr (Or.inr (h.2 c hold))
+    · rcases Owner.splitAt?_ids_sub hoids hs c hnew with ho | hid1 | hid2
+      · simp only [List.mem_cons]
+        exact Or.inr (Or.inr (h.2 c (Ctx.owner_ids_sub_ids hmem c ho)))
+      · rw [hid1]
+        simp
+      · rw [hid2]
+        simp
+
+/-- A fractional split's context preserves the history invariant. -/
+theorem Ctx.historyOK_splitFraction {C : Ctx} {o o' : Owner}
+    {id id1 id2 : CapId} {q1 q2 : Nat} {p1 : 0 < q1} {p2 : 0 < q2}
+    (h : C.HistoryOK) (hoids : o.ids.Nodup) (hmem : o ∈ C.owners)
+    (hs : o.splitFraction? id id1 id2 q1 q2 p1 p2 = some o')
+    (hnew1 : id1 ∉ C.issued) (hnew2 : id2 ∉ C.issued) (hne : id1 ≠ id2) :
+    Ctx.HistoryOK { C.update o.alloc o' with issued := id1 :: id2 :: C.issued } := by
+  refine ⟨?_, ?_⟩
+  · exact List.nodup_cons.mpr ⟨by simp [hnew1, hne],
+      List.nodup_cons.mpr ⟨hnew2, h.1⟩⟩
+  · intro c hc
+    have hsub : c ∈ C.ids ∨ c ∈ o'.ids := Ctx.ids_update_sub c hc
+    rcases hsub with hold | hnew
+    · simp only [List.mem_cons]
+      exact Or.inr (Or.inr (h.2 c hold))
+    · rcases Owner.splitFraction?_ids_sub hoids hs c hnew with ho | hid1 | hid2
+      · simp only [List.mem_cons]
+        exact Or.inr (Or.inr (h.2 c (Ctx.owner_ids_sub_ids hmem c ho)))
+      · rw [hid1]
+        simp
+      · rw [hid2]
+        simp
+
+/-- A join's context, with the new identifier appended, preserves the history
+invariant. -/
+theorem Ctx.historyOK_join {C : Ctx} {o o' : Owner}
+    {node newId : CapId}
+    (h : C.HistoryOK) (hmem : o ∈ C.owners)
+    (hs : o.joinFraction? node newId = some o')
+    (hnew : newId ∉ C.issued) :
+    Ctx.HistoryOK { C.update o.alloc o' with issued := newId :: C.issued } := by
+  refine ⟨?_, ?_⟩
+  · exact List.nodup_cons.mpr ⟨hnew, h.1⟩
+  · intro c hc
+    have hsub : c ∈ C.ids ∨ c ∈ o'.ids := Ctx.ids_update_sub c hc
+    rcases hsub with hold | hnewc
+    · simp only [List.mem_cons]
+      exact Or.inr (h.2 c hold)
+    · rcases Owner.joinFraction?_ids_sub' hs c hnewc with ho | hid
+      · simp only [List.mem_cons]
+        exact Or.inr (h.2 c (Ctx.owner_ids_sub_ids hmem c ho))
+      · rw [hid]
+        simp
+
 end Cap
