@@ -839,8 +839,9 @@ spatial split, write, disposal, with every evidence derived --- is accepted
 (\texttt{iLifecycle\_ok}), ends on its typed post-context
 (\texttt{iLifecycle\_ctx}), well formed (\texttt{iLifecycle\_sound}), with the
 pre-existing backend untouched (\texttt{iLifecycle\_snapshot}). Post-contexts
-use \texttt{getD} so the typing function stays computable; loans are not yet in
-the index because the loan list is world state outside \(\Gamma\). The closed
+use \texttt{getD} so the typing function stays computable. The loan state is
+part of the permission context (\texttt{Ctx.loans}), so the typing index can
+mention it; the loan commands are not indexed yet. The closed
 form runs from the empty world: \texttt{iClosed} allocates, writes and disposes,
 is accepted, ends with no owners (\texttt{iClosed\_closed}), is well formed, and
 leaves the disposed allocation's backend gone (\texttt{iClosed\_freed}).

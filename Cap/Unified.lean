@@ -134,17 +134,17 @@ def beginLoanChecked (w : World) (a : AllocId) (lender : CapId) (loanId : LoanId
     | none => .error "beginLoan: no such lender capability"
     | some c =>
       if c.state = .active then
-        if loanId ∉ w.loans.loans.map (·.id) then
-          if w.loans.live ⟨0⟩ then
+        if loanId ∉ w.ctx.loans.loans.map (·.id) then
+          if w.ctx.loans.live ⟨0⟩ then
             match o.suspendLeaf? lender with
             | none => .error "beginLoan: suspension refused"
             | some o' =>
               .ok { w with
-                    ctx := w.ctx.update o.alloc o',
-                    loans := { w.loans with
-                      loans := w.loans.loans ++
-                        [{ id := loanId, lender := lender, borrower := lender,
-                           lifetime := ⟨0⟩ }] } }
+                    ctx := { (w.ctx.update o.alloc o') with
+                      loans := { w.ctx.loans with
+                        loans := w.ctx.loans.loans ++
+                          [{ id := loanId, lender := lender, borrower := lender,
+                             lifetime := ⟨0⟩ }] } } }
           else .error "beginLoan: the root lifetime is not live"
         else .error "beginLoan: loan identifier is not fresh"
       else .error "beginLoan: lender capability is not active"
@@ -164,9 +164,9 @@ theorem beginLoanChecked_wf {w w' : World} {a : AllocId} {lender : CapId}
       simp only [hf, hfl] at h
       by_cases hst : c.state = .active
       · rw [ite_eq_left hst] at h
-        by_cases hfresh : loanId ∉ w.loans.loans.map (·.id)
+        by_cases hfresh : loanId ∉ w.ctx.loans.loans.map (·.id)
         · rw [ite_eq_left hfresh] at h
-          by_cases hlive : w.loans.live ⟨0⟩ = true
+          by_cases hlive : w.ctx.loans.live ⟨0⟩ = true
           · rw [ite_eq_left hlive] at h
             cases hs : o.suspendLeaf? lender with
             | none => simp [hs] at h
@@ -187,7 +187,7 @@ filter rather than `LoanCtx.endLoan`: every loan of this slice is bound to the
 shared root lifetime `⟨0⟩`, which must stay live for later loans, so no
 lifetime is ended here. Refuses if the owner or the leaf is gone. -/
 def endLoanChecked (w : World) (a : AllocId) (loanId : LoanId) : Except String World :=
-  match w.loans.findLoan? loanId with
+  match w.ctx.loans.findLoan? loanId with
   | none => .error "endLoan: no such loan"
   | some loan =>
     match w.ctx.findOwner? a with
@@ -197,16 +197,16 @@ def endLoanChecked (w : World) (a : AllocId) (loanId : LoanId) : Except String W
       | none => .error "endLoan: lender is missing or not suspended"
       | some o' =>
         .ok { w with
-              ctx := w.ctx.update o.alloc o',
-              loans := { w.loans with
-                loans := w.loans.loans.filter (fun l => l.id ≠ loanId) } }
+              ctx := { (w.ctx.update o.alloc o') with
+                loans := { w.ctx.loans with
+                  loans := w.ctx.loans.loans.filter (fun l => l.id ≠ loanId) } } }
 
 /-- A successful loan ending preserves the world invariant: the loans field
 does not enter the invariant and the context change is the resumption. -/
 theorem endLoanChecked_wf {w w' : World} {a : AllocId} {loanId : LoanId}
     (h : w.endLoanChecked a loanId = .ok w') (hwf : w.WellFormed) : w'.WellFormed := by
   unfold World.endLoanChecked at h
-  cases hl : w.loans.findLoan? loanId with
+  cases hl : w.ctx.loans.findLoan? loanId with
   | none => simp [hl] at h
   | some loan =>
     cases hf : w.ctx.findOwner? a with
@@ -344,9 +344,9 @@ def uOwner : Owner := Owner.init ⟨0⟩ 64 64 (by decide) ⟨1⟩ ⟨2⟩
 
 /-- The concrete world: one 64-byte owner and its backend. -/
 def uWorld : World :=
-  { ctx := { owners := [uOwner], D := 64, nextAlloc := 1, issued := [⟨2⟩, ⟨1⟩] },
+  { ctx := { owners := [uOwner], D := 64, nextAlloc := 1, issued := [⟨2⟩, ⟨1⟩], loans := .rootOnly },
     heaps := fun a => if a = ⟨0⟩ then some (Backend.empty 64) else none,
-    loans := .rootOnly }
+}
 
 /-- The concrete 64-byte world is well formed. -/
 theorem uWorld_wf : uWorld.WellFormed := by

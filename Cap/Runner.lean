@@ -134,8 +134,8 @@ def Prog.seq (p : Prog pre) (q : Prog p.post) : Prog pre where
 
 /-- The canonical empty world: no owners, no backends. -/
 def World.emptyWorld : World :=
-  { ctx := { owners := [], D := 64, nextAlloc := 0, issued := [] }, heaps := fun _ => none,
-    loans := .rootOnly }
+  { ctx := { owners := [], D := 64, nextAlloc := 0, issued := [], loans := .rootOnly }, heaps := fun _ => none,
+}
 
 /-- The empty world is well formed. -/
 theorem World.emptyWorld_wf : World.emptyWorld.WellFormed := by

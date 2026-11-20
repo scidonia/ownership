@@ -27,9 +27,9 @@ def ufBackend : Backend :=
 `⟨1⟩`, disposal `⟨2⟩`. -/
 def ufWorld : World :=
   { ctx := { owners := [Owner.init ⟨0⟩ 8 64 (by decide) ⟨1⟩ ⟨2⟩], D := 64, nextAlloc := 1,
-               issued := [⟨2⟩, ⟨1⟩] },
+               issued := [⟨2⟩, ⟨1⟩], loans := .rootOnly },
     heaps := fun a => if a = ⟨0⟩ then some ufBackend else none,
-    loans := .rootOnly }
+}
 
 /-- The union-find world is well formed. -/
 theorem ufWorld_wf : ufWorld.WellFormed := by

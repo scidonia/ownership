@@ -370,6 +370,7 @@ structure Ctx where
   D : Nat
   nextAlloc : Nat
   issued : List CapId   -- every capability identifier ever issued
+  loans : LoanCtx       -- outstanding loans and lifetimes
 
 structure Owner where
   alloc : AllocId
@@ -664,7 +665,8 @@ theorem evalIProg_post :
 Execution from a world matching the typing context ends in a world matching the
 postcondition, with the invariant preserved. Post-contexts are computed with
 \lean{Option.getD} so the type function stays computable while the evidence
-records success.
+records success. The loan state is part of the context index, so evidence that
+depends on outstanding loans can be stated.
 
 \paragraph{Access evidence.} A certified read or write carries its permission:
 \lean{Ctx.CanWrite Γ a id i} says the owner is found and the ledger's write guard

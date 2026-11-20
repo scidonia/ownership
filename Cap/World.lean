@@ -19,14 +19,6 @@ namespace Cap
 structure World where
   ctx : Ctx
   heaps : AllocId → Option Backend
-  /-- Outstanding loans and the lifetimes they are bound to. -/
-  loans : LoanCtx
-
-/-- The loan context of a fresh world: one live root lifetime and no loans.
-Every loan begun through `World.beginLoanChecked` is bound to this root
-lifetime. -/
-def LoanCtx.rootOnly : LoanCtx :=
-  { lifetimes := [{ id := ⟨0⟩, parent := none, state := .live }], loans := [] }
 
 def World.Rel (w : World) : Prop :=
   Ctx.Realizes w.ctx ∧

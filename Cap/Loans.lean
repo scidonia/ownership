@@ -198,4 +198,10 @@ theorem endLoan_none_of_descendant {Γ : LoanCtx} {id : LoanId} {loan : Loan}
 
 end LoanCtx
 
+/-- The loan context of a fresh world: one live root lifetime and no loans.
+Every loan begun through `World.beginLoanChecked` is bound to this root
+lifetime. -/
+def LoanCtx.rootOnly : LoanCtx :=
+  { lifetimes := [{ id := ⟨0⟩, parent := none, state := .live }], loans := [] }
+
 end Cap

@@ -295,9 +295,8 @@ def owner : Owner :=
 
 /-- The example world: one owner and its backend. -/
 def world : World :=
-  { ctx := { owners := [owner], D := 64, nextAlloc := 1, issued := [⟨2⟩, ⟨1⟩] },
-    heaps := fun a => if a = alloc then some (Backend.empty 64) else none,
-    loans := .rootOnly }
+  { ctx := { owners := [owner], D := 64, nextAlloc := 1, issued := [⟨2⟩, ⟨1⟩], loans := .rootOnly },
+    heaps := fun a => if a = alloc then some (Backend.empty 64) else none }
 
 /-- The example disposal state: no loans are outstanding. -/
 def state : DisposalState := { world := world, loans := ⟨[], []⟩ }

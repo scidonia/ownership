@@ -290,10 +290,10 @@
   `Cap.Unified`, and names are invalidated by owner removal rather than by arena
   generations.
 - `Cap/World.lean` is the world of owners, mutable backends and loans: the heap
-  map is a function from allocations to `Backend`, the world also carries a
-  `LoanCtx` (seeded everywhere with `LoanCtx.rootOnly`: one live root lifetime,
-  no loans), `World.Rel` combines `Ctx.Realizes` with the per-owner buffer
-  length, `write?` takes the owner's `Writable` guard as a
+  map is a function from allocations to `Backend`, the permission context
+  carries the `LoanCtx` (`Ctx.loans`, seeded everywhere with
+  `LoanCtx.rootOnly`: one live root lifetime, no loans), `World.Rel` combines
+  `Ctx.Realizes` with the per-owner buffer length, `write?` takes the owner's `Writable` guard as a
   proof and replaces the backend, and `freeWith?` dispatches through the context's
   disposal check and clears the backend. `write_rel` and `freeWith_rel` preserve the
   relation. It is a pure world, not the interpreter, an FFI path or a concurrency

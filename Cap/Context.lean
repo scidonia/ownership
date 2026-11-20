@@ -11,6 +11,7 @@ owner, loans and the dispatch of the owner-level transitions over the list are t
 next slice; the single-owner `Cap.Session` exercises the transitions meanwhile.
 -/
 import Cap.Join
+import Cap.Loans
 
 namespace Cap
 
@@ -22,6 +23,9 @@ structure Ctx where
   of freed allocations. Historical freshness is checked against this list, so a
   consumed identity cannot be reissued within the same run. -/
   issued : List CapId
+  /-- Outstanding loans and the lifetimes they are bound to. The loan state is
+  part of the permission context, so a program's type can mention it. -/
+  loans : LoanCtx
 
 def Ctx.Realizes (C : Ctx) : Prop :=
   (∀ o ∈ C.owners, o.Covered C.D) ∧ (C.owners.map (·.alloc)).Nodup
@@ -44,7 +48,8 @@ def Ctx.alloc (C : Ctx) (a : AllocId) (n : Nat) (pos : 0 < C.D) (rootId disposal
   { owners := Owner.init a n C.D pos rootId disposal :: C.owners,
     D := C.D,
     nextAlloc := C.nextAlloc + 1,
-    issued := rootId :: disposal :: C.issued }
+    issued := rootId :: disposal :: C.issued,
+    loans := C.loans }
 
 theorem Ctx.alloc_realizes {C : Ctx} {a : AllocId} {n : Nat} {pos : 0 < C.D}
     {rootId disposal : CapId} {hfresh : a ∉ C.owners.map (·.alloc)}
