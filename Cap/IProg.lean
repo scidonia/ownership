@@ -113,6 +113,86 @@ def evalIProg (fuel : Nat) {Γ : Ctx} {α : Type} {Q : α → Ctx} (p : IProg Γ
     | .ok w' => some ((), w')
     | .error _ => none
 
+/-- The evaluator's explicit outcome: a completed value and world, fuel
+exhaustion, or a refused world check. Refusal is a constructor so that "a typed
+program is never refused" is a statement about the machine rather than about a
+missing `Option` cause. -/
+inductive IOutcome (α : Type) where
+  | done (a : α) (w : World)
+  | exhausted
+  | refused (msg : String)
+
+/-- The evaluator with its outcome made explicit. It differs from `evalIProg`
+only in preserving the refusal's message; the completed and exhausted cases
+agree. -/
+def runIProg (fuel : Nat) {Γ : Ctx} {α : Type} {Q : α → Ctx} (p : IProg Γ α Q)
+    (w : World) : IOutcome α :=
+  match fuel, p with
+  | 0, _ => .exhausted
+  | fuel + 1, .pure a => .done a w
+  | fuel + 1, .bind q k =>
+    match runIProg fuel q w with
+    | .done a w' => runIProg fuel (k a) w'
+    | .exhausted => .exhausted
+    | .refused msg => .refused msg
+  | fuel + 1, .read a _ i _ => .done ((w.heaps a).bind (·.read i)) w
+  | fuel + 1, .write a id i v _ =>
+    match w.writeChecked a id i v with
+    | .ok w' => .done () w'
+    | .error msg => .refused msg
+  | fuel + 1, .alloc n rootId disposal _ _ _ =>
+    if hpos : 0 < w.ctx.D then
+      match w.allocChecked n rootId disposal hpos with
+      | .ok w' => .done (⟨Γ.nextAlloc⟩) w'
+      | .error msg => .refused msg
+    else .exhausted
+  | fuel + 1, .splitAt a id id1 id2 k _ _ _ _ _ _ _ _ _ =>
+    match w.splitAtChecked a id id1 id2 k with
+    | .ok w' => .done () w'
+    | .error msg => .refused msg
+  | fuel + 1, .free a d _ _ =>
+    match w.freeChecked a d with
+    | .ok w' => .done () w'
+    | .error msg => .refused msg
+
+/-- The `Option` evaluator is the explicit-outcome evaluator with the refusal
+cause erased. -/
+theorem evalIProg_eq_run (w : World) (fuel : Nat) :
+    ∀ {Γ : Ctx} {α : Type} {Q : α → Ctx} (p : IProg Γ α Q),
+      evalIProg fuel p w = match runIProg fuel p w with
+        | .done a w' => some (a, w')
+        | .exhausted => none
+        | .refused _ => none := by
+  induction fuel generalizing w with
+  | zero => intro Γ α Q p; cases p <;> rfl
+  | succ fuel ih =>
+    intro Γ α Q p
+    cases p with
+    | pure a => rfl
+    | bind q k =>
+      simp only [evalIProg, runIProg]
+      rw [ih w q]
+      cases hq : runIProg fuel q w with
+      | done a w' => exact ih w' (k a)
+      | exhausted => rfl
+      | refused msg => rfl
+    | read a id i hc => rfl
+    | write a id i v hc =>
+      simp only [evalIProg, runIProg]
+      cases w.writeChecked a id i v <;> rfl
+    | alloc n rootId disposal pos hf hfr =>
+      simp only [evalIProg, runIProg]
+      by_cases hpos : 0 < w.ctx.D
+      · simp only [dif_pos hpos]
+        cases w.allocChecked n rootId disposal hpos <;> rfl
+      · simp only [dif_neg hpos]
+    | splitAt a id id1 id2 k o hfind hfids hfresh1 hfresh2 hissued1 hissued2 hact hs =>
+      simp only [evalIProg, runIProg]
+      cases w.splitAtChecked a id id1 id2 k <;> rfl
+    | free a d hloan hs =>
+      simp only [evalIProg, runIProg]
+      cases w.freeChecked a d <;> rfl
+
 /-- Allocation realises its typed post-context. -/
 theorem allocChecked_post {w w' : World} {Γ : Ctx} {n : Nat} {rootId disposal : CapId}
     {pos : 0 < Γ.D} (hf : (⟨Γ.nextAlloc⟩ : AllocId) ∉ Γ.owners.map (·.alloc))
@@ -270,6 +350,102 @@ theorem evalIProg_post (w : World) (fuel : Nat) :
         simp only [evalIProg, hw] at h
         obtain ⟨-, rfl⟩ := Option.some.inj h
         exact ⟨freeChecked_post hloan hs hΓ hw, World.freeChecked_wf hw hwf⟩
+
+/-- A typed program is never refused. From a matching world satisfying the
+invariant, the explicit evaluator either completes or exhausts its fuel; every
+world check a command performs is discharged by that command's own typing
+evidence (`World.write_succeeds`, `World.allocChecked_succeeds`,
+`splitAtChecked_succeeds`, `World.freeChecked_succeeds`). -/
+theorem runIProg_no_refusal (w : World) (fuel : Nat) :
+    ∀ {Γ : Ctx} {α : Type} {Q : α → Ctx} (p : IProg Γ α Q),
+      w.ctx = Γ → w.WellFormed → ∀ msg, runIProg fuel p w ≠ .refused msg := by
+  induction fuel generalizing w with
+  | zero =>
+    intro Γ α Q p hΓ hwf msg h
+    cases h
+  | succ fuel ih =>
+    intro Γ α Q p hΓ hwf msg h
+    cases p with
+    | pure a => cases h
+    | read a id i hc => cases h
+    | bind q k =>
+      simp only [runIProg] at h
+      cases hq : runIProg fuel q w with
+      | done a w1 =>
+        simp only [hq] at h
+        have hsome : evalIProg fuel q w = some (a, w1) := by
+          rw [evalIProg_eq_run w fuel q, hq]
+        obtain ⟨hctx1, hwf1⟩ := evalIProg_post w fuel q hΓ hsome hwf
+        exact ih w1 (k a) hctx1 hwf1 msg h
+      | exhausted =>
+        simp only [hq] at h
+        cases h
+      | refused mq =>
+        exact absurd hq (ih w q hΓ hwf mq)
+    | write a id i v hc =>
+      simp only [runIProg] at h
+      cases hw : w.writeChecked a id i v with
+      | error e =>
+        simp only [hw] at h
+        obtain ⟨w1, hok⟩ := World.write_succeeds hc hΓ hwf
+        rw [hw] at hok
+        nomatch hok
+      | ok w1 =>
+        simp only [hw] at h
+        cases h
+    | alloc n rootId disposal pos hf hfr =>
+      simp only [runIProg] at h
+      by_cases hpos : 0 < w.ctx.D
+      · simp only [dif_pos hpos] at h
+        cases ha : w.allocChecked n rootId disposal hpos with
+        | error e =>
+          simp only [ha] at h
+          have hok := World.allocChecked_succeeds (w := w) (n := n) (rootId := rootId)
+            (disposal := disposal) (po := hpos) (hΓ.symm ▸ hf) (hΓ.symm ▸ hfr)
+          rw [ha] at hok
+          cases hok
+        | ok w1 =>
+          simp only [ha] at h
+          cases h
+      · simp only [dif_neg hpos] at h
+        cases h
+    | splitAt a id id1 id2 k o hfind hfids hfresh1 hfresh2 hissued1 hissued2 hact hs =>
+      simp only [runIProg] at h
+      cases hw : w.splitAtChecked a id id1 id2 k with
+      | error e =>
+        simp only [hw] at h
+        have hok := splitAtChecked_succeeds hfind hfids hfresh1 hfresh2
+          hissued1 hissued2 hact hs hΓ
+        rw [hw] at hok
+        cases hok
+      | ok w1 =>
+        simp only [hw] at h
+        cases h
+    | free a d hloan hs =>
+      simp only [runIProg] at h
+      cases hw : w.freeChecked a d with
+      | error e =>
+        simp only [hw] at h
+        have hs' : (w.ctx.freeWith? a d).isSome = true := by
+          rw [hΓ]
+          exact hs
+        have hloan' : ∀ o, w.ctx.findOwner? a = some o →
+            ∀ l ∈ w.ctx.loans.loans, l.lender ∉ o.ids := by
+          intro o ho l hl
+          rw [hΓ] at ho hl
+          exact hloan o ho l hl
+        have hsW : (w.freeWith? a d).isSome = true := by
+          cases hc : w.ctx.freeWith? a d with
+          | none =>
+            rw [hc] at hs'
+            cases hs'
+          | some ctx' => simp [World.freeWith?, hc]
+        have hok := World.freeChecked_succeeds (w := w) (a := a) (d := d) hsW hloan'
+        rw [hw] at hok
+        cases hok
+      | ok w1 =>
+        simp only [hw] at h
+        cases h
 
 /-- The context after allocating the 4-byte owner. -/
 def ilCtx1 : Ctx :=
