@@ -930,6 +930,18 @@ carries that condition together with the recorded capability's success. The loan
 invariant and disposal's reconstruction half (which needs a spatial join) remain
 open.
 
+\section{The loan-state invariant}
+
+\file{Cap/LoansInv.lean} states \texttt{World.LoansOK}: loan identifiers
+distinct, lenders distinct, every loan's lifetime live, and every loan's lender
+still occurring as a \texttt{retired} leaf of a live owner
+(\texttt{World.LenderRetired}). The guards make it maintainable --- a lender's
+leaf cannot be split (splitters require an active leaf), merged (the join
+refuses non-active children) or freed while the lender is live --- and the
+lookup lemma \texttt{Tree.find?\_replace\_ne} supplies the structural fact the
+split and join cases need. The invariant is proved for the empty and concrete
+64-byte worlds and for writes; preservation for the remaining commands is next.
+
 \section{Measurements}
 
 \texttt{bench/CapTiming.lean} times the two pure models on the 64-byte

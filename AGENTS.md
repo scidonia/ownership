@@ -317,6 +317,12 @@
   allocation, suspension/restoration and both loan commands --- and by whole
   executions (`checkWorld_top`), with concrete instances (`emptyWorld_top`,
   `uWorld_top`). Still open: the loan invariant and disposal legality.
+- `Cap/LoansInv.lean` states the loan-state invariant `World.LoansOK`: loan
+  identifiers distinct, lenders distinct, every loan's lifetime live, and every
+  loan's lender still occurring as a `retired` leaf of a live owner
+  (`World.LenderRetired`). It holds for the empty and concrete 64-byte worlds
+  and is preserved by writes; preservation for the remaining commands is the
+  next step, built on `Tree.find?_replace_ne` and the split/join/free guards.
 - `Cap/Access.lean` gives the access evidence the certified instructions carry:
   `Ctx.CanWrite` (the owner is found and the write guard accepts) and
   `Ctx.CanRead` (the owner is found and the capability is readable at the
