@@ -249,9 +249,10 @@ def World.splitAtChecked (w : World) (a : AllocId) (id id1 id2 : CapId) (k : Nat
   match w.ctx.findOwner? a with
   | none => .error "split: no owner for the allocation"
   | some o =>
-    if hf : o.FreshIds id1 id2 ∧ id1 ∉ w.ctx.ids ∧ id2 ∉ w.ctx.ids then
+    if hf : o.FreshIds id1 id2 ∧ id1 ∉ w.ctx.ids ∧ id2 ∉ w.ctx.ids
+              ∧ id1 ∉ w.ctx.issued ∧ id2 ∉ w.ctx.issued then
       match hs : w.ctx.splitAtOwner? o id id1 id2 k with
-      | some C' => .ok { w with ctx := C' }
+      | some C' => .ok { w with ctx := { C' with issued := id1 :: id2 :: w.ctx.issued } }
       | none => .error "split: refused"
     else .error "split: capability identifiers are not fresh"
 
@@ -259,7 +260,8 @@ theorem World.splitAtChecked_sound {w w' : World} {a : AllocId} {id id1 id2 : Ca
     {k : Nat} (h : w.splitAtChecked a id id1 id2 k = .ok w') :
     ∃ o C', w.ctx.findOwner? a = some o ∧ o.FreshIds id1 id2 ∧
       id1 ∉ w.ctx.ids ∧ id2 ∉ w.ctx.ids ∧
-      w.ctx.splitAtOwner? o id id1 id2 k = some C' ∧ w' = { w with ctx := C' } := by
+      w.ctx.splitAtOwner? o id id1 id2 k = some C' ∧
+      w' = { w with ctx := { C' with issued := id1 :: id2 :: w.ctx.issued } } := by
   unfold World.splitAtChecked at h
   split at h
   · simp at h
@@ -269,7 +271,7 @@ theorem World.splitAtChecked_sound {w w' : World} {a : AllocId} {id id1 id2 : Ca
       split at h
       · rename_i C' hs
         simp only [Except.ok.injEq] at h
-        exact ⟨o, C', hf, hfr.1, hfr.2.1, hfr.2.2, hs, h.symm⟩
+        exact ⟨o, C', hf, hfr.1, hfr.2.1, hfr.2.2.1, hs, h.symm⟩
       · simp at h
     · simp at h
 
@@ -421,9 +423,10 @@ def World.splitFractionChecked (w : World) (a : AllocId) (id id1 id2 : CapId)
   match w.ctx.findOwner? a with
   | none => .error "split: no owner for the allocation"
   | some o =>
-    if o.FreshIds id1 id2 ∧ id1 ∉ w.ctx.ids ∧ id2 ∉ w.ctx.ids then
+    if o.FreshIds id1 id2 ∧ id1 ∉ w.ctx.ids ∧ id2 ∉ w.ctx.ids
+        ∧ id1 ∉ w.ctx.issued ∧ id2 ∉ w.ctx.issued then
       match w.ctx.splitFractionOwner? o id id1 id2 q1 q2 p1 p2 with
-      | some C' => .ok { w with ctx := C' }
+      | some C' => .ok { w with ctx := { C' with issued := id1 :: id2 :: w.ctx.issued } }
       | none => .error "split: refused"
     else .error "split: capability identifiers are not fresh"
 
@@ -451,7 +454,7 @@ theorem World.splitFractionChecked_wf {w w' : World} {a : AllocId} {id id1 id2 :
           simp only [ho, Option.map_some, Option.some.injEq] at hs
           subst C'
           have hwfC : (w.ctx.update o.alloc o').WellFormed :=
-            Ctx.splitFractionOwner_wellFormed hwf.1 hmem hfr.1 hfr.2.1 hfr.2.2 hs'
+            Ctx.splitFractionOwner_wellFormed hwf.1 hmem hfr.1 hfr.2.1 hfr.2.2.1 hs'
           have ho'alloc : o'.alloc = o.alloc := Owner.splitFraction?_alloc ho
           have ho'len : o'.len = o.len := Owner.splitFraction?_len ho
           have hfun : (w.ctx.update o.alloc o').Functional :=
@@ -473,9 +476,9 @@ def World.joinChecked (w : World) (a : AllocId) (node newId : CapId) :
   match w.ctx.findOwner? a with
   | none => .error "join: no owner for the allocation"
   | some o =>
-    if newId ∉ w.ctx.ids then
+    if newId ∉ w.ctx.ids ∧ newId ∉ w.ctx.issued then
       match w.ctx.joinFractionOwner? o node newId with
-      | some C' => .ok { w with ctx := C' }
+      | some C' => .ok { w with ctx := { C' with issued := newId :: w.ctx.issued } }
       | none => .error "join: refused"
     else .error "join: capability identifier is not fresh"
 
@@ -502,7 +505,7 @@ theorem World.joinChecked_wf {w w' : World} {a : AllocId} {node newId : CapId}
           simp only [ho, Option.map_some, Option.some.injEq] at hs
           subst C'
           have hwfC : (w.ctx.update o.alloc o').WellFormed :=
-            Ctx.joinFractionOwner_wellFormed hwf.1 hmem hfresh hs'
+            Ctx.joinFractionOwner_wellFormed hwf.1 hmem hfresh.1 hs'
           have ho'alloc : o'.alloc = o.alloc := Owner.joinFraction_alloc ho
           have ho'len : o'.len = o.len := Owner.joinFraction?_len ho
           have hfun : (w.ctx.update o.alloc o').Functional :=
@@ -803,5 +806,6 @@ theorem World.resumeChecked_wf {w w' : World} {a : AllocId} {id : CapId}
       simp only [hf, hr, Except.ok.injEq] at h
       subst h
       exact World.resume_update_wf hwf hf hr
+
 
 end Cap

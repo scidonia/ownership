@@ -26,7 +26,8 @@ def ufBackend : Backend :=
 /-- The union-find world: one owner over the 8-byte allocation, root capability
 `⟨1⟩`, disposal `⟨2⟩`. -/
 def ufWorld : World :=
-  { ctx := { owners := [Owner.init ⟨0⟩ 8 64 (by decide) ⟨1⟩ ⟨2⟩], D := 64, nextAlloc := 1 },
+  { ctx := { owners := [Owner.init ⟨0⟩ 8 64 (by decide) ⟨1⟩ ⟨2⟩], D := 64, nextAlloc := 1,
+               issued := [⟨2⟩, ⟨1⟩] },
     heaps := fun a => if a = ⟨0⟩ then some ufBackend else none,
     loans := .rootOnly }
 

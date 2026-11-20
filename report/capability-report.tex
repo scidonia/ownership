@@ -845,6 +845,21 @@ form runs from the empty world: \texttt{iClosed} allocates, writes and disposes,
 is accepted, ends with no owners (\texttt{iClosed\_closed}), is well formed, and
 leaves the disposed allocation's backend gone (\texttt{iClosed\_freed}).
 
+\section{Historical capability issuance}
+
+The context records `Ctx.issued`, the identifiers it has ever issued. The
+world-level spatial split, fractional split and join test a new identifier
+against this history as well as against the live set, and extend it on success:
+a split that hands a live child the identifier of a retired capability is
+refused. \file{Cap/Issuance.lean} carries the regression and its controls: the
+prefix of the two-split program is accepted, the reuse program is refused
+(\texttt{reuseSplit\_refused}), and the same program with a fresh child is
+accepted (\texttt{reuseSplitControl\_ok}); the history is monotone through the
+two transitions (\texttt{splitAtChecked\_issued\_sub},
+\texttt{joinChecked\_issued\_sub}). Allocation's identifier check and a
+history-preservation invariant across every transition remain open, and the
+paper states that boundary.
+
 \section{Measurements}
 
 \texttt{bench/CapTiming.lean} times the two pure models on the 64-byte

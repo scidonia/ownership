@@ -203,6 +203,16 @@
   the membership bound, and `joinFraction?_ids_nodup` preserves distinctness for a
   fresh `newId`. Arbitrary same-resource recombination, the common-partition
   normaliser and provenance beyond node shape are not implemented.
+- `Cap/Context.lean`'s `Ctx` carries `issued : List CapId`, the issuance history.
+  The world-level split, fractional-split and join check a new identifier
+  against it (as well as against the live set) and extend it on success, so a
+  retired name is never reissued by those transitions; `Cap/Issuance.lean`
+  records the regression (`reuseSplit_refused`: a split reusing the retired root
+  identifier as a child is refused, with `reuseSplit_prefix_ok` and
+  `reuseSplitControl_ok` as controls) and proves the history grows
+  (`splitAtChecked_issued_sub`, `joinChecked_issued_sub`). Allocation's own
+  identifier check and a general history-preservation invariant across all
+  transitions remain open.
 - `Cap/IProg.lean` is the indexed program interface: `IProg Γ α Q` starts with
   permission context `Γ`, returns `a : α` and ends with `Q a`; context-changing
   constructors (`alloc`, `splitAt`, `free`) carry their evidence, so stale or

@@ -1619,7 +1619,7 @@ example : ∃ c, owner64Same.root.find? ⟨0⟩ = some c :=
 
 /-- A one-allocation 64-byte context. -/
 def ctx64 : Ctx :=
-  { owners := [owner64], D := 64, nextAlloc := 1 }
+  { owners := [owner64], D := 64, nextAlloc := 1, issued := [⟨1⟩, ⟨0⟩] }
 
 example : ctx64.WellFormed := by
   refine ⟨?_, ?_, ?_⟩

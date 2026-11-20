@@ -326,6 +326,7 @@ structure Ctx where
   owners : List Owner
   D : Nat
   nextAlloc : Nat
+  issued : List CapId   -- every capability identifier ever issued
 
 structure Owner where
   alloc : AllocId
@@ -797,6 +798,8 @@ Byte-array backend refines the pure model &
 \lean{empty\_refines}, \lean{write\_refines}, \lean{ba64\_snapshot} \\
 Loans: suspended write refused, restored write accepted &
 \lean{uLoan\_suspended\_write\_refused}, \lean{uLoanRun\_ok} \\
+Retired capability identifiers are not reissued by splits/joins &
+\lean{reuseSplit\_refused}, \lean{splitAtChecked\_issued\_sub} \\
 \midrule
 Representation relation world$\leftrightarrow$array, forest invariant & planned \\
 General find/union correctness with compression & planned \\
@@ -833,9 +836,11 @@ update, or a real runtime. We report them as an observation, not a claim.
   result type and an opaque runtime are future work.
 \item \textbf{One invariant, not the whole design invariant.} Coverage, leaves
   within, distinct identifiers, owner uniqueness and storage agreement are
-  maintained. Provenance roles of internal split nodes, identifier recycling
-  policy after disposal, and loan-to-capability relationships are not yet part of
-  a preserved invariant.
+  maintained. Historical issuance is enforced by the world-level splits and
+  join, with growth lemmas, but allocation's identifier check, a
+  history-preservation invariant across every transition, provenance roles of
+  internal split nodes, and loan-to-capability relationships are not yet part of
+  a single preserved invariant.
 \item \textbf{Union-find correctness is partial.} The representation layer and
   the general partition correspondence are planned; today's theorems concern the
   concrete four-node instance and the search program.

@@ -18,6 +18,10 @@ structure Ctx where
   owners : List Owner
   D : Nat
   nextAlloc : Nat
+  /-- Every capability identifier ever issued in this context, including those
+  of freed allocations. Historical freshness is checked against this list, so a
+  consumed identity cannot be reissued within the same run. -/
+  issued : List CapId
 
 def Ctx.Realizes (C : Ctx) : Prop :=
   (∀ o ∈ C.owners, o.Covered C.D) ∧ (C.owners.map (·.alloc)).Nodup
@@ -39,7 +43,8 @@ def Ctx.alloc (C : Ctx) (a : AllocId) (n : Nat) (pos : 0 < C.D) (rootId disposal
     (hfresh : a ∉ C.owners.map (·.alloc)) : Ctx :=
   { owners := Owner.init a n C.D pos rootId disposal :: C.owners,
     D := C.D,
-    nextAlloc := C.nextAlloc + 1 }
+    nextAlloc := C.nextAlloc + 1,
+    issued := rootId :: disposal :: C.issued }
 
 theorem Ctx.alloc_realizes {C : Ctx} {a : AllocId} {n : Nat} {pos : 0 < C.D}
     {rootId disposal : CapId} {hfresh : a ∉ C.owners.map (·.alloc)}

@@ -344,7 +344,7 @@ def uOwner : Owner := Owner.init ⟨0⟩ 64 64 (by decide) ⟨1⟩ ⟨2⟩
 
 /-- The concrete world: one 64-byte owner and its backend. -/
 def uWorld : World :=
-  { ctx := { owners := [uOwner], D := 64, nextAlloc := 1 },
+  { ctx := { owners := [uOwner], D := 64, nextAlloc := 1, issued := [⟨2⟩, ⟨1⟩] },
     heaps := fun a => if a = ⟨0⟩ then some (Backend.empty 64) else none,
     loans := .rootOnly }
 

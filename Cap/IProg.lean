@@ -46,7 +46,8 @@ inductive IProg : (Γ : Ctx) → (α : Type) → (α → Ctx) → Type 1 where
       (hfind : Γ.findOwner? a = some o) (hfids : o.FreshIds id1 id2)
       (hfresh1 : id1 ∉ Γ.ids) (hfresh2 : id2 ∉ Γ.ids)
       (hs : (Γ.splitAtOwner? o id id1 id2 k).isSome) :
-      IProg Γ Unit (fun _ => (Γ.splitAtOwner? o id id1 id2 k).getD Γ)
+      IProg Γ Unit (fun _ => { (Γ.splitAtOwner? o id id1 id2 k).getD Γ with
+                               issued := id1 :: id2 :: Γ.issued })
   | free (a : AllocId) (d : CapId)
       (h : (Γ.freeWith? a d).isSome) :
       IProg Γ Unit (fun _ => (Γ.freeWith? a d).getD Γ)
@@ -103,13 +104,17 @@ theorem splitAtChecked_post {w w' : World} {Γ : Ctx} {a : AllocId}
     (hs : (Γ.splitAtOwner? o id id1 id2 k).isSome)
     (hΓ : w.ctx = Γ)
     (hw : w.splitAtChecked a id id1 id2 k = .ok w') :
-    w'.ctx = (Γ.splitAtOwner? o id id1 id2 k).getD Γ := by
+    w'.ctx = { (Γ.splitAtOwner? o id id1 id2 k).getD Γ with
+                issued := id1 :: id2 :: Γ.issued } := by
   obtain ⟨o', C', hfo', _, _, _, hs', hw'⟩ := World.splitAtChecked_sound hw
   rw [hΓ] at hfo'
   rw [hfind] at hfo'
   cases hfo'
   rw [hΓ] at hs'
-  rw [hw', hs']
+  rw [hw', hΓ]
+  show ({ C' with issued := id1 :: id2 :: Γ.issued } : Ctx)
+      = { (Γ.splitAtOwner? o id id1 id2 k).getD Γ with issued := id1 :: id2 :: Γ.issued }
+  rw [hs']
   rfl
 
 /-- A checked disposal realises its typed post-context. -/
@@ -210,7 +215,8 @@ def ilCtx1 : Ctx :=
 
 /-- The context after the spatial split. -/
 def ilCtx3 : Ctx :=
-  (ilCtx1.splitAtOwner? (Owner.init ⟨1⟩ 4 64 (by decide) ⟨3⟩ ⟨4⟩) ⟨3⟩ ⟨5⟩ ⟨6⟩ 2).getD ilCtx1
+  { (ilCtx1.splitAtOwner? (Owner.init ⟨1⟩ 4 64 (by decide) ⟨3⟩ ⟨4⟩) ⟨3⟩ ⟨5⟩ ⟨6⟩ 2).getD ilCtx1 with
+    issued := ⟨5⟩ :: ⟨6⟩ :: ilCtx1.issued }
 
 /-- The context after disposal. -/
 def ilCtx5 : Ctx := (ilCtx3.freeWith? ⟨1⟩ ⟨4⟩).getD ilCtx3
