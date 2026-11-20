@@ -146,7 +146,7 @@ Review item & Change in this revision \\
 \midrule
 R1 & \file{Cap/Unified.lean}: value-carrying writes with the checker as interpreter; world-relation preservation; the 64-byte run through that route. Splits, snapshot, free and loans are not yet in this language. \\
 R2 & Access-capability ids separated from internal split-node provenance; \texttt{Owner.FreshIds} and a freshness branch in the checker refusing duplicate and reused-parent identifiers (\texttt{msgFresh}); regressions in \texttt{bench/CapFreshness.lean}. The full invariant is still open. \\
-R3 & A begun loan is bound to the lifetime it inserts and requires distinct lender/borrower capabilities; \texttt{endLoan} refuses while a recorded descendant loan exists. A live inner reborrow integrated with the ledger is still absent. \\
+R3 & A begun loan is bound to the lifetime it inserts and requires distinct lender/borrower capabilities; \texttt{endLoan} refuses while a recorded descendant loan exists. \texttt{Cap/Reborrow.lean} adds the delegation chain: each borrower is the next loan's lender, the holder and the whole share move to the new borrower (\texttt{delegate\_moves\_share}) and back (\texttt{retract\_restores}), and a two-level reborrow unwinds. Integrating the chain with ledger leaves and the world's loan context is still absent. \\
 R4 & \file{Cap/Disposal.lean}: one \texttt{Legal} predicate (entitlement, coverage, reconstructed root, empty loans) and a checked \texttt{free?}; not yet a command of the unified language. \\
 R5 & Not done: the complete split/borrow/fill/read/rejoin/restore/snapshot/free trace. \\
 Validation & \texttt{scripts/check\_cap\_controls.sh} requires each negative fixture to fail with its intended diagnostic; \texttt{check\_all} runs it. \\
@@ -575,9 +575,18 @@ immutable snapshot from the post-world. Certificates compose: \texttt{checkWorld
 runs an appended command list from the first part's result, and \texttt{Prog.seq} makes
 the second program start in the first one's post-world. \texttt{Cap/Indexed.lean}'s `Ix` is a
 specification type by comparison: its `run` field alone does not establish a
-post-relation, which is now stated in that module. `World` remains public pure
-model data, so the sealed runtime boundary, the complete invariant and the full
-command set are still open (the runner handoff's P0).
+post-relation, which is now stated in that module. \file{Cap/Sealed.lean}
+seals the construction path: \texttt{Sealed} has a private constructor, a sealed
+world is obtainable only from \texttt{Sealed.ofRun} over an accepted command
+list, and the only observation is \texttt{Sealed.snapshot} of one allocation
+(\texttt{bench/CapSealReject.lean} shows direct construction is unavailable).
+\texttt{boundaryClaims} lists the executable-edge claims with their status: the
+checker's execution, the world invariant and the snapshot interface are proved,
+while the C store trace, physical reference counts and physical storage
+independence are runtime contracts and concurrency is excluded. Physical storage
+independence is not a theorem of the pure model --- copied programs share
+backends --- so the C runner's contract and the complete command set remain
+open (the runner handoff's P0).
 
 \section{Surface checker and certificates}
 
@@ -768,7 +777,8 @@ backend at its initial zeros (\texttt{uLifecycle\_snapshot}).
 
 Loans are the suspension discipline: \texttt{beginLoan} retires the lender's leaf
 and records the loan in the world's loan context (the borrower is the lender's own
-identifier --- exclusive suspension, not a reborrow capability), and
+identifier --- exclusive suspension at the world level; \file{Cap/Reborrow.lean}
+models distinct-borrower delegation chains separately), and
 \texttt{endLoan} removes the record and restores the leaf. While the loan is
 outstanding a write through the lender is refused by the existing guard
 (\texttt{uLoan\_suspended\_write\_refused}, with the accepted write before the
@@ -790,6 +800,17 @@ four nodes is \texttt{Same} in the functional partition relation
 (\texttt{ufTrace\_partition}). Path compression in the client and a read
 discipline are not claimed; the compression facts the client would preserve live
 in \file{Cap/UFCompress.lean}.
+
+\file{Cap/UFChecked.lean} supplies the read discipline. \texttt{UFRep w a id n}
+is the representation predicate of a whole-share read-write parent array whose
+stored bytes are all valid node indices. From it, a runtime index \texttt{i < n}
+yields the static evidence (\texttt{UFRep.canRead}, \texttt{UFRep.canWrite}), a
+represented read is proved to return a value below \texttt{n}
+(\texttt{readParent\_lt}) and below 256, and \texttt{findRootC} is the chase
+typed by exactly that evidence. \texttt{compressC} is the one-step checked
+compression, \texttt{compressC\_ok} says it is never refused and
+\texttt{compressC\_wf} preserves the world invariant. Partition-refinement and
+path-compression semantics are still not claimed.
 
 \section{Byte-array backend refinement}
 
@@ -888,11 +909,13 @@ proves two certified writes at one byte name the same capability. In
 these predicates, so an unauthorised access is not a program; the lifecycle's
 evidence is derived and still decides. Every indexed constructor's evidence now covers its checker:
 \texttt{splitAtChecked\_succeeds}, \texttt{World.allocChecked\_succeeds} and
-\texttt{World.freeChecked\_succeeds} join the two access success lemmas, so a
-typed command of the indexed layer is never refused. The context-preserving
-fragment's raw access constructors are the remaining type-level gap: a
-data-dependent index cannot carry write evidence without indexing programs by a
-representation predicate, which is the union-find representation work.
+\texttt{World.freeChecked\_succeeds} join the two access success lemmas. The
+evaluator's outcome is explicit (\texttt{IOutcome}: completion, fuel exhaustion
+or refusal), and \texttt{runIProg\_no\_refusal} lifts the per-command facts to
+programs: a typed program is never refused, only completed or exhausted. A
+data-dependent index cannot carry write evidence at the program text, so
+\file{Cap/UFChecked.lean} supplies the representation predicate that does it at
+run time.
 
 \section{The issuance-history invariant}
 
