@@ -576,10 +576,12 @@ runs an appended command list from the first part's result, and \texttt{Prog.seq
 the second program start in the first one's post-world. \texttt{Cap/Indexed.lean}'s `Ix` is a
 specification type by comparison: its `run` field alone does not establish a
 post-relation, which is now stated in that module. \file{Cap/Sealed.lean}
-seals the construction path: \texttt{Sealed} has a private constructor, a sealed
-world is obtainable only from \texttt{Sealed.ofRun} over an accepted command
-list, and the only observation is \texttt{Sealed.snapshot} of one allocation
-(\texttt{bench/CapSealReject.lean} shows direct construction is unavailable).
+seals the construction path and the representation: \texttt{Sealed} has a
+private constructor and a private field, a sealed world is obtainable only from
+\texttt{Sealed.ofRun} over an accepted command list, and the only observation is
+\texttt{Sealed.snapshot} of one allocation (\texttt{bench/CapSealReject.lean}
+and \texttt{bench/CapSealPeekReject.lean} show construction and reading the
+field are unavailable).
 \texttt{boundaryClaims} lists the executable-edge claims with their status: the
 checker's execution, the world invariant and the snapshot interface are proved,
 while the C store trace, physical reference counts and physical storage

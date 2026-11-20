@@ -101,10 +101,12 @@ splitting ledger with byte budgets, a command language with allocation, writes,
 splits, joins, loans and disposal, sealed certificates with sequential
 composition, a closed-run lifecycle, and union-find as a client, including a
 path-compressing search that runs as a program in the discipline. The paper also
-states precisely what is \emph{not} yet established: reads are observations, loans
-are exclusive suspension rather than reborrowing, termination is fuel, module
-encapsulation is not enforced by Lean, and the C backend with its representation
-relation remains to be implemented. We argue that the proved core is enough to
+states precisely what is \emph{not} yet established: reads are observations; loans
+at the world level are exclusive suspension rather than a reborrow capability
+(delegation chains are separate bookkeeping); termination is fuel; the sealed
+interface hides construction and representation but Lean cannot make physical
+storage private; and the C backend with its representation relation remains to be
+implemented. We argue that the proved core is enough to
 make the sealed-ownership claim precise, and we separate the three trust levels
 (abstract model, C implementation, compiled execution) that the full claim
 requires.
@@ -154,8 +156,9 @@ proof about an earlier state cannot authorise a live mutation.
   lifecycle from the canonical empty world with snapshots as the only
   observation (Section~\ref{sec:sealed}).
 \item Case studies: a spatial fill lifecycle, union-find through the checked
-  route with a path-compressing search as a program, loans as suspension, and a
-  byte-array backend refined against a pure model (Sections~\ref{sec:cases}).
+  route with a path-compressing search as a program, loans as suspension with a
+  delegation-chain model of nested reborrowing, and a byte-array backend refined
+  against a pure model (Sections~\ref{sec:cases}).
 \item An explicit map of the trust boundary: what is proved, what is
   assumed, and what the C backend would require (Sections~\ref{sec:c} and
   \ref{sec:limits}).
@@ -680,11 +683,15 @@ capability. An unauthorised access is therefore not a well-typed program: the
 evidence cannot be manufactured for a capability that may not act there. Every indexed constructor's evidence covers its checker:
 \lean{splitAtChecked\_succeeds}, \lean{World.allocChecked\_succeeds} and
 \lean{World.freeChecked\_succeeds} join the two access success lemmas, so a
-typed command of the indexed layer is never refused. The data-dependent indices
-of an algorithm, and the context-preserving fragment's raw access constructors,
-are the remaining type-level work: a runtime index cannot carry write evidence
-without indexing programs by a representation predicate, which is the
-union-find representation layer.
+typed command is never refused. Making that a statement about executions needs
+the outcome separated: \lean{IOutcome} distinguishes completion, fuel exhaustion
+and a refused world check, \lean{evalIProg\_eq\_run} shows the \lean{Option}
+evaluator is that outcome with the refusal cause erased, and
+\lean{runIProg\_no\_refusal} proves by fuel induction that a typed program's
+outcome is never a refusal. A data-dependent index still cannot carry access
+evidence at the program text; \lean{Cap/UFChecked.lean} supplies the runtime
+link for the checked backend through a representation predicate
+(Section~\ref{sec:limits}).
 
 \paragraph{Recursion and loops.} Recursion does not create a new loan: a
 recursive call can sequentially use the existing exclusive capability while its
@@ -727,15 +734,17 @@ The indexed interface has the matching closed form: a program that allocates,
 writes and disposes, typed as ending with no owners, accepted, well formed, with
 the disposed allocation's backend gone.
 
-\paragraph{Failure.} Failure is not yet separated by the evaluator's result
-type: it returns \lean{Option}, so fuel exhaustion and a refused check are both
-\lean{none}. What is established is the per-command half: each typed command's
-evidence covers its checker --- \lean{splitAtChecked\_succeeds},
-\lean{World.allocChecked\_succeeds}, \lean{World.freeChecked\_succeeds} and the two
-access success lemmas --- so a typed command is never refused. Splitting the
-result into done, exhausted and refused, and proving the refusal constructor
-unreachable for typed executions, is the remaining step; resource-preserving
-failure results for the C backend are planned work (Section~\ref{sec:c}).
+\paragraph{Failure.} Failure is separated by the explicit-outcome evaluator:
+\lean{IOutcome} distinguishes a completed value and world, fuel exhaustion and a
+refused world check. \lean{evalIProg\_eq\_run} shows the \lean{Option}
+evaluator is that outcome with the refusal cause erased, and
+\lean{runIProg\_no\_refusal} proves a typed program is never refused: each
+command's check is discharged by its typing evidence
+(\lean{write\_succeeds}, \lean{allocChecked\_succeeds},
+\lean{splitAtChecked\_succeeds}, \lean{freeChecked\_succeeds}). The only
+remaining outcomes for a typed run are completion and exhaustion.
+Resource-preserving failure results for the C backend are planned work
+(Section~\ref{sec:c}).
 
 \section{Case studies}
 \label{sec:cases}
@@ -850,9 +859,25 @@ Two certified writes at one byte agree &
 \lean{no\_two\_canwrite} \\
 Disposal refuses with an outstanding loan &
 \lean{freeChecked\_refused\_of\_loan} \\
+Typed programs are never refused; completion and exhaustion are the only outcomes &
+\lean{IOutcome}, \lean{evalIProg\_eq\_run}, \lean{runIProg\_no\_refusal} \\
+The loan-state invariant holds and is preserved by every command &
+\lean{World.LoansOK}, \lean{loansOK\_splitAtChecked},
+\lean{loansOK\_joinChecked}, \lean{loansOK\_beginLoanChecked} \\
+Representation predicate: runtime index to access evidence, bounded reads &
+\lean{UFRep.canRead}, \lean{UFRep.canWrite}, \lean{readParent\_lt} \\
+Checked chase is the functional search; result is a root and reachable &
+\lean{findRootC\_eq\_of\_stops}, \lean{findRootC\_root},
+\lean{findRootC\_reachable} \\
+Checked compression is the functional compress; no new partition pair &
+\lean{compressC\_UFArr}, \lean{compressC\_same\_sound} \\
+Delegation chains: holder and share conservation, loan-record bridge &
+\lean{delegate\_moves\_share}, \lean{retract\_restores},
+\lean{Chain.lenders\_nodup}, \lean{toLoans\_filter\_retract} \\
+Sealed construction and representation; trust statuses &
+\lean{Sealed.ofRun}, \lean{boundary\_no\_physical\_proof} \\
 \midrule
-Representation relation world$\leftrightarrow$array, forest invariant & planned \\
-General find/union correctness with compression & planned \\
+General partition correspondence at every step; full path compression & planned \\
 C primitives and their refinement & planned \\
 Compiled performance evidence & planned \\
 \bottomrule
@@ -872,28 +897,44 @@ update, or a real runtime. We report them as an observation, not a claim.
 \begin{itemize}
 \item \textbf{Access evidence is partial.} The indexed interface's reads and
   writes carry \lean{CanRead}/\lean{CanWrite} evidence, so an unauthorised
-  access is untypable there. The context-preserving fragment still has raw access
-  constructors: its accesses are at indices that arrive from a read at run time,
-  and no static premise can discharge an access at such an index. The fix is
-  type-level, not another premise --- index programs by a representation
-  predicate (the union-find representation layer) so that the runtime value's
-  range certificate comes from the invariant. An evidence-returning test would
-  need the evaluator to carry the realization hypothesis, which the fragment's
-  own soundness theorem is what would license; fractional read permissions are
-  not yet distinguished from free observation.
-\item \textbf{Loans are exclusive suspension.} The borrower is the lender's own
-  identifier; there is no reborrow capability, no non-root lifetime in the
-  executable language, and the policy-level liveness conjunction is not consulted
-  by the checker. A suspended leaf can be neither split (both splitters require an
-  active leaf) nor merged (the join refuses non-active children), and disposal is
-  refused while a loan's lender remains live, so a lender's leaf persists for the
-  life of its loan; the loan-state invariant itself is still to be stated.
+  access is untypable there. The checked-backend route now has the runtime link:
+  \lean{UFRep} is a representation predicate for a whole-share read-write parent
+  array, a runtime index below its length yields the access evidence
+  (\lean{UFRep.canRead}, \lean{UFRep.canWrite}), a represented read returns a
+  value below the length, the chase is the functional search
+  (\lean{findRootC\_root}, \lean{findRootC\_reachable}), and the checked
+  compression is the functional one (\lean{compressC\_UFArr}) with its partition
+  soundness (\lean{compressC\_same\_sound}). The context-preserving fragment
+  still has raw access constructors and no such predicate, and a uniform
+  partition correspondence at every step is not proved; fractional read
+  permissions are not yet distinguished from free observation.
+\item \textbf{Loans are exclusive suspension at the world level.} The
+  executable borrower is the lender's own identifier: there is no reborrow
+  capability in the world, and no non-root lifetime in the executable language.
+  A suspended leaf can be neither split (both splitters require an active leaf)
+  nor merged (the join refuses non-active children), and disposal is refused
+  while a loan's lender remains live. The loan-state invariant is
+  \lean{LoansOK} (distinct loan identifiers and lenders, live lifetimes, issued
+  lenders, and every lender still a retired leaf), preserved by every
+  context-changing command including loan beginning and ending. Delegation
+  chains with distinct borrowers, nested scopes and share conservation are
+  modelled separately (\lean{Cap/Reborrow.lean}) and bridge to loan records,
+  but are not yet integrated with ledger leaves or the world's live loan field;
+  the policy-level liveness conjunction is not consulted by the checker.
 \item \textbf{Termination is fuel.} Programs are total by fuel; exhaustion is a
   visible outcome. Termination for valid forests and for the general loops is
   future work.
-\item \textbf{No module opacity.} Lean has no module boundary that hides a
-  definition; the seal is by discipline, not enforced by the language. A safe
-  result type and an opaque runtime are future work.
+\item \textbf{Sealing is per-declaration, not physical.}
+  \lean{Cap/Sealed.lean} makes the sealed world's constructor and representation
+  field private, so outside the module a world can be held and observed but not
+  manufactured or read: a sealed world comes only from an accepted run
+  (\lean{Sealed.ofRun}) and its only observation is a snapshot
+  (\lean{Sealed.snapshot}); two negative fixtures check construction and
+  peeking. Lean has no stronger module abstraction, and nothing here seals
+  physical storage: the pure model's copied programs share backends. The
+  executable-edge claims are listed with an explicit status
+  (\lean{boundaryClaims}, \lean{boundary\_no\_physical\_proof}); a safe,
+  opaque runtime remains future work.
 \item \textbf{One invariant, not the whole design invariant.} The preserved
   invariant combines coverage, leaves within, distinct identifiers, owner
   uniqueness and storage agreement (the world bundle) with the issuance history:
@@ -908,9 +949,12 @@ update, or a real runtime. We report them as an observation, not a claim.
   entitlement per allocation is not part of the invariant, and the full rule
   needs a spatial join for reconstruction, which the ledger does not yet
   provide.
-\item \textbf{Union-find correctness is partial.} The representation layer and
-  the general partition correspondence are planned; today's theorems concern the
-  concrete four-node instance and the search program.
+\item \textbf{Union-find correctness is partial.} The checked-backend route
+  has the representation predicate, the bound on represented reads, the root and
+  reachability facts of the chase, and the partition soundness of the one-step
+  compression. The general partition correspondence at every step, full path
+  compression and termination without fuel are not proved; the Owned-fragment
+  search is separate from this checked route.
 \item \textbf{No verification of C.} The backend exists as a Lean model and a
   ByteArray refinement only.
 \end{itemize}
@@ -936,8 +980,10 @@ A borrowing discipline need not be a type system. Handles as names, a ledger of
 fractional shares and footprints, and a checker that is also the interpreter give
 an ownership discipline in ordinary Lean, with machine-checked preservation and
 a program interface whose refused operations do not typecheck. The remaining work
-is well-defined: a representation relation and forest invariant for union-find,
-fractional reads and real reborrowing, module-level sealing, and the C backend
+is well-defined: the general partition correspondence and a forest invariant for
+the checked union-find, the context-preserving fragment's runtime index
+discipline and fractional reads, integrating the delegation chain with ledger
+leaves and the world's live loans, physical-storage sealing, and the C backend
 with its three trust levels made explicit.
 
 \begin{thebibliography}{9}

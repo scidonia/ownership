@@ -24,7 +24,7 @@ namespace Cap
 /-- A world reachable only through this module's constructor. -/
 structure Sealed where
   private mk ::
-  w : World
+  private w : World
 
 /-- Seal a world. Private to this module. -/
 private def mkSealed (w : World) : Sealed := Sealed.mk w

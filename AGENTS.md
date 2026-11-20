@@ -478,8 +478,9 @@ shows the certificate it would have to emit, not proof-producing elaboration.
   name model: no ledger leaves, footprints or heaps are threaded, and what the
   borrower does inside its scope is not claimed.
 - `Cap/Sealed.lean` is the sealed execution boundary: `Sealed` has a private
-  constructor, so outside the module a sealed world can be held and observed but
-  not manufactured or destructured (`bench/CapSealReject.lean` must fail to
+  constructor and a private representation field, so outside the module a sealed
+  world can be held and observed but not manufactured or read
+  (`bench/CapSealReject.lean` and `bench/CapSealPeekReject.lean` must fail to
   elaborate, `bench/CapSealAccept.lean` builds one from an accepted run). A
   sealed world is obtained only from `Sealed.ofRun` over a command list the
   checker accepted, running more commands is `Sealed.run`, and the only
