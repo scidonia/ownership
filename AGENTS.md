@@ -305,7 +305,10 @@
   `World.read_succeeds` and `World.write_succeeds` (\(\file{Cap/IProg.lean}\)
   for the write) prove a certified access is never refused, and
   `World.no_two_canwrite` proves two certified writes at one byte name the same
-  capability. `IProg.read` and `IProg.write` carry these predicates, so an
+  capability. Every indexed constructor's evidence covers its checker:
+  `splitAtChecked_succeeds`, `World.allocChecked_succeeds` and
+  `World.freeChecked_succeeds`, together with the two access success lemmas,
+  give "a typed command of the indexed layer is never refused". `IProg.read` and `IProg.write` carry these predicates, so an
   unauthorised access is not a program. The context-preserving `Owned`
   fragment's raw access constructors are not yet evidence-bearing.
 - `Cap/Exclusivity.lean` turns coverage into write exclusivity:

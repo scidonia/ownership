@@ -885,8 +885,13 @@ certified accesses are never refused, and \texttt{World.no\_two\_canwrite}
 proves two certified writes at one byte name the same capability. In
 \file{Cap/IProg.lean} the \texttt{read} and \texttt{write} constructors carry
 these predicates, so an unauthorised access is not a program; the lifecycle's
-evidence is derived and still decides. The context-preserving fragment's raw
-access constructors and the data-dependent index discipline remain open.
+evidence is derived and still decides. Every indexed constructor's evidence now covers its checker:
+\texttt{splitAtChecked\_succeeds}, \texttt{World.allocChecked\_succeeds} and
+\texttt{World.freeChecked\_succeeds} join the two access success lemmas, so a
+typed command of the indexed layer is never refused. The context-preserving
+fragment's raw access constructors are the remaining type-level gap: a
+data-dependent index cannot carry write evidence without indexing programs by a
+representation predicate, which is the union-find representation work.
 
 \section{Measurements}
 

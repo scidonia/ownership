@@ -675,11 +675,14 @@ invariant supplies the backing allocation and bounds, so
 certified access is never refused, and \lean{World.no\_two\_canwrite} proves
 that two certified writes at one byte of one allocation name the same
 capability. An unauthorised access is therefore not a well-typed program: the
-evidence cannot be manufactured for a capability that may not act there. The
-data-dependent indices of an algorithm are the remaining design point --- they
-require either bounded indices with representation lemmas or checked tests that
-return evidence on success --- and the context-preserving fragment's raw access
-constructors are not yet evidence-bearing.
+evidence cannot be manufactured for a capability that may not act there. Every indexed constructor's evidence covers its checker:
+\lean{splitAtChecked\_succeeds}, \lean{World.allocChecked\_succeeds} and
+\lean{World.freeChecked\_succeeds} join the two access success lemmas, so a
+typed command of the indexed layer is never refused. The data-dependent indices
+of an algorithm, and the context-preserving fragment's raw access constructors,
+are the remaining type-level work: a runtime index cannot carry write evidence
+without indexing programs by a representation predicate, which is the
+union-find representation layer.
 
 \paragraph{Recursion and loops.} Recursion does not create a new loan: a
 recursive call can sequentially use the existing exclusive capability while its

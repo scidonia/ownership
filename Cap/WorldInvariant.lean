@@ -808,4 +808,23 @@ theorem World.resumeChecked_wf {w w' : World} {a : AllocId} {id : CapId}
       exact World.resume_update_wf hwf hf hr
 
 
+/-- A contextual allocation check accepts whenever its conditions hold. -/
+theorem World.allocChecked_succeeds {w : World} {n : Nat} {rootId disposal : CapId}
+    {po : 0 < w.ctx.D}
+    (hf : (⟨w.ctx.nextAlloc⟩ : AllocId) ∉ w.ctx.owners.map (·.alloc))
+    (hfr : rootId ∉ w.ctx.ids ∧ disposal ∉ w.ctx.ids ∧ rootId ≠ disposal) :
+    (w.allocChecked n rootId disposal po).isOk = true := by
+  unfold World.allocChecked
+  rw [dif_pos hf, dif_pos hfr]
+  rfl
+
+/-- A contextual disposal check accepts whenever its condition holds. -/
+theorem World.freeChecked_succeeds {w : World} {a : AllocId} {d : CapId}
+    (hs : (w.freeWith? a d).isSome) :
+    (w.freeChecked a d).isOk = true := by
+  unfold World.freeChecked
+  cases hf : w.freeWith? a d with
+  | none => rw [hf] at hs; simp at hs
+  | some w' => rfl
+
 end Cap
