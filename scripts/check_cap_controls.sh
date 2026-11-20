@@ -47,6 +47,7 @@ check_ok AdmissionParam.lean
 check_ok NatThunkAdmission.lean
 check_ok UniverseDemo.lean
 check_ok CapNegative.lean
+check_ok CapSealAccept.lean
 check_ok CapFreshness.lean
 check_ok OwnedAccept.lean
 check_ok OwnedDemo.lean
@@ -58,6 +59,7 @@ check_fail CapSurfaceReject.lean "splitAt refused"
 check_fail CapSurfaceReject.lean "splitFraction refused"
 check_fail OwnedReject.lean "used 2 times"
 check_fail OwnedNoAccess.lean "is private"
+check_fail CapSealReject.lean "Cap.Sealed.mk"
 
 if [ "$fail" -ne 0 ]; then
   echo "capability controls: FAILED" >&2

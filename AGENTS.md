@@ -452,6 +452,35 @@ shows the certificate it would have to emit, not proof-producing elaboration.
   in `bench/CapFreshness.lean`). It is a deep syntax and checker for the owner layer
   only, not surface elaboration, not a heap semantics, and acceptance is checker
   acceptance rather than execution safety.
+- `Cap/Reborrow.lean` is the delegation-chain bookkeeping: a `Link` records one
+  outstanding loan (allocation, lender, distinct borrower, lifetime), `Chain base
+  ls` requires each link's lender to be the chain's current holder, and `holder`
+  names the innermost borrower (or the base). `delegate` appends a link and
+  `retract` ends the innermost one; `holder_delegate` and
+  `holder_retract_delegate` show the holder moves to the new borrower and back.
+  `weight D base chain c` gives the holder the whole share `D` and every other
+  name zero; `delegate_moves_share` proves delegation moves `D` from the previous
+  holder (now zero) to the new borrower, and `retract_restores` returns it.
+  `nested_two_level` and `nested_two_level_unwind` are the two-level reborrow:
+  base lends to `b1`, `b1` lends to `b2` while the outer loan is outstanding, and
+  two retractions unwind to base. It is a name model: no ledger leaves,
+  footprints, heaps or `LoanCtx` are threaded, and what the borrower does inside
+  its scope is not claimed.
+- `Cap/Sealed.lean` is the sealed execution boundary: `Sealed` has a private
+  constructor, so outside the module a sealed world can be held and observed but
+  not manufactured or destructured (`bench/CapSealReject.lean` must fail to
+  elaborate, `bench/CapSealAccept.lean` builds one from an accepted run). A
+  sealed world is obtained only from `Sealed.ofRun` over a command list the
+  checker accepted, running more commands is `Sealed.run`, and the only
+  observation is `Sealed.snapshot` of one allocation. `Sealed.ofRun_wf` carries
+  the world invariant and `Sealed.snapshot_eq` reads the represented backend.
+  `boundaryClaims` lists the executable-edge claims with their status: the
+  checker's execution and invariant are proved, while the C store trace, physical
+  reference counts and physical storage independence are runtime contracts and
+  concurrency is excluded; `boundary_no_physical_proof` records that no physical
+  claim is marked proved. Lean has no module opacity, so this seals the
+  *construction* path, not physical storage: the pure model's backends are
+  shared by copied programs, which is the C runner's contract, not a theorem.
 - `Cap/Nested.lean` is the two-level borrow model: `Lender` with active/suspended
   states, `beginBorrow` suspending the lender and issuing a borrower, `endBorrow`
   restoring the suspended lender without returning the borrower, and
