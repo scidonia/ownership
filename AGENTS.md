@@ -322,8 +322,9 @@
   lender an issued identifier (so it can never equal a freshly minted child or
   join name), and every loan's lender still occurring as a `retired` leaf of a
   live owner (`World.LenderRetired`). It holds for the empty and concrete 64-byte worlds
-  and is preserved by writes; preservation for the remaining commands is the
-  next step, built on `Tree.find?_replace_ne` and the split/join/free guards.
+  and is preserved by writes and allocation; preservation for the remaining
+  commands is the next step, built on `Tree.find?_replace_ne` and the
+  split/join/free guards.
 - `Cap/Access.lean` gives the access evidence the certified instructions carry:
   `Ctx.CanWrite` (the owner is found and the write guard accepts) and
   `Ctx.CanRead` (the owner is found and the capability is readable at the

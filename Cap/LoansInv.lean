@@ -61,4 +61,27 @@ theorem World.loansOK_write {w w' : World} {a : AllocId} {id : CapId} {i : Nat}
   rw [hctx]
   exact h
 
+/-- Allocation preserves the loan invariant: the loan list is unchanged and the
+existing owners (hence every lender's retired leaf) survive the insertion. -/
+theorem World.loansOK_allocChecked {w w' : World} {n : Nat} {rootId disposal : CapId}
+    {po : 0 < w.ctx.D}
+    (hw : w.allocChecked n rootId disposal po = .ok w') (h : w.LoansOK) :
+    w'.LoansOK := by
+  unfold World.allocChecked at hw
+  split at hw
+  · rename_i hf
+    split at hw
+    · rename_i hfresh
+      simp only [Except.ok.injEq] at hw
+      cases hw
+      unfold World.LoansOK World.LenderRetired at h ⊢
+      refine ⟨h.1, h.2.1, h.2.2.1, ?_, ?_⟩
+      · intro l hl
+        exact List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (h.2.2.2.1 l hl))
+      · intro l hl
+        obtain ⟨o, ho, c, hc, hstate⟩ := h.2.2.2.2 l hl
+        exact ⟨o, List.mem_cons_of_mem _ ho, c, hc, hstate⟩
+    · simp at hw
+  · simp at hw
+
 end Cap

@@ -940,8 +940,8 @@ of a live owner
 leaf cannot be split (splitters require an active leaf), merged (the join
 refuses non-active children) or freed while the lender is live --- and the
 lookup lemma \texttt{Tree.find?\_replace\_ne} supplies the structural fact the
-split and join cases need. The invariant is proved for the empty and concrete
-64-byte worlds and for writes; preservation for the remaining commands is next.
+split and join cases need. The invariant is proved for the empty and concrete 64-byte worlds, for writes
+and for allocation; preservation for the remaining commands is next.
 
 \section{Measurements}
 
