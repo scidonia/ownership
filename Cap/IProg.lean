@@ -55,6 +55,8 @@ inductive IProg : (Γ : Ctx) → (α : Type) → (α → Ctx) → Type 1 where
       IProg Γ Unit (fun _ => { (Γ.splitAtOwner? o id id1 id2 k).getD Γ with
                                issued := id1 :: id2 :: Γ.issued })
   | free (a : AllocId) (d : CapId)
+      (hloan : ∀ o, Γ.findOwner? a = some o →
+        ∀ l ∈ Γ.loans.loans, l.lender ∉ o.ids)
       (h : (Γ.freeWith? a d).isSome) :
       IProg Γ Unit (fun _ => (Γ.freeWith? a d).getD Γ)
 
@@ -106,7 +108,7 @@ def evalIProg (fuel : Nat) {Γ : Ctx} {α : Type} {Q : α → Ctx} (p : IProg Γ
     match w.splitAtChecked a id id1 id2 k with
     | .ok w' => some ((), w')
     | .error _ => none
-  | fuel + 1, .free a d _ =>
+  | fuel + 1, .free a d _ _ =>
     match w.freeChecked a d with
     | .ok w' => some ((), w')
     | .error _ => none
@@ -170,24 +172,32 @@ theorem splitAtChecked_post {w w' : World} {Γ : Ctx} {a : AllocId}
 
 /-- A checked disposal realises its typed post-context. -/
 theorem freeChecked_post {w w' : World} {Γ : Ctx} {a : AllocId} {d : CapId}
+    (hloan : ∀ o, Γ.findOwner? a = some o →
+      ∀ l ∈ Γ.loans.loans, l.lender ∉ o.ids)
     (hs : (Γ.freeWith? a d).isSome) (hΓ : w.ctx = Γ)
     (hw : w.freeChecked a d = .ok w') :
     w'.ctx = (Γ.freeWith? a d).getD Γ := by
   unfold World.freeChecked at hw
-  cases hf : w.freeWith? a d with
-  | none => simp [hf] at hw
-  | some w1 =>
-    simp [hf] at hw
-    cases hw
-    unfold World.freeWith? at hf
-    cases hc : w.ctx.freeWith? a d with
-    | none => simp [hc] at hf
-    | some ctx' =>
-      simp [hc] at hf
-      cases hf
-      rw [hΓ] at hc
-      rw [hc]
-      rfl
+  split at hw
+  · simp at hw
+  · rename_i o hfind
+    split at hw
+    · rename_i hok
+      cases hf : w.freeWith? a d with
+      | none => simp [hf] at hw
+      | some w1 =>
+        simp [hf] at hw
+        cases hw
+        unfold World.freeWith? at hf
+        cases hc : w.ctx.freeWith? a d with
+        | none => simp [hc] at hf
+        | some ctx' =>
+          simp [hc] at hf
+          cases hf
+          rw [hΓ] at hc
+          rw [hc]
+          rfl
+    · simp at hw
 
 /-- Soundness: execution from a world matching the typing context ends in a
 world matching the postcondition, and preserves the world invariant. -/
@@ -251,7 +261,7 @@ theorem evalIProg_post (w : World) (fuel : Nat) :
         simp only [evalIProg, hw] at h
         obtain ⟨-, rfl⟩ := Option.some.inj h
         exact ⟨splitAtChecked_post hfind hs hΓ hw, World.splitAtChecked_wf hw hwf⟩
-    | free a0 d hs =>
+    | free a0 d hloan hs =>
       cases hw : w.freeChecked a0 d with
       | error e =>
         simp only [evalIProg, hw] at h
@@ -259,7 +269,7 @@ theorem evalIProg_post (w : World) (fuel : Nat) :
       | ok w1 =>
         simp only [evalIProg, hw] at h
         obtain ⟨-, rfl⟩ := Option.some.inj h
-        exact ⟨freeChecked_post hs hΓ hw, World.freeChecked_wf hw hwf⟩
+        exact ⟨freeChecked_post hloan hs hΓ hw, World.freeChecked_wf hw hwf⟩
 
 /-- The context after allocating the 4-byte owner. -/
 def ilCtx1 : Ctx :=
@@ -273,7 +283,23 @@ def ilCtx3 : Ctx :=
 /-- The context after disposal. -/
 def ilCtx5 : Ctx := (ilCtx3.freeWith? ⟨1⟩ ⟨4⟩).getD ilCtx3
 
-/-- The allocation step. -/
+theorem ilCtx3_loans : ilCtx3.loans.loans = [] := by
+  unfold ilCtx3
+  cases h : ilCtx1.splitAtOwner? (Owner.init ⟨1⟩ 4 64 (by decide) ⟨3⟩ ⟨4⟩) ⟨3⟩ ⟨5⟩ ⟨6⟩ 2
+  · show ilCtx1.loans.loans = []
+    rw [show ilCtx1.loans = uWorld.ctx.loans from rfl]
+    rfl
+  · unfold Ctx.splitAtOwner? at h
+    cases ho : (Owner.init ⟨1⟩ 4 64 (by decide) ⟨3⟩ ⟨4⟩).splitAt? ⟨3⟩ ⟨5⟩ ⟨6⟩ 2 with
+    | none => simp [ho] at h
+    | some o' =>
+      simp only [ho, Option.map_some, Option.some.injEq] at h
+      subst h
+      show (Ctx.update ilCtx1 ⟨1⟩ o').loans.loans = []
+      rw [show (Ctx.update ilCtx1 ⟨1⟩ o').loans = ilCtx1.loans from rfl]
+      rw [show ilCtx1.loans = uWorld.ctx.loans from rfl]
+      rfl
+
 def iAlloc : IProg uWorld.ctx AllocId (fun _ => ilCtx1) :=
   .alloc 4 ⟨3⟩ ⟨4⟩ (by decide) (by decide) (by decide)
 
@@ -292,7 +318,8 @@ def iWrite2 : IProg ilCtx3 Unit (fun _ => ilCtx3) :=
   .write ⟨1⟩ ⟨5⟩ 0 8 (by exact ⟨_, rfl, by decide⟩)
 
 /-- The disposal step. -/
-def iFree : IProg ilCtx3 Unit (fun _ => ilCtx5) := .free ⟨1⟩ ⟨4⟩ (by decide)
+def iFree : IProg ilCtx3 Unit (fun _ => ilCtx5) :=
+  @IProg.free ilCtx3 ⟨1⟩ ⟨4⟩ (by intro o _ l hl; rw [ilCtx3_loans] at hl; exact absurd hl (by simp)) (by decide)
 
 /-- The indexed lifecycle, composed by `bind` with each stage's evidence. -/
 def iLifecycle : IProg uWorld.ctx Unit (fun _ => ilCtx5) :=
@@ -334,6 +361,10 @@ def icCtx1 : Ctx :=
   World.emptyWorld.ctx.alloc ⟨0⟩ 4 (by decide) ⟨1⟩ ⟨2⟩ (by decide)
 
 /-- The context after disposing it: no owners remain, fresh-id history is kept. -/
+theorem icCtx1_loans : icCtx1.loans.loans = [] := by
+  show uWorld.ctx.loans.loans = []
+  rfl
+
 def icCtx3 : Ctx := (icCtx1.freeWith? ⟨0⟩ ⟨2⟩).getD icCtx1
 
 /-- A closed program: allocate a 4-byte owner, write, dispose. Its typed
@@ -341,7 +372,7 @@ post-context has no owners. -/
 def iClosed : IProg World.emptyWorld.ctx Unit (fun _ => icCtx3) :=
   .bind (.alloc 4 ⟨1⟩ ⟨2⟩ (by decide) (by decide) (by decide)) fun _ =>
   .bind (.write ⟨0⟩ ⟨1⟩ 0 7 (by exact ⟨_, rfl, by decide⟩)) fun _ =>
-  .bind (.free ⟨0⟩ ⟨2⟩ (by decide)) fun _ =>
+  .bind (@IProg.free icCtx1 ⟨0⟩ ⟨2⟩ (by intro o _ l hl; rw [icCtx1_loans] at hl; exact absurd hl (by simp)) (by decide)) fun _ =>
   .pure ()
 
 /-- The closed program is accepted. -/

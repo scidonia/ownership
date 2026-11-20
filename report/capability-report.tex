@@ -921,8 +921,12 @@ and beginning and ending a loan (\texttt{historyOK\_write},
 (\texttt{checkWorld\_top}), and the empty and concrete 64-byte worlds satisfy it
 (\texttt{emptyWorld\_top}, \texttt{uWorld\_top}). Both split checkers require the split capability to be an active leaf, so a
 suspended lender cannot be split away, and the indexed split constructor carries
-that witness. The loan invariant, disposal legality and the loan state in the
-typing context remain open.
+that witness. The loan state lives in the permission context (`Ctx.loans`).
+Disposal refuses while a loan's lender remains live in the owner
+(`World.freeChecked\_refused\_of\_loan`), and the indexed `free` constructor
+carries that condition together with the recorded capability's success. The loan
+invariant and disposal's reconstruction half (which needs a spatial join) remain
+open.
 
 \section{Measurements}
 

@@ -344,22 +344,34 @@ theorem World.splitAtChecked_wf {w w' : World} {a : AllocId} {id id1 id2 : CapId
       simpa [hoalloc] using hf
     exact ⟨hwfC, hfun, World.update_storage hwf hfa ho'alloc ho'len⟩
 
-/-- A checked disposal through the recorded disposal capability. -/
+/-- A checked disposal: no loan may be outstanding for the allocation, and the
+recorded disposal capability must be accepted. -/
 def World.freeChecked (w : World) (a : AllocId) (d : CapId) : Except String World :=
-  match w.freeWith? a d with
-  | some w' => .ok w'
-  | none => .error "free: refused"
+  match w.ctx.findOwner? a with
+  | none => .error "free: no owner for the allocation"
+  | some o =>
+    if ∀ l ∈ w.ctx.loans.loans, l.lender ∉ o.ids then
+      match w.freeWith? a d with
+      | some w' => .ok w'
+      | none => .error "free: refused"
+    else .error "free: outstanding loan"
 
 /-- A successful disposal preserves the world invariant. -/
 theorem World.freeChecked_wf {w w' : World} {a : AllocId} {d : CapId}
     (h : w.freeChecked a d = .ok w') (hwf : w.WellFormed) : w'.WellFormed := by
   unfold World.freeChecked at h
-  cases hw : w.freeWith? a d with
-  | none => simp [hw] at h
-  | some w'' =>
-    simp [hw] at h
-    cases h
-    exact World.freeWith?_wellFormed hw hwf
+  split at h
+  · simp at h
+  · rename_i o hfind
+    split at h
+    · rename_i hloan
+      cases hw : w.freeWith? a d with
+      | none => simp [hw] at h
+      | some w'' =>
+        simp [hw] at h
+        cases h
+        exact World.freeWith?_wellFormed hw hwf
+    · simp at h
 
 /-- A checked allocation: the next allocation identifier must be free and the
 root and disposal capabilities fresh and distinct. The new owner's backend is
@@ -822,11 +834,33 @@ theorem World.allocChecked_succeeds {w : World} {n : Nat} {rootId disposal : Cap
 
 /-- A contextual disposal check accepts whenever its condition holds. -/
 theorem World.freeChecked_succeeds {w : World} {a : AllocId} {d : CapId}
-    (hs : (w.freeWith? a d).isSome) :
+    (hs : (w.freeWith? a d).isSome)
+    (hloan : ∀ o, w.ctx.findOwner? a = some o →
+      ∀ l ∈ w.ctx.loans.loans, l.lender ∉ o.ids) :
     (w.freeChecked a d).isOk = true := by
   unfold World.freeChecked
-  cases hf : w.freeWith? a d with
-  | none => rw [hf] at hs; simp at hs
-  | some w' => rfl
+  cases hf : w.ctx.findOwner? a with
+  | none =>
+    exfalso
+    unfold World.freeWith? Ctx.freeWith? at hs
+    simp [hf] at hs
+  | some o =>
+    dsimp only
+    rw [if_pos (hloan o hf)]
+    cases hw : w.freeWith? a d with
+    | none => rw [hw] at hs; simp at hs
+    | some w' => rfl
+
+/-- Disposal is refused while a loan remains outstanding for the allocation:
+the loan's lender still occurs in the owner's live identifiers. -/
+theorem World.freeChecked_refused_of_loan {w : World} {a : AllocId} {d : CapId}
+    {o : Owner} {l : Loan}
+    (hfind : w.ctx.findOwner? a = some o)
+    (hl : l ∈ w.ctx.loans.loans) (hin : l.lender ∈ o.ids) :
+    w.freeChecked a d = .error "free: outstanding loan" := by
+  unfold World.freeChecked
+  rw [hfind]
+  dsimp only
+  rw [if_neg (fun h => h l hl hin)]
 
 end Cap

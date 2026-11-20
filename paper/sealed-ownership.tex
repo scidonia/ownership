@@ -848,6 +848,8 @@ Certified commands are never refused (accesses, split, alloc, free) &
 \lean{allocChecked\_succeeds}, \lean{freeChecked\_succeeds} \\
 Two certified writes at one byte agree &
 \lean{no\_two\_canwrite} \\
+Disposal refuses with an outstanding loan &
+\lean{freeChecked\_refused\_of\_loan} \\
 \midrule
 Representation relation world$\leftrightarrow$array, forest invariant & planned \\
 General find/union correctness with compression & planned \\
@@ -895,12 +897,13 @@ update, or a real runtime. We report them as an observation, not a claim.
   \lean{World.TopInv} is preserved by every checked command and by whole
   executions (\lean{checkWorld\_top}). Provenance roles of internal split nodes,
   loan-to-capability relations and disposal legality are still outside it.
-\item \textbf{Disposal is entitlement-only in the certified route.} The
-  recorded disposal capability is checked and removal preserves the world
-  invariant, but the certified disposal does not consult outstanding loans
-  (only the session model's \lean{free?} does), does not require a reconstructed
-  root, and the invariant does not state one entitlement per allocation. The full
-  rule needs a spatial join for reconstruction, which the ledger does not yet
+\item \textbf{Disposal's loan half is enforced; reconstruction is not.} The
+  recorded disposal capability is checked, removal preserves the world
+  invariant, and disposal is refused while a loan's lender remains live in the
+  owner (\lean{World.freeChecked\_refused\_of\_loan}); the indexed \lean{free}
+  constructor carries that condition. A reconstructed root is not required, one
+  entitlement per allocation is not part of the invariant, and the full rule
+  needs a spatial join for reconstruction, which the ledger does not yet
   provide.
 \item \textbf{Union-find correctness is partial.} The representation layer and
   the general partition correspondence are planned; today's theorems concern the

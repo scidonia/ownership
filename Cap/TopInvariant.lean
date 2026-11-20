@@ -113,20 +113,26 @@ theorem World.historyOK_freeChecked {w w' : World} {a : AllocId} {d : CapId}
     (hw : w.freeChecked a d = .ok w') (hh : Ctx.HistoryOK w.ctx) :
     Ctx.HistoryOK w'.ctx := by
   unfold World.freeChecked at hw
-  cases hf : w.freeWith? a d with
-  | none => simp [hf] at hw
-  | some w1 =>
-    simp [hf] at hw
-    cases hw
-    unfold World.freeWith? at hf
-    cases hc : w.ctx.freeWith? a d with
-    | none => simp [hc] at hf
-    | some ctx' =>
-      simp [hc] at hf
-      cases hf
-      have heq : ctx' = w.ctx.free a := Ctx.freeWith?_eq_free hc
-      rw [heq]
-      exact Ctx.historyOK_free hh
+  split at hw
+  · simp at hw
+  · rename_i o hfind
+    split at hw
+    · rename_i hloan
+      cases hf : w.freeWith? a d with
+      | none => simp [hf] at hw
+      | some w1 =>
+        simp [hf] at hw
+        cases hw
+        unfold World.freeWith? at hf
+        cases hc : w.ctx.freeWith? a d with
+        | none => simp [hc] at hf
+        | some ctx' =>
+          simp [hc] at hf
+          cases hf
+          have heq : ctx' = w.ctx.free a := Ctx.freeWith?_eq_free hc
+          rw [heq]
+          exact Ctx.historyOK_free hh
+    · simp at hw
 
 /-- Allocation preserves the history. -/
 theorem World.historyOK_allocChecked {w w' : World} {n : Nat}
