@@ -892,6 +892,13 @@ update, or a real runtime. We report them as an observation, not a claim.
   history-preservation invariant across every transition, provenance roles of
   internal split nodes, and loan-to-capability relationships are not yet part of
   a single preserved invariant.
+\item \textbf{Disposal is entitlement-only in the certified route.} The
+  recorded disposal capability is checked and removal preserves the world
+  invariant, but the certified disposal does not consult outstanding loans
+  (only the session model's \lean{free?} does), does not require a reconstructed
+  root, and the invariant does not state one entitlement per allocation. The full
+  rule needs a spatial join for reconstruction, which the ledger does not yet
+  provide.
 \item \textbf{Union-find correctness is partial.} The representation layer and
   the general partition correspondence are planned; today's theorems concern the
   concrete four-node instance and the search program.
