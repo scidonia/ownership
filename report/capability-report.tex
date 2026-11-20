@@ -858,7 +858,10 @@ accepted (\texttt{reuseSplitControl\_ok}); the history is monotone through the
 two transitions (\texttt{splitAtChecked\_issued\_sub},
 \texttt{joinChecked\_issued\_sub}). Allocation's identifier check and a
 history-preservation invariant across every transition remain open, and the
-paper states that boundary.
+paper states that boundary. The indexed split constructor carries the same
+historical-freshness premises the checker tests, and
+\texttt{splitAtChecked\_succeeds} proves that a typed split is never refused:
+the typed interface and the checker agree on the history check.
 
 \section{Measurements}
 
