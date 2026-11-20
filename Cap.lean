@@ -35,3 +35,4 @@ import Cap.IProg
 import Cap.Issuance
 import Cap.Access
 import Cap.Exclusivity
+import Cap.History

@@ -43,7 +43,8 @@ inductive IProg : (Γ : Ctx) → (α : Type) → (α → Ctx) → Type 1 where
       (h : Ctx.CanWrite Γ a id i) : IProg Γ Unit (fun _ => Γ)
   | alloc (n : Nat) (rootId disposal : CapId) (pos : 0 < Γ.D)
       (hf : (⟨Γ.nextAlloc⟩ : AllocId) ∉ Γ.owners.map (·.alloc))
-      (hfr : rootId ∉ Γ.ids ∧ disposal ∉ Γ.ids ∧ rootId ≠ disposal) :
+      (hfr : rootId ∉ Γ.ids ∧ disposal ∉ Γ.ids ∧ rootId ≠ disposal
+             ∧ rootId ∉ Γ.issued ∧ disposal ∉ Γ.issued) :
       IProg Γ AllocId (fun _ => Γ.alloc ⟨Γ.nextAlloc⟩ n pos rootId disposal hf)
   | splitAt (a : AllocId) (id id1 id2 : CapId) (k : Nat) (o : Owner)
       (hfind : Γ.findOwner? a = some o) (hfids : o.FreshIds id1 id2)
@@ -112,7 +113,8 @@ def evalIProg (fuel : Nat) {Γ : Ctx} {α : Type} {Q : α → Ctx} (p : IProg Γ
 /-- Allocation realises its typed post-context. -/
 theorem allocChecked_post {w w' : World} {Γ : Ctx} {n : Nat} {rootId disposal : CapId}
     {pos : 0 < Γ.D} (hf : (⟨Γ.nextAlloc⟩ : AllocId) ∉ Γ.owners.map (·.alloc))
-    (hfr : rootId ∉ Γ.ids ∧ disposal ∉ Γ.ids ∧ rootId ≠ disposal)
+    (hfr : rootId ∉ Γ.ids ∧ disposal ∉ Γ.ids ∧ rootId ≠ disposal
+           ∧ rootId ∉ Γ.issued ∧ disposal ∉ Γ.issued)
     (hΓ : w.ctx = Γ) (hpos : 0 < w.ctx.D)
     (hw : w.allocChecked n rootId disposal hpos = .ok w') :
     w'.ctx = Γ.alloc ⟨Γ.nextAlloc⟩ n pos rootId disposal hf := by

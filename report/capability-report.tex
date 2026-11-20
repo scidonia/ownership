@@ -893,6 +893,19 @@ fragment's raw access constructors are the remaining type-level gap: a
 data-dependent index cannot carry write evidence without indexing programs by a
 representation predicate, which is the union-find representation work.
 
+\section{The issuance-history invariant}
+
+\file{Cap/History.lean} defines \texttt{Ctx.HistoryOK}: the history is
+duplicate-free and every live capability identifier occurs in it. The context
+transitions preserve it --- allocation with a fresh, distinct root and disposal
+identifier (\texttt{historyOK\_alloc}), disposal (\texttt{historyOK\_free}) and
+owner replacement with an unchanged identifier set (\texttt{historyOK\_update\_of\_ids},
+covering suspension and restoration) --- with the membership bounds for both
+splits and the join. Allocation's checker now tests the history too, and the
+indexed constructor carries the same premises. World-level wrappers, the combined
+top-level invariant, concrete instances, the loan invariant and disposal
+legality remain to be proved.
+
 \section{Measurements}
 
 \texttt{bench/CapTiming.lean} times the two pure models on the 64-byte

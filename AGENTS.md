@@ -298,6 +298,17 @@
   disposal check and clears the backend. `write_rel` and `freeWith_rel` preserve the
   relation. It is a pure world, not the interpreter, an FFI path or a concurrency
   claim.
+- `Cap/History.lean` is the issuance-history invariant: `Ctx.HistoryOK`
+  (`issued` duplicate-free and every live identifier in it), with
+  `Ctx.historyOK_alloc` (fresh root and disposal identifiers, distinct),
+  `Ctx.historyOK_free` (history unchanged, live set shrinks) and
+  `Ctx.historyOK_update_of_ids` (suspension/restoration, whose identifier set is
+  unchanged), plus the membership bounds `Owner.splitAt?_ids_sub`,
+  `splitFraction?_ids_sub` and `joinFraction?_ids_sub'`. Allocation's checker now
+  also tests the history, and the indexed allocation constructor carries the
+  corresponding premises. Still open: world-level wrappers for each checked
+  command, the combined top-level invariant, concrete instances, the loan
+  invariant and disposal legality.
 - `Cap/Access.lean` gives the access evidence the certified instructions carry:
   `Ctx.CanWrite` (the owner is found and the write guard accepts) and
   `Ctx.CanRead` (the owner is found and the capability is readable at the

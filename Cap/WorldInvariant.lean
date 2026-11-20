@@ -366,7 +366,8 @@ empty. -/
 def World.allocChecked (w : World) (n : Nat) (rootId disposal : CapId)
     (pos : 0 < w.ctx.D) : Except String World :=
   if hf : (⟨w.ctx.nextAlloc⟩ : AllocId) ∉ w.ctx.owners.map (·.alloc) then
-    if hfresh : rootId ∉ w.ctx.ids ∧ disposal ∉ w.ctx.ids ∧ rootId ≠ disposal then
+    if hfresh : rootId ∉ w.ctx.ids ∧ disposal ∉ w.ctx.ids ∧ rootId ≠ disposal
+                ∧ rootId ∉ w.ctx.issued ∧ disposal ∉ w.ctx.issued then
       .ok { w with
             ctx := w.ctx.alloc ⟨w.ctx.nextAlloc⟩ n pos rootId disposal hf,
             heaps := fun x => if x = (⟨w.ctx.nextAlloc⟩ : AllocId) then some (Backend.empty n) else w.heaps x }
@@ -378,11 +379,12 @@ theorem World.allocChecked_wf {w w' : World} {n : Nat} {rootId disposal : CapId}
     {pos : 0 < w.ctx.D} (h : w.allocChecked n rootId disposal pos = .ok w')
     (hwf : w.WellFormed) : w'.WellFormed := by
   unfold World.allocChecked at h
-  by_cases hf : (⟨w.ctx.nextAlloc⟩ : AllocId) ∉ w.ctx.owners.map (·.alloc)
-  · by_cases hfresh : rootId ∉ w.ctx.ids ∧ disposal ∉ w.ctx.ids ∧ rootId ≠ disposal
-    · simp [hf, hfresh] at h
+  split at h
+  · rename_i hf
+    split at h
+    · rename_i hfresh
       cases h
-      refine ⟨Ctx.alloc_wellFormed (hfresh := hf) hwf.1 hfresh.1 hfresh.2.1 hfresh.2.2, ?_, ?_⟩
+      refine ⟨Ctx.alloc_wellFormed (hfresh := hf) hwf.1 hfresh.1 hfresh.2.1 hfresh.2.2.1, ?_, ?_⟩
       · apply Ctx.functional_of_nodup
         simp only [Ctx.alloc, List.map_cons, List.nodup_cons]
         exact ⟨hf, hwf.1.1.2⟩
@@ -412,11 +414,8 @@ theorem World.allocChecked_wf {w w' : World} {n : Nat} {rootId disposal : CapId}
             rwa [hoalloc] at this
           obtain ⟨b, hb, hlen⟩ := hwf.2.2 a' o' hfind_old
           exact ⟨b, by simp [hne, hb], hlen⟩
-    · rw [dif_pos hf, dif_neg hfresh] at h
-      nomatch h
-  · rw [dif_neg hf] at h
-    nomatch h
-
+    · simp at h
+  · simp at h
 /-- A checked fractional split at the owner of an allocation. -/
 def World.splitFractionChecked (w : World) (a : AllocId) (id id1 id2 : CapId)
     (q1 q2 : Nat) (p1 : 0 < q1) (p2 : 0 < q2) : Except String World :=
@@ -812,7 +811,8 @@ theorem World.resumeChecked_wf {w w' : World} {a : AllocId} {id : CapId}
 theorem World.allocChecked_succeeds {w : World} {n : Nat} {rootId disposal : CapId}
     {po : 0 < w.ctx.D}
     (hf : (⟨w.ctx.nextAlloc⟩ : AllocId) ∉ w.ctx.owners.map (·.alloc))
-    (hfr : rootId ∉ w.ctx.ids ∧ disposal ∉ w.ctx.ids ∧ rootId ≠ disposal) :
+    (hfr : rootId ∉ w.ctx.ids ∧ disposal ∉ w.ctx.ids ∧ rootId ≠ disposal
+           ∧ rootId ∉ w.ctx.issued ∧ disposal ∉ w.ctx.issued) :
     (w.allocChecked n rootId disposal po).isOk = true := by
   unfold World.allocChecked
   rw [dif_pos hf, dif_pos hfr]
