@@ -51,7 +51,7 @@ theorem World.historyOK_splitAtChecked {w w' : World} {a : AllocId}
         | some o' =>
           simp only [ho, Option.map_some, Option.some.injEq] at hs
           rw [← hs]
-          exact Ctx.historyOK_split hh hoids hmem ho hfr.2.2.2.1 hfr.2.2.2.2 hfr.1.2.2
+          exact Ctx.historyOK_split hh hoids hmem ho hfr.2.2.2.1 hfr.2.2.2.2.1 hfr.1.2.2
       · simp at hw
     · simp at hw
 
@@ -78,7 +78,7 @@ theorem World.historyOK_splitFractionChecked {w w' : World} {a : AllocId}
         | some o' =>
           simp only [ho, Option.map_some, Option.some.injEq] at hs
           rw [← hs]
-          exact Ctx.historyOK_splitFraction hh hoids hmem ho hfr.2.2.2.1 hfr.2.2.2.2 hfr.1.2.2
+          exact Ctx.historyOK_splitFraction hh hoids hmem ho hfr.2.2.2.1 hfr.2.2.2.2.1 hfr.1.2.2
       · simp at hw
     · simp at hw
 

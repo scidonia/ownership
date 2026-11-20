@@ -50,6 +50,7 @@ inductive IProg : (Γ : Ctx) → (α : Type) → (α → Ctx) → Type 1 where
       (hfind : Γ.findOwner? a = some o) (hfids : o.FreshIds id1 id2)
       (hfresh1 : id1 ∉ Γ.ids) (hfresh2 : id2 ∉ Γ.ids)
       (hissued1 : id1 ∉ Γ.issued) (hissued2 : id2 ∉ Γ.issued)
+      (hact : ∃ c, o.root.find? id = some c ∧ c.state = .active)
       (hs : (Γ.splitAtOwner? o id id1 id2 k).isSome) :
       IProg Γ Unit (fun _ => { (Γ.splitAtOwner? o id id1 id2 k).getD Γ with
                                issued := id1 :: id2 :: Γ.issued })
@@ -101,7 +102,7 @@ def evalIProg (fuel : Nat) {Γ : Ctx} {α : Type} {Q : α → Ctx} (p : IProg Γ
       | .ok w' => some (⟨Γ.nextAlloc⟩, w')
       | .error _ => none
     else none
-  | fuel + 1, .splitAt a id id1 id2 k _ _ _ _ _ _ _ _ =>
+  | fuel + 1, .splitAt a id id1 id2 k _ _ _ _ _ _ _ _ _ =>
     match w.splitAtChecked a id id1 id2 k with
     | .ok w' => some ((), w')
     | .error _ => none
@@ -132,13 +133,14 @@ theorem splitAtChecked_succeeds {w : World} {Γ : Ctx} {a : AllocId}
     (hfind : Γ.findOwner? a = some o) (hfids : o.FreshIds id1 id2)
     (hfresh1 : id1 ∉ Γ.ids) (hfresh2 : id2 ∉ Γ.ids)
     (hissued1 : id1 ∉ Γ.issued) (hissued2 : id2 ∉ Γ.issued)
+    (hact : ∃ c, o.root.find? id = some c ∧ c.state = .active)
     (hs : (Γ.splitAtOwner? o id id1 id2 k).isSome)
     (hΓ : w.ctx = Γ) :
     (w.splitAtChecked a id id1 id2 k).isOk = true := by
   unfold World.splitAtChecked
   rw [hΓ]
   simp only [hfind]
-  rw [dif_pos ⟨hfids, hfresh1, hfresh2, hissued1, hissued2⟩]
+  rw [dif_pos ⟨hfids, hfresh1, hfresh2, hissued1, hissued2, hact⟩]
   split
   · rfl
   · rename_i hnone
@@ -240,7 +242,7 @@ theorem evalIProg_post (w : World) (fuel : Nat) :
           exact ⟨allocChecked_post hf hfr hΓ hpos hw, World.allocChecked_wf hw hwf⟩
       · simp only [evalIProg, hpos] at h
         nomatch h
-    | splitAt a0 id0 id1 id2 k o hfind hfids hfresh1 hfresh2 hissued1 hissued2 hs =>
+    | splitAt a0 id0 id1 id2 k o hfind hfids hfresh1 hfresh2 hissued1 hissued2 hact hs =>
       cases hw : w.splitAtChecked a0 id0 id1 id2 k with
       | error e =>
         simp only [evalIProg, hw] at h
@@ -282,7 +284,8 @@ def iWrite1 : IProg ilCtx1 Unit (fun _ => ilCtx1) :=
 /-- The spatial split. -/
 def iSplit : IProg ilCtx1 Unit (fun _ => ilCtx3) :=
   .splitAt ⟨1⟩ ⟨3⟩ ⟨5⟩ ⟨6⟩ 2 (Owner.init ⟨1⟩ 4 64 (by decide) ⟨3⟩ ⟨4⟩)
-    (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
+    (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide)
+    (by exact ⟨_, rfl, by decide⟩) (by decide)
 
 /-- The write through the left half. -/
 def iWrite2 : IProg ilCtx3 Unit (fun _ => ilCtx3) :=

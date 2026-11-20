@@ -250,7 +250,8 @@ def World.splitAtChecked (w : World) (a : AllocId) (id id1 id2 : CapId) (k : Nat
   | none => .error "split: no owner for the allocation"
   | some o =>
     if hf : o.FreshIds id1 id2 ∧ id1 ∉ w.ctx.ids ∧ id2 ∉ w.ctx.ids
-              ∧ id1 ∉ w.ctx.issued ∧ id2 ∉ w.ctx.issued then
+              ∧ id1 ∉ w.ctx.issued ∧ id2 ∉ w.ctx.issued
+              ∧ (∃ c, o.root.find? id = some c ∧ c.state = .active) then
       match hs : w.ctx.splitAtOwner? o id id1 id2 k with
       | some C' => .ok { w with ctx := { C' with issued := id1 :: id2 :: w.ctx.issued } }
       | none => .error "split: refused"
@@ -423,7 +424,8 @@ def World.splitFractionChecked (w : World) (a : AllocId) (id id1 id2 : CapId)
   | none => .error "split: no owner for the allocation"
   | some o =>
     if o.FreshIds id1 id2 ∧ id1 ∉ w.ctx.ids ∧ id2 ∉ w.ctx.ids
-        ∧ id1 ∉ w.ctx.issued ∧ id2 ∉ w.ctx.issued then
+        ∧ id1 ∉ w.ctx.issued ∧ id2 ∉ w.ctx.issued
+        ∧ (∃ c, o.root.find? id = some c ∧ c.state = .active) then
       match w.ctx.splitFractionOwner? o id id1 id2 q1 q2 p1 p2 with
       | some C' => .ok { w with ctx := { C' with issued := id1 :: id2 :: w.ctx.issued } }
       | none => .error "split: refused"
