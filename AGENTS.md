@@ -261,6 +261,18 @@
   every pair of the four nodes is `Same` in the functional relation
   (`ufTrace_partition`). No path compression in the client, no read discipline:
   the checked route governs writes only.
+- `Cap/UFChecked.lean` repairs the union-find's access discipline: `UFRep w a id n`
+  is the representation predicate of a whole-share read-write parent array whose
+  stored bytes are all valid node indices. It turns a *runtime* index `i < n`
+  into static access evidence (`UFRep.canRead`, `UFRep.canWrite`) — the missing
+  link that a program-text index cannot supply — and proves every represented
+  parent read returns a value below `n` (`readParent?_lt`) and below 256, which is
+  what the recursive chase needs for its next index. `findRootC` is the chase
+  typed by that evidence, `compressC` the one-step compression through
+  `writeChecked`, `compressC_ok` its non-refusal (the guard is the
+  representation's own) and `compressC_wf` invariant preservation. It is the
+  checked read route over the pure backend, not an interpreter, FFI or in-place
+  claim.
 - `Cap/UFCompress.lean` adds bounded root finding and one-step compression to the
   functional model: `findRootF` chases parents with fuel, `StopsAt` records a
   reached fixed point, `findRootF_root`/`findRootF_reachable` give the root and

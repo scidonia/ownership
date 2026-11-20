@@ -29,6 +29,7 @@ import Cap.Invariant
 import Cap.WorldInvariant
 import Cap.UFCompress
 import Cap.UFRun
+import Cap.UFChecked
 import Cap.BackendArr
 import Cap.Typed
 import Cap.IProg
