@@ -13,6 +13,7 @@ This module states the invariant and proves it for the initial worlds and for
 writes. Preservation for the remaining commands is the next step.
 -/
 import Cap.Unified
+import Cap.Join
 import Cap.TopInvariant
 import Cap.History
 
@@ -347,5 +348,425 @@ theorem Tree.find?_replaceNode_outside (t : Tree) (node id' : CapId) (t' : Tree)
       | none =>
         simp only [Tree.find?]
         rw [ihr hrepR]
+
+/-- A fractional join preserves the loan invariant: the joined children are
+active while every lender's leaf is retired, so no lender lies in the replaced
+fragment; the joined leaf's identifier is fresh, so its lookup is empty; and
+other owners are untouched. -/
+theorem World.loansOK_joinChecked {w w' : World} {a : AllocId}
+    {node newId : CapId}
+    (hw : w.joinChecked a node newId = .ok w')
+    (hwf : w.WellFormed) (h : w.LoansOK) : w'.LoansOK := by
+  unfold World.joinChecked at hw
+  cases hf : w.ctx.findOwner? a with
+  | none => simp [hf] at hw
+  | some o =>
+    simp only [hf] at hw
+    by_cases hfresh : newId ∉ w.ctx.ids ∧ newId ∉ w.ctx.issued
+    · rw [if_pos hfresh] at hw
+      cases hs : w.ctx.joinFractionOwner? o node newId with
+      | none => simp [hs] at hw
+      | some C' =>
+        simp only [hs, Except.ok.injEq] at hw
+        subst hw
+        unfold World.LoansOK World.LenderRetired at h
+        obtain ⟨hid, hlend, hlife, hiss, hret⟩ := h
+        unfold Ctx.joinFractionOwner? at hs
+        cases hj : o.joinFraction? node newId with
+        | none => simp [hj] at hs
+        | some o' =>
+          simp only [hj, Option.map_some, Option.some.injEq] at hs
+          subst C'
+          unfold Owner.joinFraction? at hj
+          cases hfrag : o.root.findFrac? node with
+          | none => simp [hfrag] at hj
+          | some frag =>
+            cases hjc : frag.joinChildren? newId with
+            | none => simp [hfrag, hjc] at hj
+            | some t' =>
+              simp only [hfrag, hjc, Option.map_some, Option.some.injEq] at hj
+              subst hj
+              obtain ⟨i, c1, c2, hnode, hcids, ht'ids, -⟩ :=
+                Tree.joinChildren?_some hjc
+              obtain ⟨-, -, -, -, hc1act, hc2act⟩ := Tree.joinChildren?_active hjc
+              have hmemO : o ∈ w.ctx.owners := List.mem_of_find?_eq_some hf
+              have hrootnd : o.root.ids.Nodup :=
+                List.nodup_cons.mp (Ctx.owner_ids_nodup hwf.1.2.2 hmemO) |>.2
+              unfold World.LoansOK World.LenderRetired at ⊢
+              refine ⟨?_, ?_, ?_, ?_, ?_⟩
+              · simpa [Ctx.update] using hid
+              · simpa [Ctx.update] using hlend
+              · intro l' hl'
+                simpa [Ctx.update] using hlife l' (by simpa [Ctx.update] using hl')
+              · intro l' hl'
+                exact List.mem_cons_of_mem _
+                  (hiss l' (by simpa [Ctx.update] using hl'))
+              · intro l' hl'
+                obtain ⟨own, hown, cl, hcl, hst⟩ :=
+                  hret l' (by simpa [Ctx.update] using hl')
+                have hneNew : l'.lender ≠ newId :=
+                  fun heq => hfresh.2 (heq ▸ hiss l' (by simpa [Ctx.update] using hl'))
+                have hclid : cl.id = l'.lender := Tree.find?_id_eq hcl
+                have hout : ∀ frag', o.root.findFrac? node = some frag' →
+                    l'.lender ∉ frag'.ids := by
+                  intro frag' hfrag'
+                  have hfeq : frag' = frag := by
+                    rw [hfrag] at hfrag'
+                    exact (Option.some.inj hfrag').symm
+                  have hc1leaf : c1 ∈ o.root.leaves :=
+                    Tree.findFrac?_leaves_sub hfrag (by
+                      rw [hnode]
+                      simp [Tree.leaves])
+                  have hc2leaf : c2 ∈ o.root.leaves :=
+                    Tree.findFrac?_leaves_sub hfrag (by
+                      rw [hnode]
+                      simp [Tree.leaves])
+                  intro hmem
+                  obtain ⟨-, -, -, -, hc1active, hc2active⟩ := Tree.joinChildren?_active hjc
+                  have hfragids : frag'.ids = [c1.id, c2.id] := by
+                    rw [hfeq, hnode]
+                    rfl
+                  rw [hfragids] at hmem
+                  rcases List.mem_cons.mp hmem with hc1 | hc2
+                  · have hc1id : c1.id = l'.lender := by rw [← hc1]
+                    exfalso
+                    by_cases hownO : own = o
+                    · rw [hownO] at hcl hown
+                      have hclleaf : cl ∈ o.root.leaves := Tree.find?_mem_leaves hcl
+                      have hmap : (o.root.leaves.map Leaf.id).Nodup := by
+                        rw [← Tree.ids_eq_map_leaves]
+                        exact hrootnd
+                      have hcl_c1 : cl = c1 :=
+                        List.nodup_map_leaf_id_inj hmap cl hclleaf c1 hc1leaf
+                          (by rw [hclid, hc1id])
+                      obtain ⟨i', c1', c2', hnode', ha, hb⟩ :=
+                        Tree.joinChildren?_active hjc
+                      have heq : Tree.frac i (.leaf c1) (.leaf c2)
+                          = Tree.frac i' (.leaf c1') (.leaf c2') :=
+                        hnode.symm.trans hnode'
+                      have hc1' : c1 = c1' := by
+                        injection heq with _ hl _
+                        injection hl with h
+                      rw [← hc1'] at ha
+                      rw [hcl_c1] at hst
+                      rw [hst] at ha
+                      exact absurd ha (by decide)
+                    · have hoalloc : own.alloc ≠ o.alloc := by
+                        intro heq
+                        have hfindOwn : w.ctx.findOwner? own.alloc = some own :=
+                          Ctx.findOwner?_eq_some_of_mem_of_functional hwf.2.1 hown
+                        have := hwf.2.1 own.alloc own o hfindOwn hmemO heq.symm
+                        exact hownO this.symm
+                      have hne : own ≠ o := fun heq => hoalloc (heq ▸ rfl)
+                      have hownmem : l'.lender ∈ own.ids :=
+                        List.mem_cons_of_mem _ (Tree.find?_mem_ids hcl)
+                      have homem : l'.lender ∈ o.ids := by
+                        have hrootmem : l'.lender ∈ o.root.ids := by
+                          rw [← hc1id]
+                          exact Tree.findFrac?_ids_sub hfrag (by
+                            rw [hnode]
+                            simp [Tree.ids])
+                        exact List.mem_cons_of_mem _ hrootmem
+                      exact Ctx.ids_disjoint_of_ne hwf.1.2.2 hown hmemO hne
+                        l'.lender hownmem homem
+                  · have hc2eq : l'.lender = c2.id := List.mem_singleton.mp hc2
+                    have hc2id : c2.id = l'.lender := hc2eq.symm
+                    exfalso
+                    by_cases hownO : own = o
+                    · rw [hownO] at hcl hown
+                      have hclleaf : cl ∈ o.root.leaves := Tree.find?_mem_leaves hcl
+                      have hmap : (o.root.leaves.map Leaf.id).Nodup := by
+                        rw [← Tree.ids_eq_map_leaves]
+                        exact hrootnd
+                      have hcl_c2 : cl = c2 :=
+                        List.nodup_map_leaf_id_inj hmap cl hclleaf c2 hc2leaf
+                          (by rw [hclid, hc2id])
+                      obtain ⟨i', c1', c2', hnode', ha, hb⟩ :=
+                        Tree.joinChildren?_active hjc
+                      have heq : Tree.frac i (.leaf c1) (.leaf c2)
+                          = Tree.frac i' (.leaf c1') (.leaf c2') :=
+                        hnode.symm.trans hnode'
+                      have hc2' : c2 = c2' := by
+                        injection heq with _ _ hr
+                        injection hr with h
+                      rw [← hc2'] at hb
+                      rw [hcl_c2] at hst
+                      rw [hst] at hb
+                      exact absurd hb (by decide)
+                    · have hoalloc : own.alloc ≠ o.alloc := by
+                        intro heq
+                        have hfindOwn : w.ctx.findOwner? own.alloc = some own :=
+                          Ctx.findOwner?_eq_some_of_mem_of_functional hwf.2.1 hown
+                        have := hwf.2.1 own.alloc own o hfindOwn hmemO heq.symm
+                        exact hownO this.symm
+                      have hne : own ≠ o := fun heq => hoalloc (heq ▸ rfl)
+                      have hownmem : l'.lender ∈ own.ids :=
+                        List.mem_cons_of_mem _ (Tree.find?_mem_ids hcl)
+                      have homem : l'.lender ∈ o.ids := by
+                        have hrootmem : l'.lender ∈ o.root.ids := by
+                          rw [← hc2id]
+                          exact Tree.findFrac?_ids_sub hfrag (by
+                            rw [hnode]
+                            simp [Tree.ids])
+                        exact List.mem_cons_of_mem _ hrootmem
+                      exact Ctx.ids_disjoint_of_ne hwf.1.2.2 hown hmemO hne
+                        l'.lender hownmem homem
+                have hnew : t'.find? l'.lender = none := by
+                  apply Tree.find?_eq_none_of_not_mem_ids
+                  rw [ht'ids]
+                  simp [hneNew]
+                by_cases hownO : own = o
+                · rw [hownO] at hcl hown
+                  have hfind' : (Tree.replaceNode node t' o.root).find? l'.lender
+                      = some cl := by
+                    rw [Tree.find?_replaceNode_outside o.root node l'.lender t' hnew hout]
+                    exact hcl
+                  exact ⟨{ o with root := Tree.replaceNode node t' o.root },
+                    List.mem_map.mpr ⟨o, hown, by simp⟩, cl, hfind', hst⟩
+                · have hoalloc : own.alloc ≠ o.alloc := by
+                    intro heq
+                    have hfindOwn : w.ctx.findOwner? own.alloc = some own :=
+                      Ctx.findOwner?_eq_some_of_mem_of_functional hwf.2.1 hown
+                    have := hwf.2.1 own.alloc own o hfindOwn hmemO heq.symm
+                    exact hownO this.symm
+                  exact ⟨own, List.mem_map.mpr ⟨own, hown, by simp [hoalloc]⟩,
+                    cl, hcl, hst⟩
+    · rw [if_neg hfresh] at hw
+      simp at hw
+
+/-- Beginning a loan preserves the invariant: the lender's leaf is retired by the
+suspension, the guard requires it active so no earlier loan shares the lender, and
+the new loan is recorded against the live root lifetime with an issued lender. -/
+theorem World.loansOK_beginLoanChecked {w w' : World} {a : AllocId}
+    {lender : CapId} {loanId : LoanId}
+    (hw : w.beginLoanChecked a lender loanId = .ok w')
+    (hwf : w.WellFormed) (h : w.LoansOK) (hh : Ctx.HistoryOK w.ctx) :
+    w'.LoansOK := by
+  unfold World.beginLoanChecked at hw
+  cases hf : w.ctx.findOwner? a with
+  | none => simp [hf] at hw
+  | some o =>
+    simp only [hf] at hw
+    cases hfind : o.root.find? lender with
+    | none => simp [hfind] at hw
+    | some c =>
+      simp only [hfind] at hw
+      by_cases hc : c.state = .active
+      · rw [if_pos hc] at hw
+        by_cases hfresh : loanId ∉ w.ctx.loans.loans.map (·.id)
+        · rw [if_pos hfresh] at hw
+          by_cases hlive : w.ctx.loans.live ⟨0⟩
+          · rw [if_pos hlive] at hw
+            cases hs : o.suspendLeaf? lender with
+            | none => simp [hs] at hw
+            | some o' =>
+              simp only [hs, Except.ok.injEq] at hw
+              subst hw
+              obtain ⟨hid, hlend, hlife, hiss, hret⟩ := h
+              obtain ⟨c0, hfold, hc0act, hnewlookup⟩ := Owner.suspendLeaf?_find? hs
+              have hc0c : c0 = c := by
+                rw [hfold] at hfind
+                exact Option.some.inj hfind
+              rw [hc0c] at hnewlookup
+              have hmemO : o ∈ w.ctx.owners := List.mem_of_find?_eq_some hf
+              -- no earlier loan shares the lender
+              let fs : Leaf → Tree := fun c' => .leaf { c' with state := .retired }
+              have ho'eq : o' = { o with root := Tree.replace lender fs o.root } := by
+                obtain ⟨d, _, _, hod⟩ := Owner.suspendLeaf?_eq hs
+                simpa [fs] using hod
+              have hold_lender_ne : ∀ l ∈ w.ctx.loans.loans, l.lender ≠ lender := by
+                intro l hl heq
+                obtain ⟨own, hown, cl, hcl, hst⟩ := hret l hl
+                rw [heq] at hcl
+                by_cases hownO : own = o
+                · rw [hownO] at hcl hown
+                  have hclc : cl = c := by
+                    rw [hcl] at hfind
+                    exact Option.some.inj hfind
+                  rw [hclc] at hst
+                  rw [hst] at hc
+                  exact absurd hc (by decide)
+                · have hoalloc : own.alloc ≠ o.alloc := by
+                    intro heq'
+                    have hfindOwn : w.ctx.findOwner? own.alloc = some own :=
+                      Ctx.findOwner?_eq_some_of_mem_of_functional hwf.2.1 hown
+                    have := hwf.2.1 own.alloc own o hfindOwn hmemO heq'.symm
+                    exact hownO this.symm
+                  have hne : own ≠ o := fun heq' => hoalloc (heq' ▸ rfl)
+                  have hownmem : lender ∈ own.ids :=
+                    List.mem_cons_of_mem _ (Tree.find?_mem_ids hcl)
+                  have homem : lender ∈ o.ids :=
+                    List.mem_cons_of_mem _ (Tree.find?_mem_ids hfind)
+                  exact Ctx.ids_disjoint_of_ne hwf.1.2.2 hown hmemO hne
+                    lender hownmem homem
+              -- the new loan
+              unfold World.LoansOK World.LenderRetired at ⊢
+              refine ⟨?_, ?_, ?_, ?_, ?_⟩
+              · have : (w.ctx.loans.loans.map (·.id) ++ [loanId]).Nodup := by
+                  rw [List.nodup_append]
+                  refine ⟨hid, by simp, ?_⟩
+                  intro a ha b hb
+                  simp only [List.mem_singleton] at hb
+                  subst hb
+                  exact fun heq => hfresh (heq ▸ ha)
+                simpa [List.map_append] using this
+              · have : (w.ctx.loans.loans.map (·.lender) ++ [lender]).Nodup := by
+                  rw [List.nodup_append]
+                  refine ⟨hlend, by simp, ?_⟩
+                  intro a ha b hb
+                  simp only [List.mem_singleton] at hb
+                  subst hb
+                  obtain ⟨l, hl, rfl⟩ := List.mem_map.mp ha
+                  exact hold_lender_ne l hl
+                simpa [List.map_append] using this
+              · intro l hl
+                rcases List.mem_append.mp hl with hl' | hl'
+                · change w.ctx.loans.live l.lifetime = true
+                  exact hlife l hl'
+                · simp only [List.mem_singleton] at hl'
+                  subst hl'
+                  change w.ctx.loans.live ⟨0⟩ = true
+                  exact hlive
+              · intro l hl
+                rcases List.mem_append.mp hl with hl' | hl'
+                · change l.lender ∈ w.ctx.issued
+                  exact hiss l hl'
+                · simp only [List.mem_singleton] at hl'
+                  subst hl'
+                  exact Ctx.ids_sub_issued hh lender
+                    (Ctx.owner_ids_sub_ids hmemO lender
+                      (List.mem_cons_of_mem _ (Tree.find?_mem_ids hfind)))
+              · intro l hl
+                rcases List.mem_append.mp hl with hl' | hl'
+                · obtain ⟨own, hown, cl, hcl, hst⟩ := hret l hl'
+                  have hne : l.lender ≠ lender := hold_lender_ne l hl'
+                  by_cases hownO : own = o
+                  · rw [hownO] at hcl hown
+                    have hrep : ∀ c', o.root.find? lender = some c' →
+                        (Tree.leaf { c' with state := .retired }).find? l.lender = none := by
+                      intro c' hc'
+                      change (if c'.id = l.lender then some { c' with state := .retired } else none) = none
+                      rw [if_neg]
+                      intro heq
+                      exact hne ((Tree.find?_id_eq hc').symm.trans heq).symm
+                    have hfind' : (Tree.replace lender
+                        (fun c' => .leaf { c' with state := .retired }) o.root).find? l.lender
+                        = some cl := by
+                      rw [Tree.find?_replace_ne o.root lender l.lender
+                        (fun c' => .leaf { c' with state := .retired }) hne hrep]
+                      exact hcl
+                    let f : Leaf → Tree := fun c' => .leaf { c' with state := .retired }
+                    let o'' : Owner := { o with root := Tree.replace lender f o.root }
+                    have hmem : o'' ∈ (w.ctx.update o.alloc o'').owners := by
+                      apply List.mem_map.mpr
+                      exact ⟨o, hown, by simp [o'']⟩
+                    rw [ho'eq]
+                    exact ⟨o'', hmem, cl, hfind', hst⟩
+                  · have hoalloc : own.alloc ≠ o.alloc := by
+                      intro heq
+                      have hfindOwn : w.ctx.findOwner? own.alloc = some own :=
+                        Ctx.findOwner?_eq_some_of_mem_of_functional hwf.2.1 hown
+                      have := hwf.2.1 own.alloc own o hfindOwn hmemO heq.symm
+                      exact hownO this.symm
+                    exact ⟨own, List.mem_map.mpr ⟨own, hown, by simp [hoalloc]⟩,
+                      cl, hcl, hst⟩
+                · simp only [List.mem_singleton] at hl'
+                  subst hl'
+                  exact ⟨o', List.mem_map.mpr ⟨o, hmemO, by simp⟩,
+                    ({ c with state := .retired } : Leaf), hnewlookup, rfl⟩
+          · rw [if_neg hlive] at hw
+            cases hw
+        · rw [if_neg hfresh] at hw
+          cases hw
+      · rw [if_neg hc] at hw
+        cases hw
+
+/-- Ending a loan preserves the invariant: resuming the lender's leaf leaves every
+other loan's retired leaf in place (the remaining loans are a sublist with a
+different lender, and the resumed leaf is a fresh leaf at the removed loan's
+lender), and the removed loan is gone. -/
+theorem World.loansOK_endLoanChecked {w w' : World} {a : AllocId} {loanId : LoanId}
+    (hw : w.endLoanChecked a loanId = .ok w')
+    (hwf : w.WellFormed) (h : w.LoansOK) : w'.LoansOK := by
+  unfold World.endLoanChecked at hw
+  cases hl : w.ctx.loans.findLoan? loanId with
+  | none => simp [hl] at hw
+  | some loan =>
+    simp only [hl] at hw
+    cases hf : w.ctx.findOwner? a with
+    | none => simp [hf] at hw
+    | some o =>
+      simp only [hf] at hw
+      cases hr : o.resumeLeaf? loan.lender with
+      | none => simp [hr] at hw
+      | some o' =>
+        simp only [hr, Except.ok.injEq] at hw
+        subst hw
+        obtain ⟨hid, hlend, hlife, hiss, hret⟩ := h
+        have hmemO : o ∈ w.ctx.owners := List.mem_of_find?_eq_some hf
+        have hloan_mem : loan ∈ w.ctx.loans.loans := List.mem_of_find?_eq_some hl
+        have hloan_id : loan.id = loanId := by
+          have := List.find?_some (p := fun l : Loan => decide (l.id = loanId))
+            (by simpa [LoanCtx.findLoan?] using hl)
+          simpa using this
+        let fr : Leaf → Tree := fun c' => .leaf { c' with state := .active }
+        have ho'eq : o' = { o with root := Tree.replace loan.lender fr o.root } := by
+          obtain ⟨d, _, _, hod⟩ := Owner.resumeLeaf?_eq hr
+          simpa [fr] using hod
+        unfold World.LoansOK World.LenderRetired at ⊢
+        refine ⟨?_, ?_, ?_, ?_, ?_⟩
+        · have hsub : ((w.ctx.loans.loans.filter (fun l : Loan => l.id ≠ loanId)).map
+              (·.id)).Sublist (w.ctx.loans.loans.map (·.id)) :=
+            (List.filter_sublist (p := fun l : Loan => l.id ≠ loanId)).map (·.id)
+          exact hsub.nodup hid
+        · have hsub : ((w.ctx.loans.loans.filter (fun l : Loan => l.id ≠ loanId)).map
+              (·.lender)).Sublist (w.ctx.loans.loans.map (·.lender)) :=
+            (List.filter_sublist (p := fun l : Loan => l.id ≠ loanId)).map (·.lender)
+          exact hsub.nodup hlend
+        · intro l hl'
+          obtain ⟨hlmem, -⟩ := List.mem_filter.mp hl'
+          change w.ctx.loans.live l.lifetime = true
+          exact hlife l hlmem
+        · intro l hl'
+          obtain ⟨hlmem, -⟩ := List.mem_filter.mp hl'
+          change l.lender ∈ w.ctx.issued
+          exact hiss l hlmem
+        · intro l hl'
+          obtain ⟨hlmem, hneid⟩ := List.mem_filter.mp hl'
+          have hne : l.id ≠ loanId := by simpa using hneid
+          have hlne : l ≠ loan := by
+            intro heq
+            subst heq
+            exact hne hloan_id
+          have hldne : l.lender ≠ loan.lender := by
+            intro heq
+            exact hlne (List.nodup_map_inj hlend l hlmem loan hloan_mem heq)
+          obtain ⟨own, hown, cl, hcl, hst⟩ := hret l hlmem
+          by_cases hownO : own = o
+          · rw [hownO] at hcl hown
+            let o'' : Owner := { o with root := Tree.replace loan.lender fr o.root }
+            have hrep : ∀ c', o.root.find? loan.lender = some c' →
+                (Tree.leaf { c' with state := .active }).find? l.lender = none := by
+              intro c' hc'
+              change (if c'.id = l.lender then some { c' with state := .active } else none) = none
+              rw [if_neg]
+              intro heq
+              exact hldne ((Tree.find?_id_eq hc').symm.trans heq).symm
+            have hfind' : (Tree.replace loan.lender fr o.root).find? l.lender = some cl := by
+              rw [Tree.find?_replace_ne o.root loan.lender l.lender fr hldne hrep]
+              exact hcl
+            have hmem : o'' ∈ (w.ctx.update o.alloc o'').owners := by
+              apply List.mem_map.mpr
+              exact ⟨o, hown, by simp [o'']⟩
+            rw [ho'eq]
+            exact ⟨o'', hmem, cl, hfind', hst⟩
+          · have hoalloc : own.alloc ≠ o.alloc := by
+              intro heq
+              have hfindOwn : w.ctx.findOwner? own.alloc = some own :=
+                Ctx.findOwner?_eq_some_of_mem_of_functional hwf.2.1 hown
+              have := hwf.2.1 own.alloc own o hfindOwn hmemO heq.symm
+              exact hownO this.symm
+            exact ⟨own, List.mem_map.mpr ⟨own, hown, by simp [hoalloc]⟩,
+              cl, hcl, hst⟩
 
 end Cap

@@ -286,6 +286,132 @@ def Tree.ids : Tree → List CapId
   | .frac _ l r => l.ids ++ r.ids
   | .spatial _ l r => l.ids ++ r.ids
 
+/-- The leaf occurrences of a tree, in traversal order. Unlike `Tree.ids`, this
+retains the leaves themselves, so two occurrences with the same identifier can be
+distinguished. -/
+def Tree.leaves : Tree → List Leaf
+  | .leaf c => [c]
+  | .frac _ l r => l.leaves ++ r.leaves
+  | .spatial _ l r => l.leaves ++ r.leaves
+
+/-- The identifier list is the leaf list's identifiers. -/
+theorem Tree.ids_eq_map_leaves (t : Tree) : t.ids = t.leaves.map Leaf.id := by
+  induction t with
+  | leaf c => rfl
+  | frac i l r ihl ihr => simp [Tree.ids, Tree.leaves, ihl, ihr]
+  | spatial i l r ihl ihr => simp [Tree.ids, Tree.leaves, ihl, ihr]
+
+/-- A leaf found by `Tree.find?` carries the queried identifier. -/
+theorem Tree.find?_id_eq {t : Tree} {id : CapId} {c : Leaf}
+    (h : t.find? id = some c) : c.id = id := by
+  induction t generalizing c with
+  | leaf c' =>
+    by_cases hci : c'.id = id
+    · change (if c'.id = id then some c' else none) = some c at h
+      rw [if_pos hci] at h
+      have hc : c' = c := Option.some.inj h
+      rw [← hc]
+      exact hci
+    · change (if c'.id = id then some c' else none) = some c at h
+      rw [if_neg hci] at h
+      exact absurd h (by simp)
+  | frac i l r ihl ihr =>
+    cases hl : l.find? id with
+    | some d =>
+      have hcd : c = d := by
+        have h' : some d = some c := by simpa only [Tree.find?, hl] using h
+        exact (Option.some.inj h').symm
+      rw [hcd]
+      exact ihl hl
+    | none =>
+      have hr : r.find? id = some c := by simpa only [Tree.find?, hl] using h
+      exact ihr hr
+  | spatial i l r ihl ihr =>
+    cases hl : l.find? id with
+    | some d =>
+      have hcd : c = d := by
+        have h' : some d = some c := by simpa only [Tree.find?, hl] using h
+        exact (Option.some.inj h').symm
+      rw [hcd]
+      exact ihl hl
+    | none =>
+      have hr : r.find? id = some c := by simpa only [Tree.find?, hl] using h
+      exact ihr hr
+
+/-- A leaf found by `Tree.find?` is one of the tree's leaves. -/
+theorem Tree.find?_mem_leaves {t : Tree} {id : CapId} {c : Leaf}
+    (h : t.find? id = some c) : c ∈ t.leaves := by
+  induction t generalizing c with
+  | leaf c' =>
+    by_cases hci : c'.id = id
+    · have hc : c' = c := by
+        change (if c'.id = id then some c' else none) = some c at h
+        rw [if_pos hci] at h
+        exact Option.some.inj h
+      rw [hc]
+      simp [Tree.leaves]
+    · change (if c'.id = id then some c' else none) = some c at h
+      rw [if_neg hci] at h
+      exact absurd h (by simp)
+  | frac i l r ihl ihr =>
+    cases hl : l.find? id with
+    | some d =>
+      have hcd : c = d := by
+        have h' : some d = some c := by simpa only [Tree.find?, hl] using h
+        exact (Option.some.inj h').symm
+      rw [hcd]
+      exact List.mem_append.mpr (Or.inl (ihl hl))
+    | none =>
+      have hr : r.find? id = some c := by simpa only [Tree.find?, hl] using h
+      exact List.mem_append.mpr (Or.inr (ihr hr))
+  | spatial i l r ihl ihr =>
+    cases hl : l.find? id with
+    | some d =>
+      have hcd : c = d := by
+        have h' : some d = some c := by simpa only [Tree.find?, hl] using h
+        exact (Option.some.inj h').symm
+      rw [hcd]
+      exact List.mem_append.mpr (Or.inl (ihl hl))
+    | none =>
+      have hr : r.find? id = some c := by simpa only [Tree.find?, hl] using h
+      exact List.mem_append.mpr (Or.inr (ihr hr))
+
+/-- Equal images of two list members under a duplicate-free map force the members
+to be equal. -/
+theorem List.nodup_map_inj {α β : Type} {f : α → β} {l : List α}
+    (h : (l.map f).Nodup) : ∀ a ∈ l, ∀ b ∈ l, f a = f b → a = b := by
+  induction l with
+  | nil => simp
+  | cons x xs ih =>
+    simp only [List.map_cons, List.nodup_cons] at h
+    obtain ⟨hx, hxs⟩ := h
+    intro a ha b hb hid
+    rcases List.mem_cons.mp ha with rfl | ha'
+    · rcases List.mem_cons.mp hb with rfl | hb'
+      · rfl
+      · exact absurd (List.mem_map.mpr ⟨b, hb', hid.symm⟩) hx
+    · rcases List.mem_cons.mp hb with rfl | hb'
+      · exact absurd (List.mem_map.mpr ⟨a, ha', hid⟩) hx
+      · exact ih hxs a ha' b hb' hid
+
+/-- Identifiers distinct in a leaf list (via their identifiers) determine the
+leaves: two leaves of the list with equal identifiers are equal. -/
+theorem List.nodup_map_leaf_id_inj {l : List Leaf} (h : (l.map Leaf.id).Nodup) :
+    ∀ a ∈ l, ∀ b ∈ l, a.id = b.id → a = b := by
+  induction l with
+  | nil => simp
+  | cons x xs ih =>
+    simp only [List.map_cons, List.nodup_cons] at h
+    obtain ⟨hx, hxs⟩ := h
+    intro a ha b hb hid
+    rcases List.mem_cons.mp ha with rfl | ha'
+    · rcases List.mem_cons.mp hb with rfl | hb'
+      · rfl
+      · exact absurd (List.mem_map.mpr ⟨b, hb', hid.symm⟩) hx
+    · rcases List.mem_cons.mp hb with rfl | hb'
+      · exact absurd (List.mem_map.mpr ⟨a, ha', hid⟩) hx
+      · exact ih hxs a ha' b hb' hid
+
 def Owner.ids (o : Owner) : List CapId := o.disposal :: o.root.ids
 
 /-- Two access-capability identifiers are fresh for a split of `o`: distinct from

@@ -235,6 +235,34 @@ def joinChildren? (newId : CapId) : Tree → Option Tree
     else none
   | _ => none
 
+/-- A successful sibling join has both children active: the guard requires the
+first child active and the children to agree on state. -/
+theorem joinChildren?_active {node : Tree} {newId : CapId} {t' : Tree}
+    (h : node.joinChildren? newId = some t') :
+    ∃ i c1 c2, node = .frac i (.leaf c1) (.leaf c2) ∧
+      c1.state = .active ∧ c2.state = .active := by
+  cases node with
+  | leaf c => simp [joinChildren?] at h
+  | spatial i l r => simp [joinChildren?] at h
+  | frac i l r =>
+    cases l with
+    | leaf c1 =>
+      cases r with
+      | leaf c2 =>
+        by_cases hid : c1.id = c2.id
+        · simp [joinChildren?, hid] at h
+        · by_cases hg : c1.alloc = c2.alloc ∧ c1.lo = c2.lo ∧ c1.hi = c2.hi ∧
+              c1.ceiling = c2.ceiling ∧ c1.state = c2.state ∧ c1.state = .active
+          · rw [joinChildren?] at h
+            rw [if_neg hid, if_pos hg] at h
+            exact ⟨i, c1, c2, rfl, hg.2.2.2.2.2,
+              by rw [← hg.2.2.2.2.1]; exact hg.2.2.2.2.2⟩
+          · simp [joinChildren?, hid, hg] at h
+      | frac j l' r' => simp [joinChildren?] at h
+      | spatial j l' r' => simp [joinChildren?] at h
+    | frac j l' r' => simp [joinChildren?] at h
+    | spatial j l' r' => simp [joinChildren?] at h
+
 /-- A successful join under the same resource is a same-budget replacement. -/
 theorem joinChildren?_budget (node : Tree) (newId : CapId) (t' : Tree)
     (h : node.joinChildren? newId = some t') :
@@ -369,6 +397,44 @@ theorem Tree.findFrac?_ids_sub {t u : Tree} {id x : CapId}
       rw [h1] at h
       cases h
       exact hx
+    · cases hf : l.findFrac? id with
+      | some w =>
+        have huw : u = w := by
+          have h' : Tree.findFrac? id (.frac i l r) = some w := by
+            simp [findFrac?, hi, hf]
+          rw [h'] at h
+          exact (Option.some.inj h).symm
+        subst huw
+        exact List.mem_append.mpr (Or.inl (ihl hf))
+      | none =>
+        have hur : r.findFrac? id = some u := by simpa [findFrac?, hi, hf] using h
+        exact List.mem_append.mpr (Or.inr (ihr hur))
+  | spatial i l r ihl ihr =>
+    cases hf : l.findFrac? id with
+    | some w =>
+      have huw : u = w := by
+        have h' : Tree.findFrac? id (.spatial i l r) = some w := by
+          simp [findFrac?, hf]
+        rw [h'] at h
+        exact (Option.some.inj h).symm
+      subst huw
+      exact List.mem_append.mpr (Or.inl (ihl hf))
+    | none =>
+      have hur : r.findFrac? id = some u := by simpa [findFrac?, hf] using h
+      exact List.mem_append.mpr (Or.inr (ihr hur))
+
+/-- The leaves of a located fractional node occur in the tree's leaves. -/
+theorem Tree.findFrac?_leaves_sub {t u : Tree} {id : CapId} {c : Leaf}
+    (h : t.findFrac? id = some u) (hc : c ∈ u.leaves) : c ∈ t.leaves := by
+  induction t with
+  | leaf c' => simp [findFrac?] at h
+  | frac i l r ihl ihr =>
+    by_cases hi : i = id
+    · have h1 : Tree.findFrac? id (.frac i l r) = some (.frac i l r) := by
+        simp [findFrac?, hi]
+      rw [h1] at h
+      cases h
+      exact hc
     · cases hf : l.findFrac? id with
       | some w =>
         have huw : u = w := by

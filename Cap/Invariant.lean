@@ -1244,6 +1244,32 @@ theorem flatMap_nodup_of_mem {l : List Owner} {f : Owner → List CapId} {o : Ow
     · exact hx
     · exact ih hxs hmem'
 
+/-- Owners of a list with duplicate-free identifier lists are identifier-disjoint:
+one identifier cannot occur in two distinct owners. -/
+theorem flatMap_disjoint_of_nodup {l : List Owner} {f : Owner → List CapId}
+    (hnd : (l.flatMap f).Nodup) {x y : Owner} (hx : x ∈ l) (hy : y ∈ l)
+    (hne : x ≠ y) : ∀ id, id ∈ f x → id ∈ f y → False := by
+  induction l with
+  | nil => simp at hx
+  | cons z zs ih =>
+    rw [List.flatMap_cons] at hnd
+    obtain ⟨hz, hzs, hdisj⟩ := List.nodup_append.mp hnd
+    rcases List.mem_cons.mp hx with rfl | hx'
+    · rcases List.mem_cons.mp hy with rfl | hy'
+      · exact absurd rfl hne
+      · intro id hidx hidy
+        exact absurd rfl (hdisj id hidx id (List.mem_flatMap.mpr ⟨y, hy', hidy⟩))
+    · rcases List.mem_cons.mp hy with rfl | hy'
+      · intro id hidx hidy
+        exact absurd rfl (hdisj id hidy id (List.mem_flatMap.mpr ⟨x, hx', hidx⟩))
+      · exact ih hzs hx' hy'
+
+/-- Distinct owners of a well-formed context share no capability identifier. -/
+theorem Ctx.ids_disjoint_of_ne {C : Ctx} (hnd : C.ids.Nodup) {o o' : Owner}
+    (ho : o ∈ C.owners) (ho' : o' ∈ C.owners) (hne : o ≠ o') :
+    ∀ id, id ∈ o.ids → id ∈ o'.ids → False :=
+  flatMap_disjoint_of_nodup (l := C.owners) (f := Owner.ids) hnd ho ho' hne
+
 /-- An owner's identifiers are duplicate-free in a well-formed context. -/
 theorem Ctx.owner_ids_nodup {C : Ctx} {o : Owner} (hnd : C.ids.Nodup)
     (hmem : o ∈ C.owners) : o.ids.Nodup :=
