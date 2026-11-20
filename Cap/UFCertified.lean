@@ -190,6 +190,77 @@ noncomputable def findCompressCert (a : AllocId) (id : CapId) (n : Nat) (rank : 
         compressC_wf hw' hwf, hrlt, hrootp, hbuf, hiff⟩
     exact ⟨(r, w'), hpost⟩
 
+/-! ### The path from the chase
+
+The path compressed by full path compression is read off the orbit: `rootPath`
+collects the non-root nodes visited from `x` until the search stops. Every node
+on it is in range and reaches the search's result, so `compressAll` over it
+preserves the partition. -/
+
+/-- The nodes visited before the search stops: `x`, its parent, and so on while
+the node is not a root and fuel remains. -/
+def rootPath (p : UF.Arr) : Nat → Nat → List Nat
+  | 0, _ => []
+  | fuel + 1, x => if UF.step p x = x then [] else x :: rootPath p fuel (UF.step p x)
+
+/-- Every node on the path is reachable from the start. -/
+theorem rootPath_mem_reach_from {p : UF.Arr} :
+    ∀ {fuel x y : Nat}, y ∈ rootPath p fuel x → UF.Reach p x y
+  | 0, x, y, h => by simp [rootPath] at h
+  | fuel + 1, x, y, h => by
+    rw [rootPath] at h
+    by_cases hroot : UF.step p x = x
+    · simp [hroot] at h
+    · rw [if_neg hroot] at h
+      rcases List.mem_cons.mp h with heq | htail
+      · rw [heq]
+        exact Or.inl rfl
+      · exact UF.reach_trans (Or.inr (UF.Reachable.one rfl))
+          (rootPath_mem_reach_from htail)
+
+/-- Every node on the path reaches the search's result. -/
+theorem rootPath_mem_reach_result {p : UF.Arr} :
+    ∀ {fuel x y : Nat}, y ∈ rootPath p fuel x →
+      UF.Reach p y (UF.findRootF p fuel x)
+  | 0, x, y, h => by simp [rootPath] at h
+  | fuel + 1, x, y, h => by
+    rw [rootPath] at h
+    by_cases hroot : UF.step p x = x
+    · simp [hroot] at h
+    · rw [if_neg hroot] at h
+      rw [UF.findRootF_succ, if_neg hroot]
+      rcases List.mem_cons.mp h with heq | htail
+      · rw [heq]
+        exact UF.reach_trans (Or.inr (UF.Reachable.one rfl))
+          (UF.findRootF_reachable p fuel (UF.step p x))
+      · exact rootPath_mem_reach_result htail
+
+/-- Full path compression along the chase's own path preserves the partition:
+the path is in range and every node on it reaches the root the search stopped
+at. -/
+theorem rootPath_compress_same_iff {w : World} {a : AllocId} {id : CapId} {n : Nat}
+    (hrep : UFRep w a id n) {b : Backend} (hb : w.heaps a = some b)
+    {rank : Nat → Nat} (hrank : Ranked (UFArr b) n rank)
+    {x : Nat} (hx : x < n)
+    (hstop : UF.StopsAt (UFArr b) (rank x + 1) x) {p q : Nat} :
+    UF.Same (UF.compressAll (UFArr b) (UF.findRootF (UFArr b) (rank x + 1) x)
+        (rootPath (UFArr b) (rank x + 1) x)) p q ↔
+      UF.Same (UFArr b) p q := by
+  have hroot : UF.IsRoot (UFArr b) (UF.findRootF (UFArr b) (rank x + 1) x) :=
+    UF.findRootF_root hstop
+  have hlen : (UFArr b).length = n := by
+    obtain ⟨-, -, b0, -, -, -, -, -, -, -, hb0, hlen, -⟩ := hrep
+    have hbb : b = b0 := Option.some.inj (hb.symm.trans hb0)
+    subst hbb
+    unfold UFArr
+    rw [List.length_map, hlen]
+  apply compressAll_same_iff hroot
+  intro y hy
+  have hxy : UF.Reach (UFArr b) x y := rootPath_mem_reach_from hy
+  refine ⟨?_, rootPath_mem_reach_result hy⟩
+  have hylt : y < n := Ranked.reach_lt hrank hx hxy
+  rwa [hlen]
+
 /-! ### The concrete 64-byte union-find instance -/
 
 /-- The empty 64-byte backend is a zero parent array. -/

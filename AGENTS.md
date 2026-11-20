@@ -310,8 +310,13 @@
   closed execution on the concrete 64-byte zero forest returns root 0;
   `UFRunner.findRootSnapshot` returns the root with a copy of the allocation's
   bytes, and `ufRunner_findRootSnapshot` proves the observation is
-  `(0, 64 zero bytes)`. What remains is deriving the path from the chase, a
-  dependently indexed composition, and the world-level borrower and C stages.
+  `(0, 64 zero bytes)`. The compression path is derived from the chase
+  (`rootPath`): every node on it is in range and reaches the search's result
+  (`rootPath_mem_reach_from`, `rootPath_mem_reach_result`), so
+  `rootPath_compress_same_iff` proves full-path partition preservation along the
+  path the chase itself takes. Executing those per-node writes through the
+  certified interface needs the dependently indexed composition; the world-level
+  borrower and C stages remain.
 - `Cap/UFCompress.lean` adds bounded root finding and one-step compression to the
   functional model: `findRootF` chases parents with fuel, `StopsAt` records a
   reached fixed point, `findRootF_root`/`findRootF_reachable` give the root and

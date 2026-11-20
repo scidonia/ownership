@@ -855,8 +855,12 @@ rank), and \texttt{ufRunner\_findRoot} proves a closed certified execution on th
 concrete 64-byte zero forest returns root 0. \texttt{UFRunner.findRootSnapshot}
 returns the root with a copy of the allocation's bytes, and
 \texttt{ufRunner\_findRootSnapshot} proves the observation is \texttt{(0, 64
-zero bytes)}; deriving the compression path and a dependently indexed
-composition remain open.
+zero bytes)}. The compression path is derived from the chase
+(\texttt{rootPath}); its nodes are in range and reach the search's result, and
+\texttt{rootPath\_compress\_same\_iff} proves full-path partition preservation
+along the path the chase takes. Executing the per-node writes through the
+certified interface needs a dependently indexed composition, which remains
+open.
 
 \section{Byte-array backend refinement}
 
