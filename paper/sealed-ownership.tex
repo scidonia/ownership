@@ -610,6 +610,47 @@ Accepted execution preserves coverage, freshness, owner uniqueness and storage
 agreement — through allocation, writes, spatial and fractional splits, joins,
 loans and disposal. The older relation \lean{World.Rel} follows from it.
 
+\paragraph{Every write carries its authority.} A checked write is not a bare
+store:
+\begin{lstlisting}
+def World.writeChecked (w : World) (a : AllocId) (id : CapId)
+    (i : Nat) (v : UInt8) : Except String World :=
+  match w.ctx.findOwner? a with
+  | none => .error "write: no owner for the allocation"
+  | some o =>
+    match w.heaps a with
+    | none => .error "write: no backend for the allocation"
+    | some b =>
+      if o.writableB w.ctx.D id i then
+        match b.write i v with
+        | some b' => .ok { w with
+            heaps := fun x => if x = a then some b' else w.heaps x }
+        | none => .error "write: index out of range"
+      else .error "write: capability is not writable at this index"
+\end{lstlisting}
+An accepted write is reported by \lean{writeChecked\_sound} to name the owner
+$o$ found at the allocation, the guard \lean{o.Writable w.ctx.D id i}, the
+backend and its replacement, and to leave the context unchanged. The guard
+unfolds to an active leaf holding the whole share $q=D$ at the byte, with a
+read--write ceiling and an in-range index. Hence in any accepted execution each
+write held, at the state just before it, the authority the context assigns to
+its capability; and because the write leaves the context unchanged, the
+per-byte budget and coverage are untouched by stores. Fractional shares are the
+other side of the same rule: a leaf with $q<D$ is \lean{Readable} (positive
+share, in-range index, any ceiling) but never \lean{Writable}
+(\lean{writable\_not\_shared}); two writable capabilities at one byte are the
+same identifier (\lean{no\_two\_writable}, for a well-formed owner). Splits and
+joins are the only
+permission-changing transitions, and they preserve coverage
+(\lean{Owner.splitAt\_covered}, \lean{Owner.splitFraction\_covered},
+\lean{Owner.joinFraction\_covered}). For programs the evidence form is
+\lean{Ctx.CanWrite}: a matching well-formed world accepts the write
+(\lean{World.write\_succeeds}), and two certified writes at a byte name one
+capability (\lean{World.no\_two\_canwrite}). The context-preserving
+\lean{Owned} fragment's stores pass the same run-time guard but do not carry
+that evidence in their type; that is the remaining type-level gap of
+Section~\ref{sec:limits}.
+
 \paragraph{Loans are suspension.} A loan record names its own identifier, the
 lender and borrower capabilities, and the lifetime it is bound to:
 
