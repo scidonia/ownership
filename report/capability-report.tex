@@ -777,7 +777,10 @@ the heap agreement through a same-length owner replacement is
 \texttt{World.update\_storage}. The unified checker now carries the invariant:
 \texttt{checkWorld\_wf} shows an accepted execution preserves it through writes
 and splits, and \texttt{checkWorld\_rel} derives the older \texttt{World.Rel}
-from it. The language also carries the sibling-only fractional split and join and disposal
+from it. \file{Cap/Trace.lean} lifts the per-write report to traces: in any
+accepted command list, a write at any position held its guard at the world
+reached just before it (\texttt{checkWorld\_write\_guard}), via the single-step
+decomposition \texttt{checkWorld\_cons\_ok}. The language also carries the sibling-only fractional split and join and disposal
 and allocation commands, each preserving the invariant; the join's context-side
 preservation is \texttt{Ctx.joinFractionOwner\_wellFormed}, using an exact
 permutation of the capability ids (the two child ids removed, the fresh id added).

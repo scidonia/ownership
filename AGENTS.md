@@ -547,6 +547,13 @@ shows the certificate it would have to emit, not proof-producing elaboration.
   claim is marked proved. Lean has no module opacity, so this seals the
   *construction* path, not physical storage: the pure model's backends are
   shared by copied programs, which is the C runner's contract, not a theorem.
+- `Cap/Trace.lean` states trace properties of the checker language:
+  `checkWorld_cons_ok` splits an accepted command list at its first command, and
+  `checkWorld_write_guard` proves that a write at any position of an accepted
+  trace held its guard (owner found in the context, `Writable`) at the world
+  reached just before it. The command language carries no access evidence by
+  design; this is the property its run-time check has, while `IProg`, `Owned`
+  and `Cert` are the evidence-bearing client surfaces.
 - `Cap/FullInv.lean` is the combined invariant this stage carries:
   `World.FullInv w := w.TopInv ∧ w.LoansOK` (world well-formedness, issuance
   history and the loan state). `World.checkWorld_fullInv` proves it preserved by

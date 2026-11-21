@@ -638,10 +638,11 @@ An accepted write is reported by \lean{writeChecked\_sound} to name the owner
 $o$ found at the allocation, the guard \lean{o.Writable w.ctx.D id i}, the
 backend and its replacement, and to leave the context unchanged. The guard
 unfolds to an active leaf holding the whole share $q=D$ at the byte, with a
-read--write ceiling and an in-range index. Hence in any accepted execution each
-write held, at the state just before it, the authority the context assigns to
-its capability; and because the write leaves the context unchanged, the
-per-byte budget and coverage are untouched by stores. Fractional shares are the
+read--write ceiling and an in-range index. The trace theorem
+\lean{checkWorld\_write\_guard} states that in any accepted command list, a write
+at any position held its guard at the world reached just before it; and because
+the write leaves the context unchanged, the per-byte budget and coverage are
+untouched by stores. Fractional shares are the
 other side of the same rule: a leaf with $q<D$ is \lean{Readable} (positive
 share, in-range index, any ceiling) but never \lean{Writable}
 (\lean{writable\_not\_shared}); two writable capabilities at one byte are the
@@ -970,6 +971,11 @@ theorem checkWorld_top :
 theorem World.checkWorld_fullInv :
   checkWorld w cs = .ok w' → w.FullInv → w'.FullInv
 
+theorem checkWorld_write_guard :
+  checkWorld w (pre ++ UCmd.write a id i v :: post) = .ok w' →
+  ∃ wm, checkWorld w pre = .ok wm ∧
+    ∃ o, wm.ctx.findOwner? a = some o ∧ o.Writable wm.ctx.D id i
+
 theorem evalIProg_post :
   w.ctx = Γ → evalIProg fuel p w = some (a, w') → w.WellFormed →
   w'.ctx = Q a ∧ w'.WellFormed
@@ -987,7 +993,9 @@ The three parts answer different questions and their scopes differ. Authority is
 per access: an accepted write reports, through \lean{writeChecked\_sound}, the
 owner found in the context, the guard \lean{o.Writable} (active, whole share,
 read--write ceiling, in range), and the unchanged context, so the store changed
-no permission and the per-byte budget is untouched. Preservation is per
+no permission and the per-byte budget is untouched;
+\lean{checkWorld\_write\_guard} lifts that report to any position in an
+accepted trace. Preservation is per
 execution: every accepted command and every accepted run keeps the tower.
 No-refusal is per typed program: it holds for \lean{IProg} and for the
 context-preserving \lean{Owned} fragment, whose read and write constructors carry
@@ -1066,9 +1074,9 @@ concrete 64-byte instance with an immutable observation.
   well-formed world (\lean{runOwned\_no\_refusal}). It has no representation
   index, so a runtime index cannot obtain its evidence there; that is why the
   data-dependent chase is in the certified interface, not in the fragment. The
-  unified language's \lean{write} is the remaining route without evidence: its
-  guard is checked at run time, so its authority statement is the per-write
-  consequence of an accepted write.
+  unified language's \lean{write} carries no evidence and is refused at run time
+  (its trace property is \lean{checkWorld\_write\_guard}), so its authority is
+  not a typing rule; that is the remaining access-typing gap.
   The checked-backend route supplies the runtime link for algorithms:
   \lean{UFRep} relates the world's bytes to a parent array and yields access
   evidence at a runtime index; the chase is the functional search and its result
@@ -1098,9 +1106,12 @@ concrete 64-byte instance with an immutable observation.
   borrower, a reused loan id, a wrong allocation and an invalid lifetime parent;
   ending an outer scope while an inner loan is live is refused
   (\lean{endLink\_outer\_none}).
-\item \textbf{Termination is fuel.} Programs are total by fuel; exhaustion is a
-  visible outcome. Termination for valid forests and for the general loops is
-  future work.
+\item \textbf{Termination is fuel.} The evaluators are fuel-bounded, with
+  exhaustion a distinct outcome. For the checked union-find a ranked forest gives
+  completion within the rank (\lean{stopsAt\_of\_ranked},
+  \lean{findRootC\_ranked\_root}); what is not established is termination of
+  arbitrary loops, and a rank derived from a forest or acyclicity predicate
+  rather than supplied.
 \item \textbf{Sealing is per-declaration, not physical.}
   \lean{Cap/Sealed.lean} makes the sealed world's constructor, representation
   field and invariant proof private, so outside the module a world can be held
@@ -1167,11 +1178,11 @@ A borrowing discipline need not be a type system. Handles as names, a ledger of
 fractional shares and footprints, and a checker that is also the interpreter give
 an ownership discipline in ordinary Lean, with machine-checked preservation and
 a program interface whose refused operations do not typecheck. The remaining work
-is well-defined: the executed per-step correspondence and a forest invariant for
-the checked union-find, equipping or retiring the unified command's
-runtime-checked write with evidence, integrating the delegation chain with
-ledger leaves and the world's live loans, physical-storage sealing, and the C
-backend with its three trust levels made explicit.
+is well-defined: the executed per-step correspondence and a rank derived from a
+forest predicate for the checked union-find, access evidence for the unified
+command's runtime-checked write, integrating the delegation chain with ledger
+leaves and the world's live loans, physical-storage sealing, and the C backend
+with its three trust levels made explicit.
 
 \begin{thebibliography}{9}
 \bibitem{lean4} L. de Moura and S. Ullrich. The Lean~4 theorem prover and

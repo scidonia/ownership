@@ -24,6 +24,7 @@ import Cap.Disposal
 import Cap.HashSet
 import Cap.Indexed
 import Cap.Runner
+import Cap.Trace
 import Cap.UFPartition
 import Cap.Invariant
 import Cap.WorldInvariant
