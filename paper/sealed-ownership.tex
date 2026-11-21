@@ -1003,10 +1003,12 @@ context-preserving \lean{Owned} fragment, whose read and write constructors carr
 \lean{runOwned\_no\_refusal} is stated for a matching, well-formed world.
 \lean{Owned} has no representation index, so a runtime index cannot acquire its
 evidence there; that is why the data-dependent chase is not in this fragment.
-The unified language's \lean{UCmd} carries no evidence: its write is checked at
-run time, so its authority statement is the per-write consequence rather than a
-typing rule. That is the remaining access-typing gap named in
-Section~\ref{sec:limits}.
+The unified language's \lean{UCmd} is the runtime trace layer: its commands
+carry no evidence, and the checker refuses at run time; its authority property
+is the trace theorem \lean{checkWorld\_write\_guard}. The evidence-bearing
+surfaces are the client layers \lean{IProg}, \lean{Owned} and \lean{Cert}. This
+layering is deliberate: the trace language is what executes and may refuse, not
+what a client writes.
 
 \paragraph{What must be inhabited.} Several of these types are obligations to
 provide a witness, and several are deliberately empty.
@@ -1067,16 +1069,16 @@ concrete 64-byte instance with an immutable observation.
 \label{sec:limits}
 
 \begin{itemize}
-\item \textbf{Access evidence is partial.} The indexed interface's reads and
-  writes carry \lean{CanRead}/\lean{CanWrite} evidence, so an unauthorised
-  access is untypable there; the context-preserving \lean{Owned} fragment
+\item \textbf{Access evidence and the executed path.} The client surfaces'
+  reads and writes carry \lean{CanRead}/\lean{CanWrite} evidence, so an
+  unauthorised access is untypable there; the context-preserving \lean{Owned} fragment
   does the same, has an explicit outcome and is never refused from a matching,
   well-formed world (\lean{runOwned\_no\_refusal}). It has no representation
   index, so a runtime index cannot obtain its evidence there; that is why the
   data-dependent chase is in the certified interface, not in the fragment. The
   unified language's \lean{write} carries no evidence and is refused at run time
-  (its trace property is \lean{checkWorld\_write\_guard}), so its authority is
-  not a typing rule; that is the remaining access-typing gap.
+  (its trace property is \lean{checkWorld\_write\_guard}): that layer is the
+  interpreter, and a typed wrapper over it would be a separate client surface.
   The checked-backend route supplies the runtime link for algorithms:
   \lean{UFRep} relates the world's bytes to a parent array and yields access
   evidence at a runtime index; the chase is the functional search and its result
@@ -1179,10 +1181,9 @@ fractional shares and footprints, and a checker that is also the interpreter giv
 an ownership discipline in ordinary Lean, with machine-checked preservation and
 a program interface whose refused operations do not typecheck. The remaining work
 is well-defined: the executed per-step correspondence and a rank derived from a
-forest predicate for the checked union-find, access evidence for the unified
-command's runtime-checked write, integrating the delegation chain with ledger
-leaves and the world's live loans, physical-storage sealing, and the C backend
-with its three trust levels made explicit.
+forest predicate for the checked union-find, integrating the delegation chain
+with ledger leaves and the world's live loans, physical-storage sealing, and the
+C backend with its three trust levels made explicit.
 
 \begin{thebibliography}{9}
 \bibitem{lean4} L. de Moura and S. Ullrich. The Lean~4 theorem prover and
