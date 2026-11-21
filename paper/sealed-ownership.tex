@@ -103,7 +103,7 @@ splitting ledger with byte budgets, a command language with allocation, writes,
 splits, joins, loans and disposal, sealed certificates with sequential
 composition, a closed-run lifecycle, and union-find as a client, including a
 path-compressing search that runs as a program in the discipline. The paper also
-states precisely what is \emph{not} yet established: reads are observations; loans
+states precisely what is \emph{not} established here: reads are observations; loans
 at the world level are exclusive suspension rather than a reborrow capability
 (delegation chains are separate bookkeeping); termination is fuel; the sealed
 interface hides construction and representation but Lean cannot make physical
@@ -854,7 +854,7 @@ disposal; confinement of inputs and outputs and independent immutable snapshots;
 allocation failure and error cleanup; and the sequential-execution assumption,
 including callbacks and reentrancy.
 
-Three levels of evidence must stay distinct, and only the first exists today:
+Three levels of evidence must stay distinct, and only the first is established here:
 (1) the abstract backend model proves the intended primitives preserve ownership
 and observations; (2) the implemented C primitives satisfy those contracts under
 a chosen semantics or explicit assumptions — \emph{not implemented}; (3) the
@@ -1061,7 +1061,7 @@ concrete 64-byte instance with an immutable observation.
 \begin{itemize}
 \item \textbf{Access evidence is partial.} The indexed interface's reads and
   writes carry \lean{CanRead}/\lean{CanWrite} evidence, so an unauthorised
-  access is untypable there; the context-preserving \lean{Owned} fragment now
+  access is untypable there; the context-preserving \lean{Owned} fragment
   does the same, has an explicit outcome and is never refused from a matching,
   well-formed world (\lean{runOwned\_no\_refusal}). It has no representation
   index, so a runtime index cannot obtain its evidence there; that is why the
@@ -1090,13 +1090,11 @@ concrete 64-byte instance with an immutable observation.
   context-changing command including loan beginning and ending. Delegation
   chains with distinct borrowers, nested scopes and share conservation are
   modelled separately (\lean{Cap/Reborrow.lean}) and bridge to loan records,
-  but are not yet integrated with ledger leaves or the world's live loan field;
+  but are not integrated with ledger leaves or the world's live loan field;
   the policy-level liveness conjunction is not consulted by the checker. The
-  chain invariant counts each introduced identity once (the base plus the
-  borrowers); an earlier predicate that also counted each lender was uninhabited
-  for nonempty chains, which is recorded with its proof
-  (\lean{legacy\_fresh\_uninhabited}). The full chain invariant has inhabited
-  one-loan and two-level instances and rejects a base borrower, an issued
+  chain invariant counts each introduced identity once, the base plus the
+  borrowers, and inherits lenders rather than recounting them. The full chain
+  invariant has inhabited one-loan and two-level instances and rejects a base borrower, an issued
   borrower, a reused loan id, a wrong allocation and an invalid lifetime parent;
   ending an outer scope while an inner loan is live is refused
   (\lean{endLink\_outer\_none}).
@@ -1111,10 +1109,9 @@ concrete 64-byte instance with an immutable observation.
   (\lean{Sealed.empty}), a proof-facing certified import requires the combined
   invariant (\lean{Sealed.importCertified}), and a run yields a sealed state only
   when the checker accepts, carrying the invariant through
-  (\lean{Sealed.run\_invariant}). The former \lean{Sealed.ofRun}, which took a
-  caller-supplied world and an accepted empty run, is removed; three fixtures
-  check construction, the field and the removed entry point. Lean has no
-  stronger module abstraction, and nothing here seals physical storage: the pure
+  (\lean{Sealed.run\_invariant}). Negative fixtures check that the constructor
+  and the representation field are unavailable and that no arbitrary-world entry
+  point exists. Lean has no stronger module abstraction, and nothing here seals physical storage: the pure
   model's copied programs share backends. The executable-edge claims are listed
   with an explicit status (\lean{boundaryClaims},
   \lean{boundary\_no\_physical\_proof}); a safe, opaque runtime remains future
@@ -1133,7 +1130,7 @@ concrete 64-byte instance with an immutable observation.
   owner (\lean{World.freeChecked\_refused\_of\_loan}); the indexed \lean{free}
   constructor carries that condition. A reconstructed root is not required, one
   entitlement per allocation is not part of the invariant, and the full rule
-  needs a spatial join for reconstruction, which the ledger does not yet
+  needs a spatial join for reconstruction, which the ledger does not
   provide.
 \item \textbf{Union-find correctness is partial.} The checked route has the
   representation predicate, bounded represented reads, rank-bounded chase
@@ -1142,8 +1139,9 @@ concrete 64-byte instance with an immutable observation.
   (\lean{rootPath\_compress\_same\_iff}). A sealed runner executes the concrete
   64-byte instance, proves its root and returns an immutable snapshot
   (\lean{ufRunner\_findRootSnapshot}); executing those per-node writes through
-  the certified interface remains an obligation, and the Owned-fragment search
-  is separate from this checked route.
+  the certified interface remains an obligation. The context-preserving
+  fragment has no representation index and does not host this chase; the checked
+  route is the algorithm interface.
 \item \textbf{No verification of C.} The backend exists as a Lean model and a
   ByteArray refinement only.
 \end{itemize}
