@@ -241,17 +241,18 @@
   (`iClosed_freed`). The post-contexts use `getD` so the type function is
   computable; `beginLoan`/`endLoan` are not indexed yet because the loan list is
   world state outside `Γ`.
-- `Cap/Typed.lean` is the context-preserving program fragment: `Owned Γ α` gives
-  reads, writes and monadic sequencing over a fixed permission context, and
-  `evalOwned` is a total fuelled evaluator (exhaustion is a visible `none`).
-  `evalOwned_wf` preserves the world invariant and `evalOwned_ctx` shows the
-  fragment realises its constant context index. `findCompress` is the
-  fuel-bounded union-find chase with path compression as a *program*: the run
-  from node 3 on the `[0,0,0,2]` world returns root 0 (`findCompress_run_root`),
-  compresses the path to `[0,0,0,0]` (`findCompress_compresses`), and ends well
-  formed with the context unchanged (`findCompress_run_wf`, `_ctx`). Reads are
-  observations; termination is fuel; context-changing transitions remain in
-  `UCmd`.
+- `Cap/Typed.lean` is the context-preserving program fragment, repaired:
+  `Owned Γ α` gives reads, writes and monadic sequencing over a fixed permission
+  context, and its read and write constructors take `Ctx.CanRead`/`Ctx.CanWrite`
+  evidence, so an access the context does not permit is not a program. There is
+  no raw accessor and no representation index: a data-dependent index cannot
+  obtain evidence here, and the chase lives in `Cap/UFCertified.lean`. The
+  evaluator has an explicit outcome (`OOutcome`: done, exhausted, refused);
+  `runOwned_wf` preserves the invariant, `runOwned_ctx` leaves the context
+  unchanged, and `runOwned_no_refusal` proves a typed program is never refused
+  from a matching, well-formed world (the read evidence and invariant make reads
+  observations, and `World.write_succeeds` makes writes succeed). Context-changing
+  transitions remain in `UCmd`.
 - `Cap/UFRun.lean` is the union-find client of the checked world: reads are
   observations of the pure backends (`readParent`, `find` with fuel), and `union`
   issues writes through `World.writeChecked`, so `union_wf` preserves the world
@@ -409,9 +410,9 @@
   capability. Every indexed constructor's evidence covers its checker:
   `splitAtChecked_succeeds`, `World.allocChecked_succeeds` and
   `World.freeChecked_succeeds`, together with the two access success lemmas,
-  give "a typed command of the indexed layer is never refused". `IProg.read` and `IProg.write` carry these predicates, so an
-  unauthorised access is not a program. The context-preserving `Owned`
-  fragment's raw access constructors are not yet evidence-bearing.
+  give "a typed command of the indexed layer is never refused". `IProg.read` and `IProg.write` carry these predicates, and so do `Owned`'s, so an
+  unauthorised access is not a program; `runOwned_no_refusal` extends the
+  no-refusal guarantee to the fragment from a matching, well-formed world.
 - `Cap/Exclusivity.lean` turns coverage into write exclusivity:
   `Tree.budget_leaf_ge` (a present, unconsumed leaf covering a byte contributes
   its share to the budget) and `Tree.budget_two_leaves` (two distinct such
