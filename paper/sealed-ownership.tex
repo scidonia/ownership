@@ -1057,17 +1057,31 @@ concrete 64-byte instance with an immutable observation.
 \begin{itemize}
 \item \textbf{Access evidence is partial.} The indexed interface's reads and
   writes carry \lean{CanRead}/\lean{CanWrite} evidence, so an unauthorised
-  access is untypable there. The checked-backend route now has the runtime link:
+  access is untypable there. The checked-backend route has the runtime link:
   \lean{UFRep} is a representation predicate for a whole-share read-write parent
   array, a runtime index below its length yields the access evidence
   (\lean{UFRep.canRead}, \lean{UFRep.canWrite}), a represented read returns a
   value below the length, the chase is the functional search
   (\lean{findRootC\_root}, \lean{findRootC\_reachable}), and the checked
-  compression is the functional one (\lean{compressC\_UFArr}) with its partition
-  soundness (\lean{compressC\_same\_sound}). The context-preserving fragment
-  still has raw access constructors and no such predicate, and a uniform
-  partition correspondence at every step is not proved; fractional read
-  permissions are not yet distinguished from free observation.
+  compression is the functional one (\lean{compressC\_UFArr}) with its
+  partition equivalence (\lean{compressC\_same\_iff}); full path compression
+  along the chase's own path preserves the partition too
+  (\lean{rootPath\_compress\_same\_iff}).
+  The context-preserving fragment is weaker in two distinct ways. Its writes go
+  through the same checked write, so an unauthorised write cannot mutate, but
+  the constructors carry no evidence and there is no no-refusal theorem: a
+  well-typed \lean{Owned} program can fail, and the failure is conflated with
+  fuel exhaustion. Its reads are worse: the constructor ignores the capability
+  identifier and the evaluator reads the allocation's backend directly, so that
+  fragment imposes no read authorisation at all. Reads are observations and
+  cannot corrupt the heap, but a fractional read permission is not distinguished
+  from free observation there, which is an authorisation gap rather than a
+  memory-safety one. The supported client is therefore \lean{IProg}/\lean{Cert},
+  whose accesses are evidence-bearing; retiring or re-typing \lean{Owned} is the
+  remaining type-level work. What is not proved for the algorithm is the
+  uniform correspondence over the \emph{executed} path: each per-node
+  compression step's partition equivalence is proved, but running those writes
+  through the certified interface remains an obligation.
 \item \textbf{Loans are exclusive suspension at the world level.} The
   executable borrower is the lender's own identifier: there is no reborrow
   capability in the world, and no non-root lifetime in the executable language.
@@ -1158,11 +1172,11 @@ A borrowing discipline need not be a type system. Handles as names, a ledger of
 fractional shares and footprints, and a checker that is also the interpreter give
 an ownership discipline in ordinary Lean, with machine-checked preservation and
 a program interface whose refused operations do not typecheck. The remaining work
-is well-defined: the general partition correspondence and a forest invariant for
-the checked union-find, the context-preserving fragment's runtime index
-discipline and fractional reads, integrating the delegation chain with ledger
-leaves and the world's live loans, physical-storage sealing, and the C backend
-with its three trust levels made explicit.
+is well-defined: the executed per-step correspondence and a forest invariant for
+the checked union-find, typing or retiring the context-preserving fragment's raw
+reads and writes, integrating the delegation chain with ledger leaves and the
+world's live loans, physical-storage sealing, and the C backend with its three
+trust levels made explicit.
 
 \begin{thebibliography}{9}
 \bibitem{lean4} L. de Moura and S. Ullrich. The Lean~4 theorem prover and
