@@ -4,9 +4,9 @@
 %   latexmk -pdf -interaction=nonstopmode sealed-ownership.tex
 %
 % Status note: this is a draft written against the implementation at the time of
-% writing. Sections 3--7 describe checked Lean declarations; Section 8 (the C
-% backend) and the parts marked *planned* are not implemented and are labelled as
-% such in the text. Claims are tied to evidence in a table in Section 9.
+% writing. Sections 3--7 describe checked Lean declarations; the C backend and
+% the parts marked *planned* are not implemented and are labelled as such in the
+% text.
 
 \documentclass[a4paper,UKenglish,cleveref]{lipics-v2021}
 
@@ -818,99 +818,6 @@ not replace that distinction. Two implementation routes are available: Lean
 control flow with C primitives (recommended first), or a custom lowering of the
 fragment with a simulation proof (additional compiler work).
 
-\section{Evaluation and evidence ledger}
-\label{sec:eval}
-
-What is mechanically checked today (all by the repository's gate: builds, axiom
-audit admitting only the standard three, and the paper/document builds):
-
-\begin{center}\small
-\begin{tabular}{@{}p{0.46\linewidth}p{0.44\linewidth}@{}}
-\toprule
-Claim & Evidence \\
-\midrule
-Checker and interpreter are one; accepted runs preserve the invariant &
-\lean{checkWorld\_wf}, \lean{checkWorld\_rel} \\
-Refused operations are untypable in the indexed interface &
-\lean{stale\_child\_refused}, evidence-carrying constructors \\
-Execution realises the typed post-context &
-\lean{evalIProg\_post} \\
-Closed runs start from nothing and end with no owners &
-\lean{iClosed\_ok}, \lean{iClosed\_closed}, \lean{iClosed\_freed} \\
-Union-find's compression search is a program; result and compression proved &
-\lean{findCompress\_run\_root}, \lean{findCompress\_compresses} \\
-The checked union trace lands on the functional parent array &
-\lean{ufTrace\_backend}, \lean{ufTrace\_partition} \\
-Byte-array backend refines the pure model &
-\lean{empty\_refines}, \lean{write\_refines}, \lean{ba64\_snapshot} \\
-Loans: suspended write refused, restored write accepted &
-\lean{uLoan\_suspended\_write\_refused}, \lean{uLoanRun\_ok} \\
-Retired capability identifiers are not reissued by splits/joins &
-\lean{reuseSplit\_refused}, \lean{splitAtChecked\_issued\_sub} \\
-Typed splits are never refused, including the history check &
-\lean{splitAtChecked\_succeeds} \\
-World invariant and history preserved through every command and execution &
-\lean{World.TopInv}, \lean{checkWorld\_top} \\
-At most one capability is writable at a byte &
-\lean{Owner.no\_two\_writable} \\
-Certified commands are never refused (accesses, split, alloc, free) &
-\lean{read\_succeeds}, \lean{write\_succeeds}, \lean{splitAtChecked\_succeeds},
-\lean{allocChecked\_succeeds}, \lean{freeChecked\_succeeds} \\
-Two certified writes at one byte agree &
-\lean{no\_two\_canwrite} \\
-Disposal refuses with an outstanding loan &
-\lean{freeChecked\_refused\_of\_loan} \\
-\bottomrule
-\end{tabular}
-\end{center}
-
-\begin{center}\small
-\begin{tabular}{@{}p{0.46\linewidth}p{0.44\linewidth}@{}}
-\toprule
-Claim & Evidence \\
-\midrule
-Typed programs are never refused; completion and exhaustion are the only outcomes &
-\lean{IOutcome}, \lean{evalIProg\_eq\_run}, \lean{runIProg\_no\_refusal} \\
-The loan-state invariant holds and is preserved by every command &
-\lean{World.LoansOK}, \lean{loansOK\_splitAtChecked},
-\lean{loansOK\_joinChecked}, \lean{loansOK\_beginLoanChecked} \\
-Representation predicate: runtime index to access evidence, bounded reads &
-\lean{UFRep.canRead}, \lean{UFRep.canWrite}, \lean{readParent\_lt} \\
-Checked chase is the functional search; result is a root and reachable &
-\lean{findRootC\_eq\_of\_stops}, \lean{findRootC\_root},
-\lean{findRootC\_reachable} \\
-Checked compression is the functional compress and preserves the partition &
-\lean{compressC\_UFArr}, \lean{compressC\_same\_iff} \\
-Certified find-and-compress: root, representation, invariant, partition equivalence &
-\lean{findCompressCert}, \lean{compressC\_same\_iff},
-\lean{stopsAt\_of\_ranked} \\
-Delegation chains: holder and share conservation, loan-record bridge &
-\lean{delegate\_moves\_share}, \lean{retract\_restores},
-\lean{Chain.lenders\_nodup}, \lean{toLoans\_filter\_retract} \\
-Sealed construction and representation; invariant carried; trust statuses &
-\lean{Sealed.empty}, \lean{Sealed.run\_invariant},
-\lean{boundary\_no\_physical\_proof} \\
-Combined invariant preserved by whole executions &
-\lean{World.FullInv}, \lean{World.checkWorld\_fullInv} \\
-Chain freshness counts introduced identities once; inhabited two-level invariant &
-\lean{Chain.Fresh}, \lean{Chain.WF}, \lean{legacy\_fresh\_uninhabited} \\
-Inner/outer scope ending accepted/refused &
-\lean{endLink\_inner}, \lean{endLink\_outer\_none} \\
-\midrule
-Automatic path derivation & planned \\
-C primitives and their refinement & planned \\
-Compiled performance evidence & planned \\
-\bottomrule
-\end{tabular}
-\end{center}
-
-\paragraph{Timing.} One interpreted observation on the 64-byte fill-and-sum
-pattern, with agreeing checksums: 73,959~ns per repetition for the pure list
-backend, 47,688 for the byte-array backend, 51,956 for the reference heap. Because
-the run is interpreted, these numbers include the evaluator's own overhead; they
-are environment-dependent and say nothing about compiled execution, in-place
-update, or a real runtime. We report them as an observation, not a claim.
-
 \section{Limitations and threats to validity}
 \label{sec:limits}
 
@@ -987,11 +894,12 @@ update, or a real runtime. We report them as an observation, not a claim.
 \item \textbf{Union-find correctness is partial.} The checked route has the
   representation predicate, bounded represented reads, rank-bounded chase
   completion, root correctness, one-step partition equivalence, and full path
-  compression over a supplied path (\lean{compressAll\_same\_iff}). Deriving
-  that path from the chase remains an obligation; a sealed runner executes the
-  concrete 64-byte instance, proves its root and returns an immutable snapshot
-  (\lean{ufRunner\_findRootSnapshot}), but the Owned-fragment search is separate
-  from this checked route.
+  compression along the path the chase itself takes
+  (\lean{rootPath\_compress\_same\_iff}). A sealed runner executes the concrete
+  64-byte instance, proves its root and returns an immutable snapshot
+  (\lean{ufRunner\_findRootSnapshot}); executing those per-node writes through
+  the certified interface remains an obligation, and the Owned-fragment search
+  is separate from this checked route.
 \item \textbf{No verification of C.} The backend exists as a Lean model and a
   ByteArray refinement only.
 \end{itemize}
