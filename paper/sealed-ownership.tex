@@ -71,6 +71,7 @@
     {∨}{{$\vee$}}2
     {∉}{{$\notin$}}2
     {·}{{$\cdot$}}2
+    {×}{{$\times$}}2
 }
 
 \title{Borrowing Without Linear Types: A Sealed Ownership Discipline in Lean}
@@ -868,6 +869,187 @@ translation-validated, or trusted; tests support engineering confidence but do
 not replace that distinction. Two implementation routes are available: Lean
 control flow with C primitives (recommended first), or a custom lowering of the
 fragment with a simulation proof (additional compiler work).
+
+\section{The type structure of program safety}
+\label{sec:safety-types}
+
+Program safety here is three typed statements, not one predicate: an access is
+licensed by the context, an accepted transition preserves the invariant, and a
+typed program is never refused. The first two share one invariant tower; the
+third is the execution theorem of Section~\ref{sec:programs}.
+
+\paragraph{Authority.} The write and read guards are propositions about the
+capability's leaf. Only a whole share at the index becomes writable; a positive
+share is enough to read, so fractional readers coexist by construction.
+
+\begin{lstlisting}
+def Owner.Writable (o : Owner) (D : Nat) (id : CapId) (i : Nat) : Prop :=
+  ∃ c, o.root.find? id = some c ∧ c.state = .active ∧ c.q = D ∧
+    c.ceiling = .readWrite ∧ c.lo ≤ i ∧ i < c.hi
+
+def Owner.Readable (o : Owner) (id : CapId) (i : Nat) : Prop :=
+  ∃ c, o.root.find? id = some c ∧ c.state = .active ∧ 0 < c.q ∧
+    c.lo ≤ i ∧ i < c.hi
+
+def Ctx.CanWrite (Γ : Ctx) (a : AllocId) (id : CapId) (i : Nat) : Prop :=
+  ∃ o, Γ.findOwner? a = some o ∧ o.writableB Γ.D id i = true
+
+def Ctx.CanRead (Γ : Ctx) (a : AllocId) (id : CapId) (i : Nat) : Prop :=
+  ∃ o, Γ.findOwner? a = some o ∧ o.Readable id i
+\end{lstlisting}
+
+\paragraph{The invariant tower.} Each layer is a predicate on the next layer's
+data; the data structures themselves are those of Section~\ref{sec:calculus}.
+
+\begin{lstlisting}
+def Owner.Covered (o : Owner) (D : Nat) : Prop :=
+  ∀ x, x < o.len → o.root.budget x = D
+
+def Owner.LeavesWithin (o : Owner) : Prop :=
+  ∀ id c, o.root.find? id = some c → c.alloc = o.alloc ∧ c.hi ≤ o.len
+
+def Owner.DisposalPresent (o : Owner) : Prop :=
+  (∃ c, o.root.find? o.disposal = some c) ∨ o.disposal ∉ o.root.ids
+
+def Owner.WellFormed (o : Owner) (D : Nat) : Prop :=
+  o.Covered D ∧ o.LeavesWithin ∧ o.DisposalPresent
+
+def Ctx.Realizes (C : Ctx) : Prop :=
+  (∀ o ∈ C.owners, o.Covered C.D) ∧ (C.owners.map (·.alloc)).Nodup
+
+def Ctx.Functional (C : Ctx) : Prop :=
+  ∀ a o o', C.findOwner? a = some o → o' ∈ C.owners → o'.alloc = a → o' = o
+
+def Ctx.WellFormed (C : Ctx) : Prop :=
+  C.Realizes ∧ (∀ o ∈ C.owners, o.WellFormed C.D) ∧ C.ids.Nodup
+
+def World.StorageMatches (w : World) : Prop :=
+  ∀ a o, w.ctx.findOwner? a = some o →
+    ∃ b, w.heaps a = some b ∧ b.buf.length = o.len
+
+def World.WellFormed (w : World) : Prop :=
+  Ctx.WellFormed w.ctx ∧ Ctx.Functional w.ctx ∧ w.StorageMatches
+
+def Ctx.HistoryOK (C : Ctx) : Prop :=
+  C.issued.Nodup ∧ ∀ c ∈ C.ids, c ∈ C.issued
+
+def World.TopInv (w : World) : Prop :=
+  w.WellFormed ∧ Ctx.HistoryOK w.ctx
+
+def World.LenderRetired (w : World) : Prop :=
+  ∀ l ∈ w.ctx.loans.loans, ∃ o ∈ w.ctx.owners,
+    ∃ c, o.root.find? l.lender = some c ∧ c.state = .retired
+
+def World.LoansOK (w : World) : Prop :=
+  (w.ctx.loans.loans.map (·.id)).Nodup ∧
+  (w.ctx.loans.loans.map (·.lender)).Nodup ∧
+  (∀ l ∈ w.ctx.loans.loans, w.ctx.loans.live l.lifetime = true) ∧
+  (∀ l ∈ w.ctx.loans.loans, l.lender ∈ w.ctx.issued) ∧
+  World.LenderRetired w
+
+def World.FullInv (w : World) : Prop := w.TopInv ∧ w.LoansOK
+\end{lstlisting}
+
+\paragraph{Preservation and refusal.} These are the theorem types that connect
+the tower to execution:
+
+\begin{lstlisting}
+theorem World.writeChecked_sound :
+  w.writeChecked a id i v = .ok w' →
+  ∃ o b b', w.ctx.findOwner? a = some o ∧ o.Writable w.ctx.D id i ∧
+    w.heaps a = some b ∧ b.write i v = some b' ∧
+    w'.ctx = w.ctx ∧ w'.heaps = (fun x => if x = a then some b' else w.heaps x)
+
+theorem World.write_succeeds :
+  Ctx.CanWrite Γ a id i → w.ctx = Γ → w.WellFormed →
+  ∃ w', w.writeChecked a id i v = .ok w'
+
+theorem World.no_two_canwrite :
+  w.WellFormed → Ctx.CanWrite w.ctx a id1 i → Ctx.CanWrite w.ctx a id2 i → id1 = id2
+
+theorem checkWorld_wf :
+  checkWorld w cs = .ok w' → w.WellFormed → w'.WellFormed
+theorem checkWorld_top :
+  checkWorld w cs = .ok w' → w.TopInv → w'.TopInv
+theorem World.checkWorld_fullInv :
+  checkWorld w cs = .ok w' → w.FullInv → w'.FullInv
+
+theorem evalIProg_post :
+  w.ctx = Γ → evalIProg fuel p w = some (a, w') → w.WellFormed →
+  w'.ctx = Q a ∧ w'.WellFormed
+theorem runIProg_no_refusal :
+  w.ctx = Γ → w.WellFormed → ∀ msg, runIProg fuel p w ≠ .refused msg
+theorem evalOwned_wf :
+  evalOwned fuel p w = some (a, w') → w.WellFormed → w'.WellFormed
+\end{lstlisting}
+
+The three parts answer different questions and their scopes differ. Authority is
+per access: an accepted write reports, through \lean{writeChecked\_sound}, the
+owner found in the context, the guard \lean{o.Writable} (active, whole share,
+read--write ceiling, in range), and the unchanged context, so the store changed
+no permission and the per-byte budget is untouched. Preservation is per
+execution: every accepted command and every accepted run keeps the tower.
+No-refusal is per typed program: it holds for \lean{IProg}, whose reads and
+writes carry \lean{Ctx.CanRead}/\lean{Ctx.CanWrite} evidence, and it does not
+yet hold for the context-preserving \lean{Owned} fragment, whose read and write
+constructors are raw; its theorem, \lean{evalOwned\_wf}, gives preservation
+only. The unified language's \lean{UCmd} carries no evidence either: its write
+is checked at run time, so the authority statement for it is the per-write
+consequence rather than a typing rule. These are the two type-level gaps named
+in Section~\ref{sec:limits}.
+
+\paragraph{What must be inhabited.} Several of these types are obligations to
+provide a witness, and several are deliberately empty.
+\begin{itemize}
+\item \lean{World.FullInv} must be inhabited at the start:
+\lean{emptyWorld\_fullInv}. A \lean{Sealed} value carries an inhabitant
+privately, \lean{Sealed.empty} provides it, \lean{Sealed.importCertified}
+demands one, and \lean{Sealed.run\_invariant} returns one. A malformed world has
+no entry point.
+\item Access evidence must be inhabited by the caller: \lean{IProg}'s read and
+write constructors take \lean{Ctx.CanRead}/\lean{Ctx.CanWrite}; without a
+witness the access is not a program. For an illegal reuse the corresponding
+evidence is deliberately uninhabited (\lean{stale\_child\_refused},
+\lean{reuseSplit\_refused}), so untypability, not a runtime failure, is the
+guarantee there.
+\item An algorithm's precondition must be inhabited to execute a \lean{Cert}:
+\lean{UFRep} and \lean{Ranked} hold of the concrete 64-byte world
+(\lean{uWorld\_ufRep}, \lean{uWorld\_ranked}), \lean{UFRunner} carries them,
+and \lean{Chain.WF} is inhabited by the concrete one- and two-level instances.
+A \lean{Cert} is a function requiring \lean{pre}; a failed representation
+admits no run.
+\item The unified language's \lean{write} carries no evidence, and neither does
+\lean{Owned}'s; there the guard's inhabitant is produced by the checker at run
+time, so the authority statement for those routes is the per-write consequence
+of an accepted write (unified) or absent (\lean{Owned}). These are the gaps
+named in Section~\ref{sec:limits}.
+\end{itemize}
+
+\paragraph{Algorithm-facing types.} The same shape is used by the checked
+union-find. A representation predicate and a rank replace the context guard:
+
+\begin{lstlisting}
+def UFRep (w : World) (a : AllocId) (id : CapId) (n : Nat) : Prop :=
+  ∃ o c b, w.ctx.findOwner? a = some o ∧ o.root.find? id = some c ∧
+    c.state = .active ∧ c.q = w.ctx.D ∧ c.ceiling = .readWrite ∧
+    c.lo = 0 ∧ c.hi = n ∧ w.heaps a = some b ∧ b.buf.length = n ∧
+    ∀ i, i < n → ∃ v, b.buf[i]? = some v ∧ v.toNat < n
+
+def Ranked (p : UF.Arr) (n : Nat) (rank : Nat → Nat) : Prop :=
+  (∀ i, i < n → UF.step p i < n) ∧
+  ∀ i, i < n → UF.IsRoot p i ∨ rank (UF.step p i) < rank i
+
+abbrev Cert (pre : World → Prop) (α : Type)
+    (post : World → α → World → Prop) : Type :=
+  ∀ w, pre w → { p : α × World // post w p.1 p.2 }
+\end{lstlisting}
+
+A certified computation's postcondition is where the algorithm's invariants are
+stated: \lean{findCompressCert} returns a root, preserves \lean{UFRep} and the
+world invariant, bounds the root, and proves \lean{Same} in both directions.
+\lean{UFRunner} carries \lean{FullInv}, the representation, the backend and the
+rank privately; \lean{ufRunner\_findRootSnapshot} is a closed execution of the
+concrete 64-byte instance with an immutable observation.
 
 \section{Limitations and threats to validity}
 \label{sec:limits}
