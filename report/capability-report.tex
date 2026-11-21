@@ -884,17 +884,19 @@ observed or claimed.
 
 \section{Result-returning programs: the context-preserving fragment}
 
-\file{Cap/Typed.lean} gives the program interface the sealed-paper direction
-requires first: \texttt{Owned \(\Gamma\) \(\alpha\)} is reads, writes and monadic
-sequencing over a fixed permission context, and \texttt{evalOwned} is a total
-fuelled evaluator, so a data-dependent chase is a program rather than a host
-loop around checked writes. \texttt{evalOwned\_wf} preserves the world invariant
-and \texttt{evalOwned\_ctx} shows the fragment realises its constant context
-index. The fuel-bounded union-find chase with path compression runs as a program
-(\texttt{findCompress}): it returns root 0, compresses the parent array to
-\texttt{[0,0,0,0]}, and ends well formed with the context unchanged. Reads are
-observations of the pure backends; termination is fuel; allocation, splits,
-loans and disposal remain in the \texttt{UCmd} language of
+\file{Cap/Typed.lean} gives the context-preserving program interface, repaired:
+\texttt{Owned \(\Gamma\) \(\alpha\)} is reads, writes and monadic sequencing over a
+fixed permission context, and the read and write constructors take
+\texttt{Ctx.CanRead}/\texttt{Ctx.CanWrite} evidence, so an access the context
+does not permit is not a program. The evaluator has an explicit outcome
+(done/exhausted/refused); \texttt{runOwned\_wf} preserves the world invariant,
+\texttt{runOwned\_ctx} leaves the context unchanged, and
+\texttt{runOwned\_no\_refusal} proves a typed program is never refused from a
+matching, well-formed world. The fragment has no representation index, so a
+runtime index cannot acquire evidence there; the data-dependent chase lives in
+the certified interface (\file{Cap/UFCertified.lean}), where \texttt{UFRep}
+supplies the evidence. It is not a second, weaker access rule. Reads are
+observations; allocation, splits, loans and disposal remain in
 \file{Cap/Unified.lean}.
 
 \section{The indexed interface: programs with post-contexts}
