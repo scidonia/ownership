@@ -1079,7 +1079,7 @@ concrete 64-byte instance with an immutable observation.
 \label{sec:limits}
 
 \begin{itemize}
-\item \textbf{Access evidence and the executed path.} The client surfaces'
+\item \textbf{Access evidence.} The client surfaces'
   reads and writes carry \lean{CanRead}/\lean{CanWrite} evidence, so an
   unauthorised access is untypable there; the context-preserving \lean{Owned} fragment
   does the same, has an explicit outcome and is never refused from a matching,
@@ -1095,10 +1095,8 @@ concrete 64-byte instance with an immutable observation.
   is a root; the checked compression is the functional one and preserves the
   partition both ways (\lean{compressC\_same\_iff}), including full path
   compression along the chase's own path
-  (\lean{rootPath\_compress\_same\_iff}). What remains is the uniform
-  correspondence over the \emph{executed} path: each per-node compression step's
-  equivalence is proved, but running those writes through the certified
-  interface is an obligation.
+  (\lean{rootPath\_compress\_same\_iff}). The executed-path obligation is stated
+  with the union-find limitation below.
 \item \textbf{Loans are exclusive suspension at the world level.} The
   executable borrower is the lender's own identifier: there is no reborrow
   capability in the world, and no non-root lifetime in the executable language.
@@ -1154,13 +1152,15 @@ concrete 64-byte instance with an immutable observation.
   recorded disposal capability is checked, removal preserves the world
   invariant, and disposal is refused while a loan's lender remains live in the
   owner (\lean{World.freeChecked\_refused\_of\_loan}); the indexed \lean{free}
-  constructor carries that condition. A reconstructed root is not required, one
-  entitlement per allocation is not part of the invariant, and the full rule
-  needs a spatial join for reconstruction, which the ledger does not
-  provide.
+  constructor carries that condition. A reconstructed root is not required, and
+  the full rule needs a spatial join for reconstruction, which the ledger does
+  not provide. At most one owner, and hence one recorded disposal capability, per
+  allocation is already in \lean{World.WellFormed} via \lean{Ctx.Functional};
+  no separate one-entitlement invariant is needed, and ``exactly one'' is not
+  claimed since an allocation may be freed or unowned.
 \item \textbf{Union-find correctness is partial.} The checked route has the
-  representation predicate, bounded represented reads, rank-bounded chase
-  completion, root correctness, one-step partition equivalence, and full path
+  representation predicate, bounded represented reads, rank- or
+  acyclicity-bounded chase completion, root correctness, one-step partition equivalence, and full path
   compression along the path the chase itself takes
   (\lean{rootPath\_compress\_same\_iff}). A sealed runner executes the concrete
   64-byte instance, proves its root and returns an immutable snapshot

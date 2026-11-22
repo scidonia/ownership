@@ -307,7 +307,8 @@
   root is acyclic and a two-node cycle is not; both controls are `example`s in
   the module. `acyclic_of_ranked` shows a ranked forest is acyclic (via
   `iter_root`), so `uWorld_ranked` yields the concrete instance `uWorld_acyclic`;
-  the bridge uses no choice axiom. Deriving the forest predicate from the parent
+  the bridge uses no choice axiom. `findRootF_lt` and `findRootC_lt` bound a
+  completed chase by the represented length. Deriving the forest predicate from the parent
   array's construction remains outside it. The partition equivalence is
   `compressC_same_iff`/`compress_same_iff_of_root`, built on orbit linearity
   (`reach_or_reach_of_common`), the root-is-terminal fact (`root_reach_eq`) and
@@ -318,7 +319,9 @@
   the constant array. `UFRunner` seals a world with the combined invariant, the
   representation, its backend and the rank (private fields);
   `UFRunner.findRoot` runs the algorithm, and `ufRunner_findRoot` proves the
-  closed execution on the concrete 64-byte zero forest returns root 0;
+  closed execution on the concrete 64-byte zero forest returns root 0; the
+  acyclicity route's run of the same forest is `uWorld_findRoot_acyclic` (65 fuel
+  at node 3, root 0);
   `UFRunner.findRootSnapshot` returns the root with a copy of the allocation's
   bytes, and `ufRunner_findRootSnapshot` proves the observation is
   `(0, 64 zero bytes)`. The compression path is derived from the chase

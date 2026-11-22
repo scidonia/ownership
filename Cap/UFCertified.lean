@@ -369,6 +369,25 @@ theorem uWorld_ranked : Ranked (UFArr (Backend.empty 64)) 64 zeroRank := by
 theorem uWorld_acyclic : Acyclic (UFArr (Backend.empty 64)) 64 :=
   acyclic_of_ranked uWorld_ranked
 
+/-- The concrete 64-byte zero forest's chase through the acyclicity route: with
+`n + 1` fuel at node 3 it returns the root 0. -/
+theorem uWorld_findRoot_acyclic :
+    ∃ r, findRootC uWorld ⟨0⟩ ⟨1⟩ 64 uWorld_ufRep 65 3 (by decide) = some r ∧
+      r = 0 := by
+  have hbound : ∀ i, i < 64 → UF.step (UFArr (Backend.empty 64)) i < 64 :=
+    uWorld_ranked.1
+  obtain ⟨r, hr, hroot⟩ :=
+    findRootC_acyclic_root (x := 3) uWorld_ufRep (by simp [uWorld]) hbound
+      uWorld_acyclic (by decide)
+  refine ⟨r, hr, ?_⟩
+  have hstop := stopsAt_of_acyclic hbound uWorld_acyclic 3 (by decide)
+  have hlt := findRootC_lt (x := 3) uWorld_ufRep (by simp [uWorld]) hbound
+    (by decide) hstop hr
+  have hstep : UF.step (UFArr (Backend.empty 64)) r = 0 := uEmpty_step hlt
+  unfold UF.IsRoot at hroot
+  rw [hstep] at hroot
+  omega
+
 /-- A sealed union-find runner: a world with the combined invariant, the parent
 representation, its backend and the forest rank, again private. -/
 structure UFRunner (a : AllocId) (id : CapId) (n : Nat) (rank : Nat → Nat) where

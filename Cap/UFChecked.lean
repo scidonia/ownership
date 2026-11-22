@@ -189,6 +189,37 @@ theorem findRootC_root {w : World} {a : AllocId} {id : CapId} {n : Nat}
   rw [← heq]
   exact UF.findRootF_root hstop
 
+section
+
+open UF
+
+/-- The functional search stays in range under bounded steps. -/
+theorem findRootF_lt {p : Arr} {n : Nat}
+    (hb : ∀ i, i < n → step p i < n) :
+    ∀ {fuel x : Nat}, x < n → findRootF p fuel x < n
+  | 0, x, hx => by
+    simpa [findRootF_zero] using hx
+  | fuel + 1, x, hx => by
+    rw [findRootF_succ]
+    by_cases hr : step p x = x
+    · rw [if_pos hr]
+      exact hx
+    · rw [if_neg hr]
+      exact findRootF_lt hb (hb x hx)
+
+/-- A completed checked chase stays in range. -/
+theorem findRootC_lt {w : World} {a : AllocId} {id : CapId} {n : Nat}
+    (h : UFRep w a id n) {b : Backend} (hb : w.heaps a = some b)
+    (hbound : ∀ i, i < n → step (UFArr b) i < n)
+    {fuel x : Nat} (hx : x < n) (hstop : StopsAt (UFArr b) fuel x) {r : Nat}
+    (hr : findRootC w a id n h fuel x hx = some r) : r < n := by
+  rw [findRootC_eq_of_stops h hb hx hstop] at hr
+  have heq : findRootF (UFArr b) fuel x = r := Option.some.inj hr
+  rw [← heq]
+  exact findRootF_lt hbound hx
+
+end
+
 /-! ### The no-split direction for compression to a root
 
 The one-step soundness theorem says compression creates no new `Same` pair. The
