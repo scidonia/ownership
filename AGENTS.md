@@ -220,8 +220,9 @@
   transitions remain open.
 - `Cap/IProg.lean` is the indexed program interface: `IProg Γ α Q` starts with
   permission context `Γ`, returns `a : α` and ends with `Q a`; context-changing
-  constructors (`alloc`, `splitAt`, `splitFraction`, `join`, `free`) carry
-  their evidence, so stale or refused operations are not programs
+  constructors (`alloc`, `splitAt`, `splitFraction`, `join`, `beginLoan`,
+  `endLoan`, `free`) carry their evidence, so stale or refused operations are
+  not programs
   (`stale_child_refused` shows a reused parent id makes the freshness evidence
   uninhabited). `evalIProg` is a total
   fuelled evaluator. The explicit-outcome evaluator `runIProg` distinguishes
@@ -231,7 +232,8 @@
   never refused, each command's check discharged by its typing evidence
   (`World.write_succeeds`, `World.allocChecked_succeeds`,
   `splitAtChecked_succeeds`, `splitFractionChecked_succeeds`,
-  `joinChecked_succeeds`, `World.freeChecked_succeeds`).
+  `joinChecked_succeeds`, `beginLoanChecked_succeeds`,
+  `endLoanChecked_succeeds`, `World.freeChecked_succeeds`).
   `evalIProg_post` is the layer's soundness theorem:
   execution from a world matching the context ends in a world matching the
   postcondition and preserves the world invariant. `iLifecycle` is the indexed
@@ -242,9 +244,9 @@
   formed (`iClosed_sound`), and the disposed allocation's backend is gone
   (`iClosed_freed`). The post-contexts use `getD` so the type function is
   computable; `iFracLifecycle` adds a fractional split and join to the lifecycle
-  and is accepted (`iFracLifecycle_ok`). `beginLoan`/`endLoan` are not indexed
-  yet because their context-level transitions and success/post lemmas are not
-  provided.
+  and is accepted (`iFracLifecycle_ok`). `iLoanLifecycle` adds a loan beginning
+  and ending, with the context-level suspension/resumption evidence, and is
+  accepted (`iLoanLifecycle_ok`).
 - `Cap/Typed.lean` is the context-preserving program fragment, repaired:
   `Owned Γ α` gives reads, writes and monadic sequencing over a fixed permission
   context, and its read and write constructors take `Ctx.CanRead`/`Ctx.CanWrite`

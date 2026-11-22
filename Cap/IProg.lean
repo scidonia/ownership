@@ -22,10 +22,9 @@ well-formed world that matches the postcondition, for every command in the
 language.
 
 Scope and limits: reads are observations of the pure backends; the context
-index includes the loan context (`Ctx.loans`), but `beginLoan`/`endLoan` are
-not yet indexed constructors: their checks are context-level transitions that
-still need the context transition functions and the matching success and
-post-context lemmas. They remain in `UCmd`; termination is fuel; the negative/refusal side lives at the type
+index includes the loan context (`Ctx.loans`), so `beginLoan`/`endLoan` carry
+the owner, leaf, freshness, liveness and suspension/resumption evidence as
+fields. Termination is fuel; the negative/refusal side lives at the type
 level (ill-evidenced programs do not exist) rather than as runtime errors.
 -/
 import Cap.Unified
@@ -70,6 +69,25 @@ inductive IProg : (Γ : Ctx) → (α : Type) → (α → Ctx) → Type 1 where
       (hs : (Γ.joinFractionOwner? o node newId).isSome) :
       IProg Γ Unit (fun _ => { (Γ.joinFractionOwner? o node newId).getD Γ with
                                issued := newId :: Γ.issued })
+  | beginLoan (a : AllocId) (lender : CapId) (loanId : LoanId)
+      (o : Owner) (hfind : Γ.findOwner? a = some o)
+      (c : Leaf) (hleaf : o.root.find? lender = some c)
+      (hact : c.state = .active)
+      (hfresh : loanId ∉ Γ.loans.loans.map (·.id))
+      (hlive : Γ.loans.live ⟨0⟩ = true)
+      (o' : Owner) (hsus : o.suspendLeaf? lender = some o') :
+      IProg Γ Unit (fun _ => { (Γ.update o.alloc o') with
+        loans := { Γ.loans with
+          loans := Γ.loans.loans ++
+            [{ id := loanId, lender := lender, borrower := lender,
+               lifetime := ⟨0⟩ }] } })
+  | endLoan (a : AllocId) (loanId : LoanId)
+      (loan : Loan) (hloan : Γ.loans.findLoan? loanId = some loan)
+      (o : Owner) (hfind : Γ.findOwner? a = some o)
+      (o' : Owner) (hresume : o.resumeLeaf? loan.lender = some o') :
+      IProg Γ Unit (fun _ => { (Γ.update o.alloc o') with
+        loans := { Γ.loans with
+          loans := Γ.loans.loans.filter (fun l => l.id ≠ loanId) } })
   | free (a : AllocId) (d : CapId)
       (hloan : ∀ o, Γ.findOwner? a = some o →
         ∀ l ∈ Γ.loans.loans, l.lender ∉ o.ids)
@@ -132,6 +150,14 @@ def evalIProg (fuel : Nat) {Γ : Ctx} {α : Type} {Q : α → Ctx} (p : IProg Γ
     match w.joinChecked a node newId with
     | .ok w' => some ((), w')
     | .error _ => none
+  | fuel + 1, .beginLoan a lender loanId o hfind c hleaf hact hfresh hlive o' hsus =>
+    match w.beginLoanChecked a lender loanId with
+    | .ok w' => some ((), w')
+    | .error _ => none
+  | fuel + 1, .endLoan a loanId loan hloan o hfind o' hresume =>
+    match w.endLoanChecked a loanId with
+    | .ok w' => some ((), w')
+    | .error _ => none
   | fuel + 1, .free a d _ _ =>
     match w.freeChecked a d with
     | .ok w' => some ((), w')
@@ -182,6 +208,14 @@ def runIProg (fuel : Nat) {Γ : Ctx} {α : Type} {Q : α → Ctx} (p : IProg Γ 
     match w.joinChecked a node newId with
     | .ok w' => .done () w'
     | .error msg => .refused msg
+  | fuel + 1, .beginLoan a lender loanId o hfind c hleaf hact hfresh hlive o' hsus =>
+    match w.beginLoanChecked a lender loanId with
+    | .ok w' => .done () w'
+    | .error msg => .refused msg
+  | fuel + 1, .endLoan a loanId loan hloan o hfind o' hresume =>
+    match w.endLoanChecked a loanId with
+    | .ok w' => .done () w'
+    | .error msg => .refused msg
   | fuel + 1, .free a d _ _ =>
     match w.freeChecked a d with
     | .ok w' => .done () w'
@@ -196,7 +230,7 @@ theorem evalIProg_eq_run (w : World) (fuel : Nat) :
         | .exhausted => none
         | .refused _ => none := by
   induction fuel generalizing w with
-  | zero => intro Γ α Q p; cases p <;> rfl
+  | zero => intro Γ α Q p; cases p <;> simp [evalIProg, runIProg]
   | succ fuel ih =>
     intro Γ α Q p
     cases p with
@@ -227,6 +261,12 @@ theorem evalIProg_eq_run (w : World) (fuel : Nat) :
     | join a node newId _ _ _ _ =>
       simp only [evalIProg, runIProg]
       cases w.joinChecked a node newId <;> rfl
+    | beginLoan a lender loanId o hfind c hleaf hact hfresh hlive o' hsus =>
+      simp only [evalIProg, runIProg]
+      cases w.beginLoanChecked a lender loanId <;> rfl
+    | endLoan a loanId loan hloan o hfind o' hresume =>
+      simp only [evalIProg, runIProg]
+      cases w.endLoanChecked a loanId <;> rfl
     | free a d hloan hs =>
       simp only [evalIProg, runIProg]
       cases w.freeChecked a d <;> rfl
@@ -375,6 +415,69 @@ theorem joinChecked_post {w w' : World} {Γ : Ctx} {a : AllocId}
   · rw [if_neg hfresh] at hw
     nomatch hw
 
+/-- A typed loan beginning is never refused. -/
+theorem beginLoanChecked_succeeds {w : World} {Γ : Ctx} {a : AllocId}
+    {lender : CapId} {loanId : LoanId} {o : Owner}
+    (hfind : Γ.findOwner? a = some o) {c : Leaf}
+    (hleaf : o.root.find? lender = some c) (hact : c.state = .active)
+    (hfresh : loanId ∉ Γ.loans.loans.map (·.id))
+    (hlive : Γ.loans.live ⟨0⟩ = true) {o' : Owner}
+    (hsus : o.suspendLeaf? lender = some o') (hΓ : w.ctx = Γ) :
+    (w.beginLoanChecked a lender loanId).isOk = true := by
+  unfold World.beginLoanChecked
+  rw [hΓ]
+  simp [hfind, hleaf, hact, hfresh, hlive, hsus]
+  rfl
+
+/-- A checked loan beginning realises its typed post-context. -/
+theorem beginLoanChecked_post {w w' : World} {Γ : Ctx} {a : AllocId}
+    {lender : CapId} {loanId : LoanId} {o : Owner}
+    (hfind : Γ.findOwner? a = some o) {c : Leaf}
+    (hleaf : o.root.find? lender = some c) (hact : c.state = .active)
+    (hfresh : loanId ∉ Γ.loans.loans.map (·.id))
+    (hlive : Γ.loans.live ⟨0⟩ = true) {o' : Owner}
+    (hsus : o.suspendLeaf? lender = some o') (hΓ : w.ctx = Γ)
+    (hw : w.beginLoanChecked a lender loanId = .ok w') :
+    w'.ctx = { (Γ.update o.alloc o') with
+      loans := { Γ.loans with
+        loans := Γ.loans.loans ++
+          [{ id := loanId, lender := lender, borrower := lender,
+             lifetime := ⟨0⟩ }] } } := by
+  unfold World.beginLoanChecked at hw
+  rw [hΓ] at hw
+  simp [hfind, hleaf, hact, hfresh, hlive, hsus] at hw
+  cases hw
+  rfl
+
+/-- A typed loan ending is never refused. -/
+theorem endLoanChecked_succeeds {w : World} {Γ : Ctx} {a : AllocId}
+    {loanId : LoanId} {loan : Loan}
+    (hloan : Γ.loans.findLoan? loanId = some loan)
+    {o : Owner} (hfind : Γ.findOwner? a = some o)
+    {o' : Owner} (hresume : o.resumeLeaf? loan.lender = some o')
+    (hΓ : w.ctx = Γ) :
+    (w.endLoanChecked a loanId).isOk = true := by
+  unfold World.endLoanChecked
+  rw [hΓ]
+  simp [hloan, hfind, hresume]
+  rfl
+
+/-- A checked loan ending realises its typed post-context. -/
+theorem endLoanChecked_post {w w' : World} {Γ : Ctx} {a : AllocId}
+    {loanId : LoanId} {loan : Loan}
+    (hloan : Γ.loans.findLoan? loanId = some loan)
+    {o : Owner} (hfind : Γ.findOwner? a = some o)
+    {o' : Owner} (hresume : o.resumeLeaf? loan.lender = some o')
+    (hΓ : w.ctx = Γ) (hw : w.endLoanChecked a loanId = .ok w') :
+    w'.ctx = { (Γ.update o.alloc o') with
+      loans := { Γ.loans with
+        loans := Γ.loans.loans.filter (fun l => l.id ≠ loanId) } } := by
+  unfold World.endLoanChecked at hw
+  rw [hΓ] at hw
+  simp [hloan, hfind, hresume] at hw
+  cases hw
+  rfl
+
 /-- A checked disposal realises its typed post-context. -/
 theorem freeChecked_post {w w' : World} {Γ : Ctx} {a : AllocId} {d : CapId}
     (hloan : ∀ o, Γ.findOwner? a = some o →
@@ -485,6 +588,26 @@ theorem evalIProg_post (w : World) (fuel : Nat) :
         simp only [evalIProg, hw] at h
         obtain ⟨-, rfl⟩ := Option.some.inj h
         exact ⟨joinChecked_post hfind hΓ hw, World.joinChecked_wf hw hwf⟩
+    | beginLoan a0 lender loanId o hfind c hleaf hact hfresh hlive o' hsus =>
+      cases hw : w.beginLoanChecked a0 lender loanId with
+      | error e =>
+        simp only [evalIProg, hw] at h
+        nomatch h
+      | ok w1 =>
+        simp only [evalIProg, hw] at h
+        obtain ⟨-, rfl⟩ := Option.some.inj h
+        exact ⟨beginLoanChecked_post hfind hleaf hact hfresh hlive hsus hΓ hw,
+          World.beginLoanChecked_wf hw hwf⟩
+    | endLoan a0 loanId loan hloan o hfind o' hresume =>
+      cases hw : w.endLoanChecked a0 loanId with
+      | error e =>
+        simp only [evalIProg, hw] at h
+        nomatch h
+      | ok w1 =>
+        simp only [evalIProg, hw] at h
+        obtain ⟨-, rfl⟩ := Option.some.inj h
+        exact ⟨endLoanChecked_post hloan hfind hresume hΓ hw,
+          World.endLoanChecked_wf hw hwf⟩
     | free a0 d hloan hs =>
       cases hw : w.freeChecked a0 d with
       | error e =>
@@ -582,6 +705,28 @@ theorem runIProg_no_refusal (w : World) (fuel : Nat) :
       | error e =>
         simp only [hw] at h
         have hok := joinChecked_succeeds hfind hfresh hs hΓ
+        rw [hw] at hok
+        cases hok
+      | ok w1 =>
+        simp only [hw] at h
+        cases h
+    | beginLoan a lender loanId o hfind c hleaf hact hfresh hlive o' hsus =>
+      simp only [runIProg] at h
+      cases hw : w.beginLoanChecked a lender loanId with
+      | error e =>
+        simp only [hw] at h
+        have hok := beginLoanChecked_succeeds hfind hleaf hact hfresh hlive hsus hΓ
+        rw [hw] at hok
+        cases hok
+      | ok w1 =>
+        simp only [hw] at h
+        cases h
+    | endLoan a loanId loan hloan o hfind o' hresume =>
+      simp only [runIProg] at h
+      cases hw : w.endLoanChecked a loanId with
+      | error e =>
+        simp only [hw] at h
+        have hok := endLoanChecked_succeeds hloan hfind hresume hΓ
         rw [hw] at hok
         cases hok
       | ok w1 =>
@@ -705,6 +850,49 @@ def iFracLifecycle : IProg uWorld.ctx Unit (fun _ => ilCtxJoin) :=
 /-- The fractional lifecycle's evaluator accepts it. -/
 theorem iFracLifecycle_ok :
     (evalIProg 64 iFracLifecycle uWorld).isSome = true := by
+  decide
+
+/-- The owner after suspending the root leaf. -/
+def ilSuspended : Owner :=
+  { ilOwner with root := ilOwner.root.replace ⟨3⟩ (fun c => .leaf { c with state := .retired }) }
+
+/-- The loan record of the concrete begin. -/
+def ilLoan : Loan :=
+  { id := ⟨10⟩, lender := ⟨3⟩, borrower := ⟨3⟩, lifetime := ⟨0⟩ }
+
+/-- The context after beginning the loan. -/
+def ilCtxLoan : Ctx :=
+  { (ilCtx1.update ilOwner.alloc ilSuspended) with
+    loans := { ilCtx1.loans with
+      loans := ilCtx1.loans.loans ++ [ilLoan] } }
+
+/-- The context after ending the loan. -/
+def ilCtxEnd : Ctx :=
+  { (ilCtxLoan.update ilSuspended.alloc ilOwner) with
+    loans := { ilCtxLoan.loans with
+      loans := ilCtxLoan.loans.loans.filter (fun l => l.id ≠ ⟨10⟩) } }
+
+/-- The begin command with its context-level evidence. -/
+def iBegin : IProg ilCtx1 Unit (fun _ => ilCtxLoan) :=
+  .beginLoan ⟨1⟩ ⟨3⟩ ⟨10⟩ ilOwner (by rfl)
+    { id := ⟨3⟩, alloc := ⟨1⟩, lo := 0, hi := 4, ordered := by decide, q := 64,
+      pos := by decide, ceiling := .readWrite, state := .active }
+    (by rfl) (by decide) (by decide) (by decide) ilSuspended (by rfl)
+
+/-- The end command with its context-level evidence. -/
+def iEnd : IProg ilCtxLoan Unit (fun _ => ilCtxEnd) :=
+  .endLoan ⟨1⟩ ⟨10⟩ ilLoan (by rfl) ilSuspended (by rfl) ilOwner (by rfl)
+
+/-- Allocation, loan beginning and loan ending. -/
+def iLoanLifecycle : IProg uWorld.ctx Unit (fun _ => ilCtxEnd) :=
+  .bind iAlloc fun _ =>
+  .bind iBegin fun _ =>
+  .bind iEnd fun _ =>
+  .pure ()
+
+/-- The loan lifecycle's evaluator accepts it. -/
+theorem iLoanLifecycle_ok :
+    (evalIProg 64 iLoanLifecycle uWorld).isSome = true := by
   decide
 
 /-- The indexed lifecycle, composed by `bind` with each stage's evidence. -/
