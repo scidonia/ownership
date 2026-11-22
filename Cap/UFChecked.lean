@@ -488,6 +488,65 @@ theorem stopsAt_of_acyclic {p : Arr} {n : Nat}
 
 end
 
+section
+
+open UF
+
+/-- Iterating a root stays at the root. -/
+theorem iter_root {p : Arr} {r : Nat} (hr : IsRoot p r) :
+    ∀ k, iter p k r = r
+  | 0 => rfl
+  | k + 1 => by
+    show step p (iter p k r) = r
+    rw [iter_root hr k]
+    exact hr
+
+/-- A ranked forest is acyclic: a rank that strictly decreases at every non-root
+step forbids an orbit from returning to a non-root. -/
+theorem acyclic_of_ranked {p : Arr} {n : Nat} {rank : Nat → Nat}
+    (hr : Ranked p n rank) : Acyclic p n := by
+  intro y hy hnr k hk hiter
+  have hstep_lt : ∀ j, iter p j y < n := by
+    intro j
+    induction j with
+    | zero => simpa [iter] using hy
+    | succ j ih => simpa [iter] using hr.1 (iter p j y) ih
+  have hnonroot : ∀ j, j < k → ¬ IsRoot p (iter p j y) := by
+    intro j hj hrj
+    have hadd : iter p k y = iter p (k - j) (iter p j y) := by
+      have h := iter_add p (k - j) j y
+      rw [Nat.sub_add_cancel (Nat.le_of_lt hj)] at h
+      exact h
+    have hjroot : iter p (k - j) (iter p j y) = iter p j y := iter_root hrj (k - j)
+    have h_eq : iter p k y = iter p j y := by rw [hadd, hjroot]
+    have hyj : iter p j y = y := by
+      rw [hiter] at h_eq
+      exact h_eq.symm
+    exact hnr (hyj ▸ hrj)
+  have hdec : ∀ j, j < k → rank (iter p (j + 1) y) < rank (iter p j y) := by
+    intro j hj
+    have hnot := hnonroot j hj
+    have hstep : step p (iter p j y) = iter p (j + 1) y := rfl
+    rw [← hstep]
+    exact (hr.2 (iter p j y) (hstep_lt j)).resolve_left hnot
+  have hrank : ∀ m, 0 < m → m ≤ k → rank (iter p m y) < rank y := by
+    intro m hm hmk
+    induction m with
+    | zero => omega
+    | succ m ih =>
+      by_cases hm0 : m = 0
+      · subst hm0
+        simpa [iter] using hdec 0 (by omega)
+      · have hprev : rank (iter p m y) < rank y :=
+          ih (by omega) (by omega)
+        have hstep : rank (iter p (m + 1) y) < rank (iter p m y) := hdec m (by omega)
+        exact Nat.lt_trans hstep hprev
+  have := hrank k hk (Nat.le_refl k)
+  rw [hiter] at this
+  exact (Nat.lt_irrefl (rank y)) this
+
+end
+
 /-- A represented, ranked parent map's chase completes: with `rank x + 1` fuel it
 returns a root of the represented forest. -/
 theorem findRootC_ranked_root {w : World} {a : AllocId} {id : CapId} {n : Nat}

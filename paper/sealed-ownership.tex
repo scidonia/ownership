@@ -1063,7 +1063,10 @@ The rank is one route; \lean{Acyclic} is the other. It excludes a positive
 iterate returning to an in-range non-root, and \lean{stopsAt\_of\_acyclic}
 completes the chase within $n+1$ steps by pigeonhole over the $n+1$ iterates,
 with \lean{findRootC\_acyclic\_root} the certified corollary; roots are fixed
-points and are not excluded, which the one-node-root control witnesses.
+points and are not excluded, which the one-node-root control witnesses. A rank
+implies the predicate (\lean{acyclic\_of\_ranked}), so the ranked route also
+discharges acyclicity; the concrete 64-byte zero forest is acyclic
+(\lean{uWorld\_acyclic}).
 
 A certified computation's postcondition is where the algorithm's invariants are
 stated: \lean{findCompressCert} returns a root, preserves \lean{UFRep} and the
@@ -1119,7 +1122,8 @@ concrete 64-byte instance with an immutable observation.
   exhaustion a distinct outcome. For the checked union-find a ranked forest gives
   completion within the rank (\lean{stopsAt\_of\_ranked},
   \lean{findRootC\_ranked\_root}) and a bounded acyclic forest within $n+1$ steps
-  (\lean{stopsAt\_of\_acyclic}, \lean{findRootC\_acyclic\_root}); what is not
+  (\lean{stopsAt\_of\_acyclic}, \lean{findRootC\_acyclic\_root}); a rank proof
+  yields the predicate too (\lean{acyclic\_of\_ranked}); what is not
   established is termination of arbitrary loops, and deriving the forest
   predicate (a rank or acyclicity) from the parent array's construction rather
   than supplying it.

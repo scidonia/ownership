@@ -365,6 +365,10 @@ theorem uWorld_ranked : Ranked (UFArr (Backend.empty 64)) 64 zeroRank := by
       rw [uEmpty_step hi]
       simp [zeroRank, h0]
 
+/-- The concrete 64-byte zero forest is acyclic. -/
+theorem uWorld_acyclic : Acyclic (UFArr (Backend.empty 64)) 64 :=
+  acyclic_of_ranked uWorld_ranked
+
 /-- A sealed union-find runner: a world with the combined invariant, the parent
 representation, its backend and the forest rank, again private. -/
 structure UFRunner (a : AllocId) (id : CapId) (n : Nat) (rank : Nat → Nat) where

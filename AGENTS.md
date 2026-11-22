@@ -305,8 +305,10 @@
   obtains completion within `n + 1` steps by pigeonhole over the `n + 1`
   iterates (`findRootC_acyclic_root` is the certified corollary). A one-node
   root is acyclic and a two-node cycle is not; both controls are `example`s in
-  the module. Deriving the forest predicate from the parent array's construction
-  remains outside it. The partition equivalence is
+  the module. `acyclic_of_ranked` shows a ranked forest is acyclic (via
+  `iter_root`), so `uWorld_ranked` yields the concrete instance `uWorld_acyclic`;
+  the bridge uses no choice axiom. Deriving the forest predicate from the parent
+  array's construction remains outside it. The partition equivalence is
   `compressC_same_iff`/`compress_same_iff_of_root`, built on orbit linearity
   (`reach_or_reach_of_common`), the root-is-terminal fact (`root_reach_eq`) and
   root-reach preservation (`reach_root_compress`). Full path compression is

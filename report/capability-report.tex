@@ -835,7 +835,10 @@ transfers. The representation survives the checked compression
 within the rank (\texttt{stopsAt\_of\_ranked},
 \texttt{findRootC\_ranked\_root}); a bounded acyclic forest gives the same
 completion within $n+1$ without a rank (\texttt{stopsAt\_of\_acyclic},
-\texttt{findRootC\_acyclic\_root}).near, a root reaches only
+\texttt{findRootC\_acyclic\_root}). A rank implies the acyclicity predicate
+(\texttt{acyclic\_of\_ranked}), so proving a rank also discharges the acyclic
+route; the concrete 64-byte zero forest is acyclic
+(\texttt{uWorld\_acyclic}). Orbits are linear, a root reaches only
 itself, and compression to a root preserves the partition in both directions
 (\texttt{compressC\_same\_iff}); full path compression
 (\texttt{UF.compressAll}, \texttt{compressAll\_same\_iff}) preserves the
