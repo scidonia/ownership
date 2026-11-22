@@ -22,9 +22,10 @@ well-formed world that matches the postcondition, for every command in the
 language.
 
 Scope and limits: reads are observations of the pure backends; the context
-index tracks owners, not the loan list (`w.loans` is world state outside the
-index, so `beginLoan`/`endLoan` are not yet indexed constructors — they remain
-in `UCmd`); termination is fuel; the negative/refusal side lives at the type
+index includes the loan context (`Ctx.loans`), but `beginLoan`/`endLoan` are
+not yet indexed constructors: their checks are context-level transitions that
+still need the context transition functions and the matching success and
+post-context lemmas. They remain in `UCmd`; termination is fuel; the negative/refusal side lives at the type
 level (ill-evidenced programs do not exist) rather than as runtime errors.
 -/
 import Cap.Unified
@@ -54,6 +55,21 @@ inductive IProg : (Γ : Ctx) → (α : Type) → (α → Ctx) → Type 1 where
       (hs : (Γ.splitAtOwner? o id id1 id2 k).isSome) :
       IProg Γ Unit (fun _ => { (Γ.splitAtOwner? o id id1 id2 k).getD Γ with
                                issued := id1 :: id2 :: Γ.issued })
+  | splitFraction (a : AllocId) (id id1 id2 : CapId) (q1 q2 : Nat)
+      (p1 : 0 < q1) (p2 : 0 < q2) (o : Owner)
+      (hfind : Γ.findOwner? a = some o) (hfids : o.FreshIds id1 id2)
+      (hfresh1 : id1 ∉ Γ.ids) (hfresh2 : id2 ∉ Γ.ids)
+      (hissued1 : id1 ∉ Γ.issued) (hissued2 : id2 ∉ Γ.issued)
+      (hact : ∃ c, o.root.find? id = some c ∧ c.state = .active)
+      (hs : (Γ.splitFractionOwner? o id id1 id2 q1 q2 p1 p2).isSome) :
+      IProg Γ Unit (fun _ => { (Γ.splitFractionOwner? o id id1 id2 q1 q2 p1 p2).getD Γ with
+                               issued := id1 :: id2 :: Γ.issued })
+  | join (a : AllocId) (node newId : CapId) (o : Owner)
+      (hfind : Γ.findOwner? a = some o)
+      (hfresh : newId ∉ Γ.ids ∧ newId ∉ Γ.issued)
+      (hs : (Γ.joinFractionOwner? o node newId).isSome) :
+      IProg Γ Unit (fun _ => { (Γ.joinFractionOwner? o node newId).getD Γ with
+                               issued := newId :: Γ.issued })
   | free (a : AllocId) (d : CapId)
       (hloan : ∀ o, Γ.findOwner? a = some o →
         ∀ l ∈ Γ.loans.loans, l.lender ∉ o.ids)
@@ -108,6 +124,14 @@ def evalIProg (fuel : Nat) {Γ : Ctx} {α : Type} {Q : α → Ctx} (p : IProg Γ
     match w.splitAtChecked a id id1 id2 k with
     | .ok w' => some ((), w')
     | .error _ => none
+  | fuel + 1, .splitFraction a id id1 id2 q1 q2 p1 p2 _ _ _ _ _ _ _ _ _ =>
+    match w.splitFractionChecked a id id1 id2 q1 q2 p1 p2 with
+    | .ok w' => some ((), w')
+    | .error _ => none
+  | fuel + 1, .join a node newId _ _ _ _ =>
+    match w.joinChecked a node newId with
+    | .ok w' => some ((), w')
+    | .error _ => none
   | fuel + 1, .free a d _ _ =>
     match w.freeChecked a d with
     | .ok w' => some ((), w')
@@ -150,6 +174,14 @@ def runIProg (fuel : Nat) {Γ : Ctx} {α : Type} {Q : α → Ctx} (p : IProg Γ 
     match w.splitAtChecked a id id1 id2 k with
     | .ok w' => .done () w'
     | .error msg => .refused msg
+  | fuel + 1, .splitFraction a id id1 id2 q1 q2 p1 p2 _ _ _ _ _ _ _ _ _ =>
+    match w.splitFractionChecked a id id1 id2 q1 q2 p1 p2 with
+    | .ok w' => .done () w'
+    | .error msg => .refused msg
+  | fuel + 1, .join a node newId _ _ _ _ =>
+    match w.joinChecked a node newId with
+    | .ok w' => .done () w'
+    | .error msg => .refused msg
   | fuel + 1, .free a d _ _ =>
     match w.freeChecked a d with
     | .ok w' => .done () w'
@@ -189,6 +221,12 @@ theorem evalIProg_eq_run (w : World) (fuel : Nat) :
     | splitAt a id id1 id2 k o hfind hfids hfresh1 hfresh2 hissued1 hissued2 hact hs =>
       simp only [evalIProg, runIProg]
       cases w.splitAtChecked a id id1 id2 k <;> rfl
+    | splitFraction a id id1 id2 q1 q2 p1 p2 _ _ _ _ _ _ _ _ _ =>
+      simp only [evalIProg, runIProg]
+      cases w.splitFractionChecked a id id1 id2 q1 q2 p1 p2 <;> rfl
+    | join a node newId _ _ _ _ =>
+      simp only [evalIProg, runIProg]
+      cases w.joinChecked a node newId <;> rfl
     | free a d hloan hs =>
       simp only [evalIProg, runIProg]
       cases w.freeChecked a d <;> rfl
@@ -249,6 +287,93 @@ theorem splitAtChecked_post {w w' : World} {Γ : Ctx} {a : AllocId}
       = { (Γ.splitAtOwner? o id id1 id2 k).getD Γ with issued := id1 :: id2 :: Γ.issued }
   rw [hs']
   rfl
+
+/-- A typed fractional split is never refused: the constructor's evidence
+discharges the world-level checks. -/
+theorem splitFractionChecked_succeeds {w : World} {Γ : Ctx} {a : AllocId}
+    {id id1 id2 : CapId} {q1 q2 : Nat} {p1 : 0 < q1} {p2 : 0 < q2} {o : Owner}
+    (hfind : Γ.findOwner? a = some o) (hfids : o.FreshIds id1 id2)
+    (hfresh1 : id1 ∉ Γ.ids) (hfresh2 : id2 ∉ Γ.ids)
+    (hissued1 : id1 ∉ Γ.issued) (hissued2 : id2 ∉ Γ.issued)
+    (hact : ∃ c, o.root.find? id = some c ∧ c.state = .active)
+    (hs : (Γ.splitFractionOwner? o id id1 id2 q1 q2 p1 p2).isSome)
+    (hΓ : w.ctx = Γ) :
+    (w.splitFractionChecked a id id1 id2 q1 q2 p1 p2).isOk = true := by
+  unfold World.splitFractionChecked
+  rw [hΓ]
+  simp only [hfind]
+  rw [if_pos ⟨hfids, hfresh1, hfresh2, hissued1, hissued2, hact⟩]
+  split
+  · rfl
+  · rename_i hnone
+    obtain ⟨C', hC'⟩ := Option.isSome_iff_exists.mp hs
+    rw [hnone] at hC'
+    nomatch hC'
+
+/-- A checked fractional split realises its typed post-context. -/
+theorem splitFractionChecked_post {w w' : World} {Γ : Ctx} {a : AllocId}
+    {id id1 id2 : CapId} {q1 q2 : Nat} {p1 : 0 < q1} {p2 : 0 < q2} {o : Owner}
+    (hfind : Γ.findOwner? a = some o) (hΓ : w.ctx = Γ)
+    (hw : w.splitFractionChecked a id id1 id2 q1 q2 p1 p2 = .ok w') :
+    w'.ctx = { (Γ.splitFractionOwner? o id id1 id2 q1 q2 p1 p2).getD Γ with
+                issued := id1 :: id2 :: Γ.issued } := by
+  unfold World.splitFractionChecked at hw
+  rw [hΓ] at hw
+  simp only [hfind] at hw
+  by_cases hfr : o.FreshIds id1 id2 ∧ id1 ∉ Γ.ids ∧ id2 ∉ Γ.ids ∧
+      id1 ∉ Γ.issued ∧ id2 ∉ Γ.issued ∧
+      (∃ c, o.root.find? id = some c ∧ c.state = .active)
+  · rw [if_pos hfr] at hw
+    split at hw
+    · rename_i C' hs'
+      simp only [Except.ok.injEq] at hw
+      cases hw
+      rw [hs']
+      rfl
+    · nomatch hw
+  · rw [if_neg hfr] at hw
+    nomatch hw
+
+/-- A typed fractional join is never refused. -/
+theorem joinChecked_succeeds {w : World} {Γ : Ctx} {a : AllocId}
+    {node newId : CapId} {o : Owner}
+    (hfind : Γ.findOwner? a = some o)
+    (hfresh : newId ∉ Γ.ids ∧ newId ∉ Γ.issued)
+    (hs : (Γ.joinFractionOwner? o node newId).isSome)
+    (hΓ : w.ctx = Γ) :
+    (w.joinChecked a node newId).isOk = true := by
+  unfold World.joinChecked
+  rw [hΓ]
+  simp only [hfind]
+  rw [if_pos hfresh]
+  split
+  · rfl
+  · rename_i hnone
+    obtain ⟨C', hC'⟩ := Option.isSome_iff_exists.mp hs
+    rw [hnone] at hC'
+    nomatch hC'
+
+/-- A checked fractional join realises its typed post-context. -/
+theorem joinChecked_post {w w' : World} {Γ : Ctx} {a : AllocId}
+    {node newId : CapId} {o : Owner}
+    (hfind : Γ.findOwner? a = some o) (hΓ : w.ctx = Γ)
+    (hw : w.joinChecked a node newId = .ok w') :
+    w'.ctx = { (Γ.joinFractionOwner? o node newId).getD Γ with
+                issued := newId :: Γ.issued } := by
+  unfold World.joinChecked at hw
+  rw [hΓ] at hw
+  simp only [hfind] at hw
+  by_cases hfresh : newId ∉ Γ.ids ∧ newId ∉ Γ.issued
+  · rw [if_pos hfresh] at hw
+    split at hw
+    · rename_i C' hs'
+      simp only [Except.ok.injEq] at hw
+      cases hw
+      rw [hs']
+      rfl
+    · nomatch hw
+  · rw [if_neg hfresh] at hw
+    nomatch hw
 
 /-- A checked disposal realises its typed post-context. -/
 theorem freeChecked_post {w w' : World} {Γ : Ctx} {a : AllocId} {d : CapId}
@@ -341,6 +466,25 @@ theorem evalIProg_post (w : World) (fuel : Nat) :
         simp only [evalIProg, hw] at h
         obtain ⟨-, rfl⟩ := Option.some.inj h
         exact ⟨splitAtChecked_post hfind hs hΓ hw, World.splitAtChecked_wf hw hwf⟩
+    | splitFraction a0 id0 id1 id2 q1 q2 p1 p2 o hfind hfids hf1 hf2 hi1 hi2 hact hs =>
+      cases hw : w.splitFractionChecked a0 id0 id1 id2 q1 q2 p1 p2 with
+      | error e =>
+        simp only [evalIProg, hw] at h
+        nomatch h
+      | ok w1 =>
+        simp only [evalIProg, hw] at h
+        obtain ⟨-, rfl⟩ := Option.some.inj h
+        exact ⟨splitFractionChecked_post hfind hΓ hw,
+          World.splitFractionChecked_wf hw hwf⟩
+    | join a0 node newId o hfind hfresh hs =>
+      cases hw : w.joinChecked a0 node newId with
+      | error e =>
+        simp only [evalIProg, hw] at h
+        nomatch h
+      | ok w1 =>
+        simp only [evalIProg, hw] at h
+        obtain ⟨-, rfl⟩ := Option.some.inj h
+        exact ⟨joinChecked_post hfind hΓ hw, World.joinChecked_wf hw hwf⟩
     | free a0 d hloan hs =>
       cases hw : w.freeChecked a0 d with
       | error e =>
@@ -421,6 +565,28 @@ theorem runIProg_no_refusal (w : World) (fuel : Nat) :
       | ok w1 =>
         simp only [hw] at h
         cases h
+    | splitFraction a id id1 id2 q1 q2 p1 p2 o hfind hfids hf1 hf2 hi1 hi2 hact hs =>
+      simp only [runIProg] at h
+      cases hw : w.splitFractionChecked a id id1 id2 q1 q2 p1 p2 with
+      | error e =>
+        simp only [hw] at h
+        have hok := splitFractionChecked_succeeds hfind hfids hf1 hf2 hi1 hi2 hact hs hΓ
+        rw [hw] at hok
+        cases hok
+      | ok w1 =>
+        simp only [hw] at h
+        cases h
+    | join a node newId o hfind hfresh hs =>
+      simp only [runIProg] at h
+      cases hw : w.joinChecked a node newId with
+      | error e =>
+        simp only [hw] at h
+        have hok := joinChecked_succeeds hfind hfresh hs hΓ
+        rw [hw] at hok
+        cases hok
+      | ok w1 =>
+        simp only [hw] at h
+        cases h
     | free a d hloan hs =>
       simp only [runIProg] at h
       cases hw : w.freeChecked a d with
@@ -496,6 +662,50 @@ def iWrite2 : IProg ilCtx3 Unit (fun _ => ilCtx3) :=
 /-- The disposal step. -/
 def iFree : IProg ilCtx3 Unit (fun _ => ilCtx5) :=
   @IProg.free ilCtx3 ⟨1⟩ ⟨4⟩ (by intro o _ l hl; rw [ilCtx3_loans] at hl; exact absurd hl (by simp)) (by decide)
+
+/-- The owner allocated at the start of the concrete context. -/
+def ilOwner : Owner := Owner.init ⟨1⟩ 4 64 (by decide) ⟨3⟩ ⟨4⟩
+
+/-- The context after splitting the root leaf fractionally into shares 32+32. -/
+def ilFracCtx0 : Ctx :=
+  (ilCtx1.splitFractionOwner? ilOwner ⟨3⟩ ⟨7⟩ ⟨8⟩ 32 32 (by decide) (by decide)).getD ilCtx1
+
+/-- The owner in that context. -/
+def ilFracOwner : Owner := (ilFracCtx0.findOwner? ⟨1⟩).getD ilOwner
+
+/-- The context after joining the two fractional children. -/
+def ilJoinCtx0 : Ctx :=
+  (ilFracCtx0.joinFractionOwner? ilFracOwner ⟨7⟩ ⟨9⟩).getD ilFracCtx0
+
+/-- The posted context of the fractional split. -/
+def ilCtxFrac : Ctx :=
+  { ilFracCtx0 with issued := ⟨7⟩ :: ⟨8⟩ :: ilCtx1.issued }
+
+/-- The posted context of the join. -/
+def ilCtxJoin : Ctx :=
+  { ilJoinCtx0 with issued := ⟨9⟩ :: ilCtxFrac.issued }
+
+/-- The fractional split of the allocated leaf. -/
+def iFracSplit : IProg ilCtx1 Unit (fun _ => ilCtxFrac) :=
+  .splitFraction ⟨1⟩ ⟨3⟩ ⟨7⟩ ⟨8⟩ 32 32 (by decide) (by decide) ilOwner
+    (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide)
+    (by exact ⟨_, rfl, by decide⟩) (by decide)
+
+/-- The fractional join of the two children. -/
+def iJoin : IProg ilCtxFrac Unit (fun _ => ilCtxJoin) :=
+  .join ⟨1⟩ ⟨7⟩ ⟨9⟩ ilFracOwner (by rfl) (by decide) (by decide)
+
+/-- Allocation, fractional split and join, all with evidence. -/
+def iFracLifecycle : IProg uWorld.ctx Unit (fun _ => ilCtxJoin) :=
+  .bind iAlloc fun _ =>
+  .bind iFracSplit fun _ =>
+  .bind iJoin fun _ =>
+  .pure ()
+
+/-- The fractional lifecycle's evaluator accepts it. -/
+theorem iFracLifecycle_ok :
+    (evalIProg 64 iFracLifecycle uWorld).isSome = true := by
+  decide
 
 /-- The indexed lifecycle, composed by `bind` with each stage's evidence. -/
 def iLifecycle : IProg uWorld.ctx Unit (fun _ => ilCtx5) :=

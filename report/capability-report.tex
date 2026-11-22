@@ -928,7 +928,8 @@ layer's soundness theorem \texttt{evalIProg\_post} states: execution from a worl
 matching the typing context ends in a world matching the postcondition and
 preserves the world invariant. The indexed lifecycle --- allocation, write,
 spatial split, write, disposal, with every evidence derived --- is accepted
-(\texttt{iLifecycle\_ok}), ends on its typed post-context
+(\texttt{iLifecycle\_ok}); a second lifecycle adds a fractional split and join
+(\texttt{iFracLifecycle\_ok}). It ends on its typed post-context
 (\texttt{iLifecycle\_ctx}), well formed (\texttt{iLifecycle\_sound}), with the
 pre-existing backend untouched (\texttt{iLifecycle\_snapshot}). Post-contexts
 use \texttt{getD} so the typing function stays computable. The loan state is
