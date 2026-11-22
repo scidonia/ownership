@@ -359,6 +359,11 @@ def Ranked (p : UF.Arr) (n : Nat) (rank : Nat → Nat) : Prop :=
   (∀ i, i < n → UF.step p i < n) ∧
     ∀ i, i < n → UF.IsRoot p i ∨ rank (UF.step p i) < rank i
 
+/-- No positive cycle among the in-range nodes. -/
+def Acyclic (p : UF.Arr) (n : Nat) : Prop :=
+  ∀ y, y < n → ¬ UF.IsRoot p y → ∀ k, 0 < k → UF.iter p k y ≠ y
+
+
 /-- More fuel cannot lose a stop. -/
 theorem stopsAt_mono {p : UF.Arr} : ∀ {fuel x : Nat}, UF.StopsAt p fuel x →
     ∀ k, UF.StopsAt p (fuel + k) x
@@ -396,6 +401,93 @@ theorem stopsAt_of_ranked {p : UF.Arr} {n : Nat} {rank : Nat → Nat}
       have := stopsAt_mono htail (rank i - (rank (UF.step p i) + 1))
       rwa [harith] at this
 
+/-- A duplicate-free list of naturals below `n` has at most `n` entries. -/
+theorem nodup_length_le_of_forall_lt {l : List Nat} {n : Nat}
+    (h : ∀ x ∈ l, x < n) (hnd : l.Nodup) : l.length ≤ n := by
+  have hsub : l ⊆ List.range n := by
+    intro x hx
+    exact List.mem_range.mpr (h x hx)
+  simpa using List.Nodup.length_le_of_subset hnd hsub
+
+section
+
+open UF
+
+/-- A bounded acyclic parent map's chase stops within `n + 1` steps from every
+in-range node. -/
+theorem stopsAt_of_acyclic {p : Arr} {n : Nat}
+    (hb : ∀ i, i < n → step p i < n)
+    (hac : Acyclic p n) :
+    ∀ x, x < n → StopsAt p (n + 1) x := by
+  intro x hx
+  apply Classical.byContradiction
+  intro hstop
+  have hiter_lt : ∀ k, iter p k x < n := by
+    intro k
+    induction k with
+    | zero => simpa [iter] using hx
+    | succ k ih => simpa [iter] using hb (iter p k x) ih
+  have hbad : ∀ j, j ≤ n → ¬ StopsAt p (n + 1 - j) (iter p j x) := by
+    intro j hj
+    induction j with
+    | zero =>
+      have hz : n + 1 - 0 = n + 1 := by omega
+      rw [hz]
+      simpa [iter] using hstop
+    | succ j ih =>
+      have hfuel : n + 1 - j = (n - j) + 1 := by omega
+      have hprev := ih (by omega)
+      rw [hfuel] at hprev
+      have hnroot : ¬ IsRoot p (iter p j x) := by
+        intro hr
+        exact hprev ((stopsAt_succ (p := p) (fuel := n - j) (x := iter p j x)).mpr (Or.inl hr))
+      have htail : ¬ StopsAt p (n - j) (step p (iter p j x)) := by
+        intro ht
+        exact hprev ((stopsAt_succ (p := p) (fuel := n - j) (x := iter p j x)).mpr (Or.inr ⟨hnroot, ht⟩))
+      have hgoal : n + 1 - (j + 1) = n - j := by omega
+      rw [hgoal]
+      simpa [iter] using htail
+  have hnotroot : ∀ j, j ≤ n → ¬ IsRoot p (iter p j x) := by
+    intro j hj
+    have hbadj := hbad j hj
+    have hfuel : n + 1 - j = (n - j) + 1 := by omega
+    rw [hfuel] at hbadj
+    intro hr
+    exact hbadj ((stopsAt_succ (p := p) (fuel := n - j) (x := iter p j x)).mpr (Or.inl hr))
+  let l : List Nat := (List.range (n + 1)).map (fun j => iter p j x)
+  have hlen : l.length = n + 1 := by simp [l]
+  have hnd : l.Nodup := by
+    rw [List.nodup_iff_eq_of_getElem_eq]
+    intro i j hi hj heq
+    have hval : iter p i x = iter p j x := by simpa [l] using heq
+    rcases Nat.lt_trichotomy i j with hij | heqij | hji
+    · have hk : 0 < j - i := by omega
+      have hadd : iter p ((j - i) + i) x = iter p (j - i) (iter p i x) :=
+        iter_add p (j - i) i x
+      have hji' : (j - i) + i = j := by omega
+      rw [hji'] at hadd
+      have hcycle : iter p (j - i) (iter p i x) = iter p i x := by
+        rw [← hadd]; exact hval.symm
+      exact absurd hcycle (hac (iter p i x) (hiter_lt i) (hnotroot i (by omega)) (j - i) hk)
+    · exact heqij
+    · have hk : 0 < i - j := by omega
+      have hadd : iter p ((i - j) + j) x = iter p (i - j) (iter p j x) :=
+        iter_add p (i - j) j x
+      have hij' : (i - j) + j = i := by omega
+      rw [hij'] at hadd
+      have hcycle : iter p (i - j) (iter p j x) = iter p j x := by
+        rw [← hadd]; exact hval
+      exact absurd hcycle (hac (iter p j x) (hiter_lt j) (hnotroot j (by omega)) (i - j) hk)
+  have hmem : l ⊆ List.range n := by
+    intro y hy
+    rcases List.mem_map.mp hy with ⟨j, _, rfl⟩
+    exact List.mem_range.mpr (hiter_lt j)
+  have hle := List.Nodup.length_le_of_subset hnd hmem
+  have : n + 1 ≤ n := by simpa [hlen] using hle
+  omega
+
+end
+
 /-- A represented, ranked parent map's chase completes: with `rank x + 1` fuel it
 returns a root of the represented forest. -/
 theorem findRootC_ranked_root {w : World} {a : AllocId} {id : CapId} {n : Nat}
@@ -406,6 +498,45 @@ theorem findRootC_ranked_root {w : World} {a : AllocId} {id : CapId} {n : Nat}
   have hstop := stopsAt_of_ranked hrank (rank x + 1) x hx (by omega)
   refine ⟨UF.findRootF (UFArr b) (rank x + 1) x,
     findRootC_eq_of_stops h hb hx hstop, UF.findRootF_root hstop⟩
+
+/-- A represented, bounded acyclic parent map's chase completes with `n + 1`
+fuel and returns a root of the represented forest. No rank function is needed:
+finiteness and acyclicity at the non-root nodes supply the bound. -/
+theorem findRootC_acyclic_root {w : World} {a : AllocId} {id : CapId} {n : Nat}
+    (h : UFRep w a id n) {b : Backend} (hb : w.heaps a = some b)
+    (hbound : ∀ i, i < n → UF.step (UFArr b) i < n)
+    (hac : Acyclic (UFArr b) n)
+    {x : Nat} (hx : x < n) :
+    ∃ r, findRootC w a id n h (n + 1) x hx = some r ∧ UF.IsRoot (UFArr b) r := by
+  have hstop := stopsAt_of_acyclic hbound hac x hx
+  exact ⟨UF.findRootF (UFArr b) (n + 1) x,
+    findRootC_eq_of_stops h hb hx hstop, UF.findRootF_root hstop⟩
+
+/-- A one-node root satisfies acyclicity. -/
+example : Acyclic [0] 1 := by
+  intro y hy hnr k hk
+  have hy0 : y = 0 := by omega
+  subst hy0
+  intro h
+  exact hnr rfl
+
+/-- A two-node cycle is not acyclic. -/
+example : ¬ Acyclic [1, 0] 2 := by
+  intro hac
+  have h0 : (0 : Nat) < 2 := by omega
+  have hnr : ¬ UF.IsRoot [1, 0] 0 := by
+    unfold UF.IsRoot UF.step UF.parentOf
+    decide
+  have hpos : 0 < 2 := by omega
+  have hcyc : UF.iter [1, 0] 2 0 = 0 := by
+    unfold UF.iter UF.step UF.parentOf
+    decide
+  exact hac 0 h0 hnr 2 hpos hcyc
+
+/-- The root-only forest's chase stops with `n + 1` fuel. -/
+example : UF.StopsAt [0] 2 0 := by
+  rw [UF.stopsAt_succ]
+  exact Or.inl rfl
 
 /-- One-step compression through the checked write: `parent[x] := r`, with the
 write guard derived from the representation predicate at the runtime index. -/

@@ -808,7 +808,9 @@ The checked-backend route: \lean{UFRep} relates the world's bytes to a parent
 array, a runtime index below its length yields the access evidence
 (\lean{UFRep.canRead}, \lean{UFRep.canWrite}), and represented reads are proved
 in range. Under a ranked forest the chase stops at a root,
-\lean{findRootC\_ranked\_root}; a completed chase is the functional search and
+\lean{findRootC\_ranked\_root}; under a bounded acyclic forest it stops within
+$n+1$ steps (\lean{stopsAt\_of\_acyclic}, \lean{findRootC\_acyclic\_root}), no
+rank function needed. A completed chase is the functional search and
 its result is a root; the checked compression is the functional compression and
 preserves the partition in both directions (\lean{compressC\_same\_iff});
 full path compression along the path the chase itself takes preserves it too
@@ -1057,6 +1059,11 @@ abbrev Cert (pre : World → Prop) (α : Type)
     (post : World → α → World → Prop) : Type :=
   ∀ w, pre w → { p : α × World // post w p.1 p.2 }
 \end{lstlisting}
+The rank is one route; \lean{Acyclic} is the other. It excludes a positive
+iterate returning to an in-range non-root, and \lean{stopsAt\_of\_acyclic}
+completes the chase within $n+1$ steps by pigeonhole over the $n+1$ iterates,
+with \lean{findRootC\_acyclic\_root} the certified corollary; roots are fixed
+points and are not excluded, which the one-node-root control witnesses.
 
 A certified computation's postcondition is where the algorithm's invariants are
 stated: \lean{findCompressCert} returns a root, preserves \lean{UFRep} and the
@@ -1111,9 +1118,11 @@ concrete 64-byte instance with an immutable observation.
 \item \textbf{Termination is fuel.} The evaluators are fuel-bounded, with
   exhaustion a distinct outcome. For the checked union-find a ranked forest gives
   completion within the rank (\lean{stopsAt\_of\_ranked},
-  \lean{findRootC\_ranked\_root}); what is not established is termination of
-  arbitrary loops, and a rank derived from a forest or acyclicity predicate
-  rather than supplied.
+  \lean{findRootC\_ranked\_root}) and a bounded acyclic forest within $n+1$ steps
+  (\lean{stopsAt\_of\_acyclic}, \lean{findRootC\_acyclic\_root}); what is not
+  established is termination of arbitrary loops, and deriving the forest
+  predicate (a rank or acyclicity) from the parent array's construction rather
+  than supplying it.
 \item \textbf{Sealing is per-declaration, not physical.}
   \lean{Cap/Sealed.lean} makes the sealed world's constructor, representation
   field and invariant proof private, so outside the module a world can be held
@@ -1180,8 +1189,9 @@ A borrowing discipline need not be a type system. Handles as names, a ledger of
 fractional shares and footprints, and a checker that is also the interpreter give
 an ownership discipline in ordinary Lean, with machine-checked preservation and
 a program interface whose refused operations do not typecheck. The remaining work
-is well-defined: the executed per-step correspondence and a rank derived from a
-forest predicate for the checked union-find, integrating the delegation chain
+is well-defined: the executed per-step correspondence and a forest predicate
+(rank or acyclicity) derived from the parent array's construction for the checked
+union-find, integrating the delegation chain
 with ledger leaves and the world's live loans, physical-storage sealing, and the
 C backend with its three trust levels made explicit.
 

@@ -300,7 +300,13 @@
   to the value read, returning that value. `Ranked.reach_lt` bounds
   reachable nodes, and
   `stopsAt_of_ranked` bounds the chase by the rank; the rank completion is
-  `findRootC_ranked_root`. The partition equivalence is
+  `findRootC_ranked_root`. A rank function is not required: `Acyclic` excludes a
+  positive iterate returning to an in-range non-root, and `stopsAt_of_acyclic`
+  obtains completion within `n + 1` steps by pigeonhole over the `n + 1`
+  iterates (`findRootC_acyclic_root` is the certified corollary). A one-node
+  root is acyclic and a two-node cycle is not; both controls are `example`s in
+  the module. Deriving the forest predicate from the parent array's construction
+  remains outside it. The partition equivalence is
   `compressC_same_iff`/`compress_same_iff_of_root`, built on orbit linearity
   (`reach_or_reach_of_common`), the root-is-terminal fact (`root_reach_eq`) and
   root-reach preservation (`reach_root_compress`). Full path compression is
