@@ -822,8 +822,11 @@ instance, proving its root and returning an immutable 64-zero-byte snapshot
 (\lean{ufRunner\_findRootSnapshot}). (iv) The program interface: the checked
 route is the algorithm interface. The context-preserving fragment carries access
 evidence but no representation index, so the data-dependent chase cannot be
-written there; executing the per-node path writes through the certified
-interface remains open.
+written there. The full path is executed through the certified interface
+(\lean{compressPathCert}, \lean{compressRootPathCert}); its final array is
+\lean{compressAll} of the initial one
+(\lean{compressRootPathCert\_compressAll}) and preserves the partition in both
+directions (\lean{compressRootPathCert\_same\_iff}).
 
 \paragraph{Backends.} Two implementations share one model. The pure backend is a
 byte list with a length proof; the byte-array backend is the same interface over
@@ -1095,8 +1098,8 @@ concrete 64-byte instance with an immutable observation.
   is a root; the checked compression is the functional one and preserves the
   partition both ways (\lean{compressC\_same\_iff}), including full path
   compression along the chase's own path
-  (\lean{rootPath\_compress\_same\_iff}). The executed-path obligation is stated
-  with the union-find limitation below.
+  (\lean{rootPath\_compress\_same\_iff}). The path's execution is stated with
+  the union-find correctness paragraph below.
 \item \textbf{Loans are exclusive suspension at the world level.} The
   executable borrower is the lender's own identifier: there is no reborrow
   capability in the world, and no non-root lifetime in the executable language.
@@ -1158,16 +1161,20 @@ concrete 64-byte instance with an immutable observation.
   allocation is already in \lean{World.WellFormed} via \lean{Ctx.Functional};
   no separate one-entitlement invariant is needed, and ``exactly one'' is not
   claimed since an allocation may be freed or unowned.
-\item \textbf{Union-find correctness is partial.} The checked route has the
+\item \textbf{Union-find correctness.} The checked route has the
   representation predicate, bounded represented reads, rank- or
-  acyclicity-bounded chase completion, root correctness, one-step partition equivalence, and full path
-  compression along the path the chase itself takes
-  (\lean{rootPath\_compress\_same\_iff}). A sealed runner executes the concrete
-  64-byte instance, proves its root and returns an immutable snapshot
-  (\lean{ufRunner\_findRootSnapshot}); executing those per-node writes through
-  the certified interface remains an obligation. The context-preserving
-  fragment has no representation index and does not host this chase; the checked
-  route is the algorithm interface.
+  acyclicity-bounded chase completion, root correctness, one-step partition
+  equivalence, and full path compression along the path the chase itself takes
+  (\lean{rootPath\_compress\_same\_iff}). The path is executed through the
+  certified write (\lean{compressPathCert}, \lean{compressRootPathCert}); the
+  certificate's final array is \lean{compressAll} of its initial array
+  (\lean{compressRootPathCert\_compressAll}), so the partition equivalence
+  applies to the executed writes (\lean{compressRootPathCert\_same\_iff}). A
+  sealed runner executes the concrete 64-byte instance, proves its root and
+  returns an immutable snapshot (\lean{ufRunner\_findRootSnapshot}). The
+  context-preserving fragment has no representation index and does not host this
+  chase; the checked route is the algorithm interface. Amortized analysis is not
+  claimed.
 \item \textbf{No verification of C.} The backend exists as a Lean model and a
   ByteArray refinement only.
 \end{itemize}
@@ -1193,9 +1200,9 @@ A borrowing discipline need not be a type system. Handles as names, a ledger of
 fractional shares and footprints, and a checker that is also the interpreter give
 an ownership discipline in ordinary Lean, with machine-checked preservation and
 a program interface whose refused operations do not typecheck. The remaining work
-is well-defined: the executed per-step correspondence and a forest predicate
-(rank or acyclicity) derived from the parent array's construction for the checked
-union-find, integrating the delegation chain
+is well-defined: a forest predicate (rank or acyclicity) derived from the
+parent array's construction for the checked union-find, integrating the
+delegation chain
 with ledger leaves and the world's live loans, physical-storage sealing, and the
 C backend with its three trust levels made explicit.
 

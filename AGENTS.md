@@ -328,9 +328,11 @@
   (`rootPath`): every node on it is in range and reaches the search's result
   (`rootPath_mem_reach_from`, `rootPath_mem_reach_result`), so
   `rootPath_compress_same_iff` proves full-path partition preservation along the
-  path the chase itself takes. Executing those per-node writes through the
-  certified interface needs the dependently indexed composition; the world-level
-  borrower and C stages remain.
+  path the chase itself takes. `compressBuf`/`compressPathCert` fold
+  `compressCert` over a node list; `compressRootPathCert` runs the fold on
+  `rootPath`, `compressRootPathCert_compressAll` identifies the final array with
+  `UF.compressAll`, and `compressRootPathCert_same_iff` transports the partition
+  theorem to the executed writes. The world-level borrower and C stages remain.
 - `Cap/UFCompress.lean` adds bounded root finding and one-step compression to the
   functional model: `findRootF` chases parents with fuel, `StopsAt` records a
   reached fixed point, `findRootF_root`/`findRootF_reachable` give the root and

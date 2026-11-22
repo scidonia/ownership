@@ -316,6 +316,133 @@ theorem rootPath_compress_same_iff {w : World} {a : AllocId} {id : CapId} {n : N
   have hylt : y < n := Ranked.reach_lt hrank hx hxy
   rwa [hlen]
 
+/-- The buffer after compressing a list of nodes to `r`. -/
+def compressBuf (r : Nat) : List UInt8 → List Nat → List UInt8
+  | buf, [] => buf
+  | buf, x :: xs => compressBuf r (buf.set x r.toUInt8) xs
+
+theorem map_compressBuf {r : Nat} (hr256 : r < 256) :
+    ∀ (l : List UInt8) (path : List Nat),
+      (compressBuf r l path).map UInt8.toNat =
+        UF.compressAll (l.map UInt8.toNat) r path
+  | l, [] => rfl
+  | l, x :: xs => by
+    rw [compressBuf, map_compressBuf hr256 (l.set x r.toUInt8) xs]
+    have hu : r.toUInt8.toNat = r := by
+      show r % 256 = r
+      omega
+    rw [map_toNat_set, hu]
+    rfl
+
+/-- Compress every node of a path to `r` through the certified write. -/
+noncomputable def compressPathCert (a : AllocId) (id : CapId) (n r : Nat)
+    (path : List Nat) (hr : r < n) (hr256 : r < 256)
+    (hpath : ∀ x ∈ path, x < n) :
+    Cert (fun w => UFRep w a id n ∧ w.WellFormed) Unit
+      (fun w0 _ w' => UFRep w' a id n ∧ w'.WellFormed ∧
+        ∃ b0 b', w0.heaps a = some b0 ∧ w'.heaps a = some b' ∧
+          b'.buf = compressBuf r b0.buf path) :=
+  match path with
+  | [] => fun w hw => by
+    have hpost : UFRep w a id n ∧ w.WellFormed ∧
+        ∃ b0 b', w.heaps a = some b0 ∧ w.heaps a = some b' ∧
+          b'.buf = compressBuf r b0.buf [] := by
+      obtain ⟨-, -, b, -, -, -, -, -, -, -, hb, -, -⟩ := hw.1
+      exact ⟨hw.1, hw.2, b, b, hb, hb, rfl⟩
+    exact ⟨((), w), hpost⟩
+  | x :: xs => fun w hw => by
+    let r1 := compressCert a id n x r (hpath x (by simp)) hr hr256 w hw
+    have hpre1 : UFRep r1.1.2 a id n ∧ r1.1.2.WellFormed :=
+      ⟨r1.property.1, r1.property.2.1⟩
+    let r2 := compressPathCert a id n r xs hr hr256
+      (fun y hy => hpath y (by simp [hy])) r1.1.2 hpre1
+    have hpost : UFRep r2.1.2 a id n ∧ r2.1.2.WellFormed ∧
+        ∃ b0 b', w.heaps a = some b0 ∧ r2.1.2.heaps a = some b' ∧
+          b'.buf = compressBuf r b0.buf (x :: xs) := by
+      obtain ⟨hrep1, hwf1, b0, b1, hb0, hb1, hbuf1⟩ := r1.property
+      obtain ⟨hrep2, hwf2, b1', b2, hb1', hb2, hbuf2⟩ := r2.property
+      have hb1eq : b1' = b1 := Option.some.inj (hb1'.symm.trans hb1)
+      rw [hb1eq] at hbuf2
+      refine ⟨hrep2, hwf2, b0, b2, hb0, hb2, ?_⟩
+      rw [hbuf2, hbuf1]
+      rfl
+    exact ⟨((), r2.1.2), hpost⟩
+
+theorem compressPathCert_compressAll {w : World} {a : AllocId} {id : CapId}
+    {n r : Nat} {path : List Nat} (hr : r < n) (hr256 : r < 256)
+    (hpath : ∀ x ∈ path, x < n) (hw : UFRep w a id n ∧ w.WellFormed) :
+    ∃ w', (compressPathCert a id n r path hr hr256 hpath w hw).1.2 = w' ∧
+      ∃ b0 b', w.heaps a = some b0 ∧ w'.heaps a = some b' ∧
+        UFArr b' = UF.compressAll (UFArr b0) r path := by
+  obtain ⟨hwrep, hwwf, b0, b', hb0, hb', hbuf⟩ :=
+    (compressPathCert a id n r path hr hr256 hpath w hw).property
+  refine ⟨_, rfl, b0, b', hb0, hb', ?_⟩
+  show (b'.buf.map UInt8.toNat) = UF.compressAll (b0.buf.map UInt8.toNat) r path
+  rw [hbuf]
+  exact map_compressBuf hr256 b0.buf path
+
+
+/-- Execute the full path read off the chase through the certified write:
+compressing every node of `rootPath` to the chase's result. -/
+noncomputable def compressRootPathCert (a : AllocId) (id : CapId) (n : Nat)
+    (rank : Nat → Nat) (b : Backend) (hrank : Ranked (UFArr b) n rank)
+    (x : Nat) (hx : x < n) (hn : n ≤ 256) :
+    Cert (fun w => UFRep w a id n ∧ w.WellFormed ∧ w.heaps a = some b) Unit
+      (fun w0 _ w' => UFRep w' a id n ∧ w'.WellFormed ∧
+        ∃ b0 b', w0.heaps a = some b0 ∧ w'.heaps a = some b' ∧
+          b'.buf = compressBuf (UF.findRootF (UFArr b) (rank x + 1) x) b0.buf
+            (rootPath (UFArr b) (rank x + 1) x)) := by
+  intro w hw
+  have hr : UF.findRootF (UFArr b) (rank x + 1) x < n :=
+    findRootF_lt hrank.1 hx
+  have hr256 : UF.findRootF (UFArr b) (rank x + 1) x < 256 := by omega
+  have hpath : ∀ y ∈ rootPath (UFArr b) (rank x + 1) x, y < n := by
+    intro y hy
+    exact Ranked.reach_lt hrank hx (rootPath_mem_reach_from hy)
+  exact compressPathCert a id n (UF.findRootF (UFArr b) (rank x + 1) x)
+    (rootPath (UFArr b) (rank x + 1) x) hr hr256 hpath w ⟨hw.1, hw.2.1⟩
+
+/-- The full-path certificate's final array is `compressAll` of its initial
+array, so the pure partition theorem applies to the executed writes. -/
+theorem compressRootPathCert_compressAll {w : World} {a : AllocId} {id : CapId}
+    {n : Nat} {rank : Nat → Nat} {b : Backend} {hrank : Ranked (UFArr b) n rank}
+    {x : Nat} (hx : x < n) (hn : n ≤ 256)
+    (hw : UFRep w a id n ∧ w.WellFormed ∧ w.heaps a = some b) :
+    ∃ w', (compressRootPathCert a id n rank b hrank x hx hn w hw).1.2 = w' ∧
+      ∃ b0 b', w.heaps a = some b0 ∧ w'.heaps a = some b' ∧
+        UFArr b' = UF.compressAll (UFArr b0)
+          (UF.findRootF (UFArr b) (rank x + 1) x)
+          (rootPath (UFArr b) (rank x + 1) x) := by
+  obtain ⟨hwrep, hwwf, b0, b', hb0, hb', hbuf⟩ :=
+    (compressRootPathCert a id n rank b hrank x hx hn w hw).property
+  refine ⟨_, rfl, b0, b', hb0, hb', ?_⟩
+  show (b'.buf.map UInt8.toNat) = UF.compressAll (b0.buf.map UInt8.toNat)
+    (UF.findRootF (UFArr b) (rank x + 1) x) (rootPath (UFArr b) (rank x + 1) x)
+  rw [hbuf]
+  have hr : UF.findRootF (UFArr b) (rank x + 1) x < n :=
+    findRootF_lt hrank.1 hx
+  exact map_compressBuf (by omega) b0.buf (rootPath (UFArr b) (rank x + 1) x)
+
+/-- The executed full-path compression preserves the partition in both
+directions, by transporting `rootPath_compress_same_iff` along the certificate's
+final array. -/
+theorem compressRootPathCert_same_iff {w : World} {a : AllocId} {id : CapId}
+    {n : Nat} {rank : Nat → Nat} {b : Backend} {hrank : Ranked (UFArr b) n rank}
+    {x : Nat} (hx : x < n) (hn : n ≤ 256)
+    (hw : UFRep w a id n ∧ w.WellFormed ∧ w.heaps a = some b) :
+    ∃ w', (compressRootPathCert a id n rank b hrank x hx hn w hw).1.2 = w' ∧
+      ∃ b0 b', w.heaps a = some b0 ∧ w'.heaps a = some b' ∧
+        ∀ p q, UF.Same (UFArr b') p q ↔ UF.Same (UFArr b0) p q := by
+  obtain ⟨w', hw', b0, b', hb0, hb', hcomp⟩ :=
+    compressRootPathCert_compressAll hx hn hw
+  refine ⟨w', hw', b0, b', hb0, hb', ?_⟩
+  have hb0eq : b0 = b := Option.some.inj (hb0.symm.trans hw.2.2)
+  have hstop : UF.StopsAt (UFArr b) (rank x + 1) x :=
+    stopsAt_of_ranked hrank (rank x + 1) x hx (by omega)
+  intro p q
+  rw [hcomp, hb0eq]
+  exact rootPath_compress_same_iff hw.1 hw.2.2 hrank hx hstop
+
 /-! ### The concrete 64-byte union-find instance -/
 
 /-- The empty 64-byte backend is a zero parent array. -/

@@ -843,8 +843,13 @@ $n+1$ fuel (\texttt{uWorld\_findRoot\_acyclic}). Orbits are linear, a root reach
 itself, and compression to a root preserves the partition in both directions
 (\texttt{compressC\_same\_iff}); full path compression
 (\texttt{UF.compressAll}, \texttt{compressAll\_same\_iff}) preserves the
-partition over a supplied path. Deriving the path from the chase and the
-amortized analysis are still not claimed.
+partition over a supplied path. The path is derived from the chase and
+executed through the certified write (\texttt{compressPathCert},
+\texttt{compressRootPathCert}); the certificate's final array is
+\texttt{compressAll} of its initial array
+(\texttt{compressRootPathCert\_compressAll}), so the partition theorem applies
+to the executed writes (\texttt{compressRootPathCert\_same\_iff}). Amortized
+analysis is not claimed.
 
 \file{Cap/UFCertified.lean} is the certified algorithm-facing interface: a
 \texttt{Cert pre} $\alpha$ \texttt{post} is a total computation from a world satisfying
@@ -869,9 +874,12 @@ returns the root with a copy of the allocation's bytes, and
 zero bytes)}. The compression path is derived from the chase
 (\texttt{rootPath}); its nodes are in range and reach the search's result, and
 \texttt{rootPath\_compress\_same\_iff} proves full-path partition preservation
-along the path the chase takes. Executing the per-node writes through the
-certified interface needs a dependently indexed composition, which remains
-open.
+along the path the chase takes. The full path is executed through the
+certified write: \texttt{compressPathCert} folds \texttt{compressCert} over the
+list and \texttt{compressRootPathCert} applies it to \texttt{rootPath}; the
+final array is \texttt{compressAll} of the initial array
+(\texttt{compressRootPathCert\_compressAll}) and the partition is preserved in
+both directions (\texttt{compressRootPathCert\_same\_iff}).
 
 \section{Byte-array backend refinement}
 
