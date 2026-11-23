@@ -284,6 +284,19 @@ theorem read_rep {c : Code} (m : Marshal c) {w : World} {a : AllocId}
   rw [hb]
   exact hrep
 
+/-- A capability-indexed read: the caller must present read authority at a
+byte of the owning allocation. -/
+def readC {c : Code} (m : Marshal c) (w : World) (a : AllocId) (id : CapId)
+    (i : Nat) (h : Ctx.CanRead w.ctx a id i) : Option (El c) :=
+  read m w a
+
+/-- A represented backend with read authority decodes to its value. -/
+theorem readC_rep {c : Code} (m : Marshal c) {w : World} {a : AllocId}
+    {id : CapId} {i : Nat} {b : Backend} {v : El c}
+    (hcan : Ctx.CanRead w.ctx a id i) (hb : w.heaps a = some b)
+    (hrep : Rep m v b.buf) : readC m w a id i hcan = some v :=
+  read_rep m hb hrep
+
 /-- Deallocate a marshalled buffer through the checked disposal route. -/
 def free (w : World) (a : AllocId) (d : CapId) : Except String World :=
   w.freeChecked a d

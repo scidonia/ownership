@@ -361,7 +361,8 @@
   buffer to its ghost `El c` value. `World.allocWithChecked` allocates a fresh
   owner whose backend is initialised from bytes, with `allocWithChecked_wf` and
   `allocWithChecked_succeeds`; `Marshal.alloc` proves the initial `Rep` and
-  `Marshal.read`/`read_rep` decode a represented buffer; `Marshal.free`
+  `Marshal.read`/`read_rep` decode a represented buffer, and
+  `Marshal.readC`/`readC_rep` require `Ctx.CanRead`; `Marshal.free`
   delegates to `World.freeChecked` (`free_wf`). Storage remains `El c`, not an
   arbitrary type: `SafeValue` is encoding, not confinement.
 - `Cap/UFCompress.lean` adds bounded root finding and one-step compression to the

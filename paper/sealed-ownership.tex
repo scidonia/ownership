@@ -1085,7 +1085,9 @@ the encoded bytes; it preserves \lean{World.WellFormed}
 (\lean{allocWithChecked\_wf}) and succeeds from the fresh-identifier premises
 (\lean{allocWithChecked\_succeeds}). \lean{Marshal.alloc} then gives the initial
 \lean{Rep} (\lean{alloc\_rep}), and \lean{Marshal.read} decodes the buffer back
-to the ghost value (\lean{read\_rep}). Deallocation is the existing checked route:
+to the ghost value (\lean{read\_rep}); \lean{Marshal.readC} requires a
+\lean{Ctx.CanRead} witness and returns the represented value (\lean{readC\_rep}).
+Deallocation is the existing checked route:
 \lean{Marshal.free} delegates to \lean{World.freeChecked}, so the recorded
 disposal capability and the no-live-lender condition still apply, and
 \lean{Marshal.free\_wf} preserves the invariant. The decoded \lean{El c} value is
@@ -1293,10 +1295,10 @@ ownership theorem.
   computations and full paths, including intermediate states, is not provided.
   This is a concrete metatheory obligation, not a flaw in the compression
   functions.
-\item The marshalling layer has a value-level decoder but not a
-  capability-indexed read or a checked write wrapper preserving \lean{Rep};
-  allocation preserves \lean{WellFormed} but not yet \lean{FullInv}. These can be
-  added, with an encoded-size invariant for writes.
+\item The marshalling layer has value-level and capability-indexed reads
+  (\lean{Marshal.read}, \lean{Marshal.readC}) but not a checked write wrapper
+  preserving \lean{Rep}; allocation preserves \lean{WellFormed} but not yet
+  \lean{FullInv}. These can be added, with an encoded-size invariant for writes.
 \item \lean{Built} certifies the concrete 64-byte zero array; an arbitrary
   runtime parent array still needs a construction witness.
 \item Disposal reconstruction needs the spatial join the ledger does not yet
