@@ -1094,7 +1094,8 @@ the value (\lean{readC\_rep}). \lean{Marshal.writeC} similarly requires
 (\lean{writeC\_fullInv}). A byte-wise trace over the same range is accepted by
 the checker (\lean{writeC\_trace\_ok}), though its final world is not yet proved
 equal to \lean{writeC}. Deallocation is the existing checked route:
-\lean{Marshal.free} delegates to \lean{World.freeChecked}, so the recorded
+\lean{Marshal.free} delegates to \lean{World.freeChecked}, preserves
+\lean{FullInv} (\lean{free\_fullInv}), so the recorded
 disposal capability and the no-live-lender condition still apply, and
 \lean{Marshal.free\_wf} preserves the invariant. The decoded \lean{El c} value is
 a ghost: it carries no authority, and a copied ghost value cannot access the

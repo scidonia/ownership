@@ -422,6 +422,16 @@ theorem writeC_fullInv {c : Code} (m : Marshal c) {w : World} {a : AllocId}
   · change w.LoansOK
     exact hinv.2
 
+/-- Checked deallocation preserves the combined invariant. -/
+theorem World.freeChecked_fullInv {w w' : World} {a : AllocId} {d : CapId}
+    (h : w.freeChecked a d = .ok w') (hinv : w.FullInv) : w'.FullInv := by
+  apply World.checkWorld_fullInv w w' [UCmd.free a d] _ hinv
+  cases hw : w.freeChecked a d with
+  | error e => simp [hw] at h
+  | ok w'' =>
+    simp [checkWorld, hw]
+    simpa [hw] using h
+
 /-- A byte-wise write trace for a buffer encoding. -/
 def writeCmds (a : AllocId) (id : CapId) (start : Nat) : List UInt8 → List UCmd
   | [] => []
@@ -468,6 +478,11 @@ def free (w : World) (a : AllocId) (d : CapId) : Except String World :=
 theorem free_wf {w w' : World} {a : AllocId} {d : CapId}
     (h : free w a d = .ok w') (hwf : w.WellFormed) : w'.WellFormed :=
   World.freeChecked_wf h hwf
+
+/-- A successful marshalled deallocation preserves the combined invariant. -/
+theorem free_fullInv {w w' : World} {a : AllocId} {d : CapId}
+    (h : free w a d = .ok w') (hinv : w.FullInv) : w'.FullInv :=
+  World.freeChecked_fullInv h hinv
 
 end Marshal
 
