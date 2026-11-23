@@ -150,7 +150,7 @@ state are checked together. This is the pattern the rest of the paper formalises
 names are cheap, authority is in the context, and every operation is checked
 against the current state.
 
-\paragraph*{Scope of this revision.} The proved core is a logical authority
+\paragraph*{Scope of the model.} The proved core is a logical authority
 machine. Two promised mechanisms remain incomplete and are not disguised by the
 formal development: executable loans suspend the lender rather than transfer
 usable authority to a distinct borrower, and the sealed runner still performs
@@ -259,7 +259,7 @@ silently denote a different kind of thing. Each type has exactly one job:
   consults for liveness.
 \end{itemize}
 
-A program is a sequence of operations over a \\emph{world} (permission context,
+A program is a sequence of operations over a \emph{world} (permission context,
 backends, loans). The checker is the interpreter: an accepted execution returns
 the world it executed. This is the sense in which the discipline is sealed at the
 level of the pure model; Section~\ref{sec:limits} is explicit about what sealing
@@ -1109,8 +1109,9 @@ code, not a statement that a \lean{T} retains nothing; a capturing function can
 be bijective with \lean{El .nat}. Storage is therefore \lean{El c}, never an
 arbitrary \lean{T}. A decoded \lean{El} has no references or closures, so a stale
 ghost value is harmless after deallocation; an arbitrary capturing \lean{T} would
-not be. A checked write wrapper over \lean{Rep}, a capability-indexed read, pointers,
-alignment and the C arena are not claimed here; the decoder is a value-level read.
+not be. Range-authorized reads and same-length writes are \lean{Marshal.readC}
+and \lean{Marshal.writeC}; pointers, alignment and the C arena are not claimed
+here, and the decoder is a value-level read.
 
 \subsection{Case studies}
 \label{sec:cases}
@@ -1162,7 +1163,7 @@ union(0,2) -> [0,0,0,2]
 find(3): 3 -> 2 -> 0, compress -> [0,0,0,0]
 \end{lstlisting}
 
-The model's full-path example is the branching shape from the review:
+The model's full-path example uses the branching shape:
 
 \begin{lstlisting}
 p = [0,0,1,2]
@@ -1422,7 +1423,7 @@ D. Dreyer. Iris from the ground up. \emph{JFP} 28, 2018.
 verification of C code with refined ownership types. \emph{PLDI 2021}.
 \bibitem{compcert} X. Leroy. Formal verification of a realistic compiler.
 \emph{CACM} 52(7), 2009.
-\bibitem{marshall} W. Marshall and D. Orchard. Functional ownership through
+\bibitem{marshall} D. Marshall and D. Orchard. Functional ownership through
 fractional uniqueness. \emph{Proc. ACM Program. Lang.} 8(OOPSLA1), 2024.
 \href{https://doi.org/10.1145/3649848}{doi:10.1145/3649848}.
 \bibitem{atkey} R. Atkey. Parameterised notions of computation.

@@ -79,14 +79,39 @@ example : ¬ Cap.Marshal.Ctx.CanReadRange splitCtx alloc0 ⟨1⟩ 0 2 := by
   subst c
   exact Nat.not_lt.mpr (by decide : leftLeaf.hi ≤ 1) hhi
 
+private theorem wholeCanWrite (j : Nat) (hj : j < 2) :
+    Ctx.CanWrite wholeCtx alloc0 ⟨1⟩ j := by
+  refine ⟨wholeOwner, ?_, ?_⟩
+  · simp [wholeCtx, Ctx.findOwner?, wholeOwner]
+  · simp [Owner.writableB, wholeOwner, Tree.find?, wholeLeaf, wholeCtx]
+    omega
+
+private def replacementWorld : World :=
+  pairMarshal.writeC wholeWorld alloc0 ⟨1⟩ (8, 100) (Backend.ofBytes [7, 99]) rfl
+    (by simp [wholeWorld, alloc0])
+    (by
+      intro j hj0 hj2
+      exact wholeCanWrite j (by simpa [Backend.ofBytes] using hj2))
+
+/-- Same-length replacement re-establishes the representation. -/
+example : Marshal.Rep pairMarshal (8, 100) (Backend.ofBytes [8, 100]).buf := by
+  simp [Marshal.Rep, pairMarshal, pairCode, Cap.codec, Cap.decodeCode,
+    Cap.decodePrefix, Cap.Backend.ofBytes]
+
+/-- The replacement really installs the new encoded buffer. -/
+example : replacementWorld.heaps alloc0 = some (Backend.ofBytes [8, 100]) := by
+  simp [replacementWorld, Marshal.writeC, wholeWorld, alloc0, pairMarshal,
+    pairCode, Cap.codec, Cap.encodeCode]
+
 /-- The write interface preserves the encoding size it requires. -/
 example : (pairMarshal.codec.encode (8, 100)).length =
     (pairMarshal.codec.encode (7, 99)).length := rfl
 
 /-- A shorter unary-natural encoding cannot satisfy a longer operation's
     same-length premise. -/
-example : (codec .nat).encode 0 ≠ (codec .nat).encode 1 := by
-  decide
+example : ((Cap.codec Code.nat).encode 0).length ≠
+    ((Cap.codec Code.nat).encode 1).length := by
+  simp [Cap.codec, Cap.encodeCode, Cap.encodeNat]
 
 private def unitMarshal : Marshal .unit := ⟨codec .unit⟩
 

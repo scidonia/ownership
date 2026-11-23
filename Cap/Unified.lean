@@ -1,14 +1,13 @@
 /-
-A unified certified execution for byte writes.
+A unified checked execution for the command language.
 
-This is the first slice of the review's R1: one instruction language with a value
-operand, a checker that is also the interpreter over a `World`, and preservation of
-the world relation. Acceptance therefore yields the executed world, not a separate
-permission certificate.
+One instruction language with value operands, a checker that is also the
+interpreter over a `World`, and preservation of the world relation. Acceptance
+therefore yields the executed world, not a separate permission certificate.
 
-Scope: writes and no-ops only. Splits, joins, loans and disposal still live in the
-owner layer (`Cap.Core`, `Cap.Ledger`, `Cap.Context`) and are not yet part of this
-language; that is the next slice.
+The language covers writes, both splits, joins, free, allocation, loan begin/end
+and no-op. Snapshot observation and the sealed runner's full-path state threading
+remain outside this module.
 -/
 import Cap.World
 import Cap.Backend
