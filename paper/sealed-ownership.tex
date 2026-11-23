@@ -101,8 +101,10 @@ interface in which stale or refused operations are not even well-typed programs.
 We report the current state of the implementation: a spatially and fractionally
 splitting ledger with byte budgets, a command language with allocation, writes,
 splits, joins, loans and disposal, sealed certificates with sequential
-composition, a closed-run lifecycle, and union-find as a client, including a
-path-compressing search that runs as a program in the discipline. The paper also
+composition, a closed-run lifecycle, a verified byte codec for the closed code
+universe with byte-initialised allocation and checked disposal, and union-find as
+a client, including a path-compressing search that runs as a program in the
+discipline. The paper also
 states precisely what is \emph{not} established here: reads are observations; loans
 at the world level are exclusive suspension rather than a reborrow capability
 (delegation chains are separate bookkeeping); termination is fuel; the sealed
@@ -165,7 +167,7 @@ proof about an earlier state cannot authorise a live mutation.
   against a pure model (Sections~\ref{sec:cases}).
 \item A verified marshalling layer for the closed code universe: codecs with
   a round-trip theorem, a buffer representation relation, and byte-initialised
-  allocation with checked disposal (Section~\ref{sec:cases}).
+  allocation with checked disposal (Section~\ref{sec:marshal}).
 \item An explicit map of the trust boundary: what is proved, what is
   assumed, and what the C backend would require (Sections~\ref{sec:c} and
   \ref{sec:limits}).
@@ -1017,6 +1019,55 @@ world invariant, bounds the root, and proves \lean{Same} in both directions.
 rank privately; \lean{ufRunner\_findRootSnapshot} is a closed execution of the
 concrete 64-byte instance with an immutable observation.
 
+\section{Marshalling the closed code universe}
+\label{sec:marshal}
+
+The closed code universe of Section~\ref{sec:calculus} is a logical model, not
+yet a byte format. Marshalling adds the representation relation between the two:
+a codec turns an \lean{El c} value into bytes and back, and a ghost
+\lean{Rep} predicate relates a buffer's contents to its value. This is the same
+shape as \lean{UFRep}: a logic-level representation, a concrete byte buffer and
+access through the ownership discipline.
+
+\begin{lstlisting}
+structure Codec (c : Code) where
+  encode : El c → List UInt8
+  decode : List UInt8 → Option (El c)
+  decode_encode : ∀ v, decode (encode v) = some v
+
+structure Marshal (c : Code) where
+  codec : Codec c
+
+def Marshal.Rep (m : Marshal c) (v : El c) (buf : List UInt8) : Prop :=
+  m.codec.decode buf = some v
+\end{lstlisting}
+
+The codec is structural on \lean{Code}: tags for products and sums, a unary
+length prefix for lists and for \lean{Nat} (a correctness representation, not a
+performance one), and \lean{decode\_encode} for every value. It is a verified
+serialiser, not a compiler-verified C layout; the C boundary remains
+Section~\ref{sec:c}.
+
+Allocation is byte-initialised. \lean{World.allocWithChecked} performs the same
+freshness checks as \lean{World.allocChecked}, but installs a backend containing
+the encoded bytes; it preserves \lean{World.WellFormed}
+(\lean{allocWithChecked\_wf}) and succeeds from the fresh-identifier premises
+(\lean{allocWithChecked\_succeeds}). \lean{Marshal.alloc} then gives the initial
+\lean{Rep} (\lean{alloc\_rep}). Deallocation is the existing checked route:
+\lean{Marshal.free} delegates to \lean{World.freeChecked}, so the recorded
+disposal capability and the no-live-lender condition still apply, and
+\lean{Marshal.free\_wf} preserves the invariant. The decoded \lean{El c} value is
+a ghost: it carries no authority, and a copied ghost value cannot access the
+buffer.
+
+The confinement caveat is unchanged. \lean{SafeValue T} is a bijection to a
+code, not a statement that a \lean{T} retains nothing; a capturing function can
+be bijective with \lean{El .nat}. Storage is therefore \lean{El c}, never an
+arbitrary \lean{T}. A decoded \lean{El} has no references or closures, so a stale
+ghost value is harmless after deallocation; an arbitrary capturing \lean{T} would
+not be. A checked read/write wrapper over \lean{Rep}, pointers, alignment and the
+C arena are not claimed here.
+
 \section{Case studies}
 \label{sec:cases}
 
@@ -1063,20 +1114,6 @@ written there. The full path is executed through the certified interface
 \lean{compressAll} of the initial one
 (\lean{compressRootPathCert\_compressAll}) and preserves the partition in both
 directions (\lean{compressRootPathCert\_same\_iff}).
-
-\paragraph{Marshalling.} The closed code universe has a verified byte codec:
-\lean{Codec c} carries \lean{encode : El c → List UInt8}, a total decoder and
-\lean{decode\_encode}; \lean{codec} provides one for every code. The encoding is
-tagged for sums and products, length-prefixed for lists, and unary for \lean{Nat}
-(it is a correctness representation, not a performance one). \lean{Marshal} and
-\lean{Marshal.Rep} relate a buffer to its ghost \lean{El c} value;
-\lean{World.allocWithChecked} allocates a fresh owner whose backend is
-initialised from the encoded bytes, and \lean{Marshal.alloc} proves the initial
-representation. \lean{Marshal.free} delegates to the checked disposal route.
-Storage remains \lean{El c}, never an arbitrary \lean T: the
-\lean{SafeValue} bijection is encoding, not confinement, and a capturing value
-must not outlive the buffer. This is the local byte/inductive representation
-relation; it does not yet include pointers, alignment, or the C arena.
 
 \paragraph{Backends.} Two implementations share one model. The pure backend is a
 byte list with a length proof; the byte-array backend is the same interface over
@@ -1205,6 +1242,12 @@ fragment with a simulation proof (additional compiler work).
   allocation is already in \lean{World.WellFormed} via \lean{Ctx.Functional};
   no separate one-entitlement invariant is needed, and ``exactly one'' is not
   claimed since an allocation may be freed or unowned.
+\item \textbf{Marshalling is value-level.} The codec covers the closed
+  \lean{El} types: no pointers, alignment, padding or C arena. Allocation is
+  byte-initialised and preserves \lean{World.WellFormed}; deallocation is the
+  checked disposal route. A checked read/write wrapper over \lean{Rep} is not
+  provided, and a client type reachable through \lean{SafeValue} must not be
+  allowed to capture the buffer.
 \item \textbf{Union-find correctness.} The checked route has the
   representation predicate, bounded represented reads, rank- or
   acyclicity-bounded chase completion, root correctness, one-step partition
