@@ -238,6 +238,53 @@ theorem World.allocWithChecked_wf {w w' : World} {bytes : List UInt8}
     · simp at h
   · simp at h
 
+/-- Byte-initialised allocation preserves the issuance history. -/
+theorem World.historyOK_allocWithChecked {w w' : World} {bytes : List UInt8}
+    {rootId disposal : CapId} {po : 0 < w.ctx.D}
+    (hw : w.allocWithChecked bytes rootId disposal po = .ok w')
+    (hh : Ctx.HistoryOK w.ctx) : Ctx.HistoryOK w'.ctx := by
+  unfold World.allocWithChecked at hw
+  split at hw
+  · rename_i hf
+    split at hw
+    · rename_i hfresh
+      simp only [Except.ok.injEq] at hw
+      cases hw
+      exact Ctx.historyOK_alloc (hf := hf) hh hfresh.2.2.2.1 hfresh.2.2.2.2 hfresh.2.2.1
+    · simp at hw
+  · simp at hw
+
+/-- Byte-initialised allocation preserves the loan invariant. -/
+theorem World.loansOK_allocWithChecked {w w' : World} {bytes : List UInt8}
+    {rootId disposal : CapId} {po : 0 < w.ctx.D}
+    (hw : w.allocWithChecked bytes rootId disposal po = .ok w')
+    (h : w.LoansOK) : w'.LoansOK := by
+  unfold World.allocWithChecked at hw
+  split at hw
+  · rename_i hf
+    split at hw
+    · rename_i hfresh
+      simp only [Except.ok.injEq] at hw
+      cases hw
+      unfold World.LoansOK World.LenderRetired at h ⊢
+      refine ⟨h.1, h.2.1, h.2.2.1, ?_, ?_⟩
+      · intro l hl
+        exact List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (h.2.2.2.1 l hl))
+      · intro l hl
+        obtain ⟨o, ho, c, hc, hstate⟩ := h.2.2.2.2 l hl
+        exact ⟨o, List.mem_cons_of_mem _ ho, c, hc, hstate⟩
+    · simp at hw
+  · simp at hw
+
+/-- Byte-initialised allocation preserves the combined invariant. -/
+theorem World.allocWithChecked_fullInv {w w' : World} {bytes : List UInt8}
+    {rootId disposal : CapId} {po : 0 < w.ctx.D}
+    (hw : w.allocWithChecked bytes rootId disposal po = .ok w')
+    (hinv : w.FullInv) : w'.FullInv :=
+  ⟨⟨World.allocWithChecked_wf hw hinv.1.1,
+    World.historyOK_allocWithChecked hw hinv.1.2⟩,
+    World.loansOK_allocWithChecked hw hinv.2⟩
+
 /-- A marshalled representation of a closed code. -/
 structure Marshal (c : Code) where
   codec : Codec c
@@ -337,6 +384,13 @@ theorem writeC_rep {c : Code} (m : Marshal c) {w : World} {a : AllocId}
   refine ⟨Backend.ofBytes (m.codec.encode v), ?_, ?_⟩
   · simp [writeC]
   · simpa [Rep, Backend.ofBytes] using m.codec.decode_encode v
+
+/-- A successful marshalled allocation preserves the combined invariant. -/
+theorem alloc_fullInv {c : Code} (m : Marshal c) {w w' : World} {v : El c}
+    {rootId disposal : CapId} {pos : 0 < w.ctx.D}
+    (h : m.alloc w v rootId disposal pos = .ok w') (hinv : w.FullInv) :
+    w'.FullInv :=
+  World.allocWithChecked_fullInv (by simpa [alloc] using h) hinv
 
 /-- Deallocate a marshalled buffer through the checked disposal route. -/
 def free (w : World) (a : AllocId) (d : CapId) : Except String World :=

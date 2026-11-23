@@ -367,7 +367,8 @@
   `Marshal.readC`/`readC_rep` require `Ctx.CanReadRange` over the backend's
   bytes; `Marshal.writeC`/`writeC_rep` require `Ctx.CanWriteRange` and an
   encoded-length equality; `Marshal.free`
-  delegates to `World.freeChecked` (`free_wf`). Storage remains `El c`, not an
+  delegates to `World.freeChecked` (`free_wf`), and `alloc_fullInv` lifts
+  byte-initialised allocation to `FullInv`. Storage remains `El c`, not an
   arbitrary type: `SafeValue` is encoding, not confinement.
 - `Cap/UFCompress.lean` adds bounded root finding and one-step compression to the
   functional model: `findRootF` chases parents with fuel, `StopsAt` records a

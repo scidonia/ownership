@@ -1082,8 +1082,8 @@ Section~\ref{sec:c}.
 
 Allocation is byte-initialised. \lean{World.allocWithChecked} performs the same
 freshness checks as \lean{World.allocChecked}, but installs a backend containing
-the encoded bytes; it preserves \lean{World.WellFormed}
-(\lean{allocWithChecked\_wf}) and succeeds from the fresh-identifier premises
+the encoded bytes; it preserves \lean{FullInv} (\lean{allocWithChecked\_fullInv})
+and succeeds from the fresh-identifier premises
 (\lean{allocWithChecked\_succeeds}). \lean{Marshal.alloc} then gives the initial
 \lean{Rep} (\lean{alloc\_rep}), and \lean{Marshal.read} decodes the buffer back
 to the ghost value (\lean{read\_rep}); \lean{Marshal.readC} requires
@@ -1304,9 +1304,9 @@ ownership theorem.
 \item The marshalling layer has a value-level decoder, a whole-range
   authorized read (\lean{Marshal.read}, \lean{Marshal.readC},
   \lean{Ctx.CanReadRange}) and a range-authorized, same-length write preserving
-  \lean{Rep} (\lean{Marshal.writeC}, \lean{writeC\_rep}). It is not yet
-  connected to the checker trace and does not preserve \lean{FullInv}; allocation
-  preserves \lean{WellFormed} but not yet \lean{FullInv}.
+  \lean{Rep} (\lean{Marshal.writeC}, \lean{writeC\_rep}). Allocation preserves
+  \lean{FullInv} (\lean{alloc\_fullInv}); the write is not yet connected to the
+  checker trace and its \lean{FullInv} preservation is not proved.
 \item \lean{Built} certifies the concrete 64-byte zero array; an arbitrary
   runtime parent array still needs a construction witness.
 \item Disposal reconstruction needs the spatial join the ledger does not yet
