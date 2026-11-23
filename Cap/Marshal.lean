@@ -1,5 +1,6 @@
 import Cap.Code
 import Cap.Unified
+import Cap.UFCertified
 
 namespace Cap
 
@@ -284,6 +285,23 @@ end Marshal
 example : (codec (.prod .nat .bool)).decode
     ((codec (.prod .nat .bool)).encode (3, true)) = some (3, true) :=
   (codec (.prod .nat .bool)).decode_encode (3, true)
+
+/-- End-to-end marshalling on the concrete 64-byte world: allocate a
+`(Nat × Bool)` buffer, and observe that its backend represents the value. -/
+theorem marshal_example : ∃ w' b,
+    Marshal.alloc ⟨codec (.prod .nat .bool)⟩ uWorld (3, true) ⟨7⟩ ⟨8⟩ (by decide) = .ok w' ∧
+      w'.heaps ⟨uWorld.ctx.nextAlloc⟩ = some b ∧
+      Marshal.Rep ⟨codec (.prod .nat .bool)⟩ (3, true) b.buf := by
+  obtain ⟨w', hw'⟩ := World.allocWithChecked_succeeds (w := uWorld)
+    (bytes := (codec (.prod .nat .bool)).encode (3, true))
+    (rootId := ⟨7⟩) (disposal := ⟨8⟩) (pos := by decide) (by decide) (by decide)
+  have hw'' : Marshal.alloc ⟨codec (.prod .nat .bool)⟩ uWorld (3, true) ⟨7⟩ ⟨8⟩
+      (by decide) = .ok w' := by
+    simpa [Marshal.alloc] using hw'
+  obtain ⟨b, hb, hrep⟩ := Marshal.alloc_rep (m := ⟨codec (.prod .nat .bool)⟩)
+    (w := uWorld) (v := (3, true)) (rootId := ⟨7⟩) (disposal := ⟨8⟩)
+    (pos := by decide) hw''
+  exact ⟨w', b, hw'', hb, hrep⟩
 
 /-- The canonical codec round-trips a list of bytes. -/
 example : (codec (.list .uint8)).decode

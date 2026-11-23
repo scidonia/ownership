@@ -1058,7 +1058,9 @@ the encoded bytes; it preserves \lean{World.WellFormed}
 disposal capability and the no-live-lender condition still apply, and
 \lean{Marshal.free\_wf} preserves the invariant. The decoded \lean{El c} value is
 a ghost: it carries no authority, and a copied ghost value cannot access the
-buffer.
+buffer. A concrete example on the 64-byte world (\lean{marshal\_example})
+allocates a \lean{Nat × Bool} buffer, proves its backend represents the value,
+and leaves the encoded bytes in the owner's backend.
 
 The confinement caveat is unchanged. \lean{SafeValue T} is a bijection to a
 code, not a statement that a \lean{T} retains nothing; a capturing function can
