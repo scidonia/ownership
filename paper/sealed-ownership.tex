@@ -88,10 +88,14 @@
 \maketitle
 
 \begin{abstract}
-Linear and uniqueness type systems restrict how resources may be used, but they
-are not the only way to enforce ownership. We ask whether such a discipline can
-be enforced \emph{from outside} the host type system, by a checked data
-structure, and connected to real mutation. We present a borrowing
+Rust-style ownership and borrowing make efficient manual resource management
+practical, but adding a new type discipline to a theorem prover is hard: it
+normally means extending the kernel or elaborator, embedding a new language and
+its semantics, or trusting a translation. We ask whether Lean's existing
+dependent type system can encode enough of the discipline to give us what we need
+for efficient manual management inside ordinary Lean, without changing the
+theorem prover or compiler. Our aim is understanding the metatheory of that
+encoding, not adding a second type system to Lean. We present a borrowing
 discipline embedded in ordinary dependent type theory (Lean~4): handles are
 freely copyable names with no authority of their own; a ledger of fractional
 shares and byte footprints owns all authority; every operation is checked against
@@ -120,20 +124,23 @@ requires.
 
 \section{Introduction}
 
-A verified functional specification with controlled low-level mutation is a
-familiar tension. In Lean~4, arrays are persistent in their specification but
-copy-on-write in their runtime: an unshared array is updated in place, a shared
-one is copied. The observable behaviour is the same; the cost is not, and the
-compiler's decision depends on reference counts that the type system does not
-mention.
+Rust-style ownership and borrowing are the best-known way to combine safe
+mutation with efficient manual resource management in a mainstream language. In
+Lean~4, arrays are persistent in their specification but copy-on-write in their
+runtime: an unshared array is updated in place, a shared one is copied. The
+observable behaviour is the same; the cost is not, and the compiler's decision
+depends on reference counts that the type system does not mention.
 
-This paper asks whether that runtime decision can be brought under a discipline
-we can check in the proof assistant, without modifying the compiler at all. Can
-we enforce an \emph{ownership discipline} in ordinary Lean — aliasing
-rules, exclusive mutation, fractional reads, loans and disposal — such that a
+Adding a new type discipline to a theorem prover is not like adding a library.
+It normally requires changing the kernel or elaborator, implementing a new
+language with its own semantics, or trusting a translation. This paper asks a
+different question: can Lean's existing dependent type system encode the
+ownership discipline we need for efficient manual management, without changing
+the theorem prover or compiler? And can we then understand and prove the
+resulting metatheory? Concretely, can we encode \emph{ownership} — aliasing
+rules, exclusive mutation, fractional reads, loans and disposal — so that a
 program written against the discipline is checked, and its execution is licensed
-by the checker? And can that be done without linear host types, in a language
-where every value may be copied?
+by the checker, in a language where every value may still be copied?
 
 Our answer is a ledger. A \emph{handle} (allocation identifier, capability
 identifier) is a name; names carry no authority. All authority lives in a
