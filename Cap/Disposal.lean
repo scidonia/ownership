@@ -209,6 +209,21 @@ theorem DisposalState.free?_none_of_not_legal {s : DisposalState} {a : AllocId}
   | none => rfl
   | some s' => exact absurd (legal_of_free? hf) h
 
+/-- A spatial root is not reconstructed, so disposal refuses it. This names the
+  unsupported case rather than deriving refusal from a failed shape match. -/
+theorem DisposalState.free?_none_of_spatial_root {s : DisposalState} {a : AllocId}
+    {d : CapId} {o : Owner} {id : CapId} {l r : Tree}
+    (hf : s.world.ctx.findOwner? a = some o) (hr : o.root = .spatial id l r) :
+    s.free? a d = none := by
+  apply DisposalState.free?_none_of_not_legal
+  intro hl
+  obtain ⟨o', hf', _hcov, _hd, _hloans, hroot⟩ := hl
+  rw [hf] at hf'
+  cases hf'
+  obtain ⟨c, hc, _hstate, _hq, _halloc, _hlo, _hhi⟩ := hroot
+  rw [hr] at hc
+  cases hc
+
 /-- A legal state disposes. -/
 theorem DisposalState.free?_legal {s : DisposalState} {a : AllocId} {d : CapId}
     (hl : s.Legal a d) : ∃ s', s.free? a d = some s' := by

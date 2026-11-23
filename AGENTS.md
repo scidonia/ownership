@@ -407,8 +407,9 @@
   recorded disposal entitlement, an empty loan list and a reconstructed root
   (a single active whole-share leaf over the allocation); `free?` is the checked
   route through `World.freeWith?`, and the facts are `free?_none_of_not_legal`,
-  `free?_legal`, `free?_removes_owner`, `free?_none_after_free`, the entitlement
-  and loan refusals, and concrete examples. It is not yet wired into
+  `free?_legal`, `free?_removes_owner`, `free?_none_after_free`,
+  `free?_none_of_spatial_root` (an unsupported spatial decomposition refuses),
+  the entitlement and loan refusals, and concrete examples. It is not yet wired into
   `Cap.Unified`, and names are invalidated by owner removal rather than by arena
   generations.
 - `Cap/World.lean` is the world of owners, mutable backends and loans: the heap

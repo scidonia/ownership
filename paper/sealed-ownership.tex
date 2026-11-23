@@ -1315,8 +1315,10 @@ ownership theorem.
 \item \lean{Built} certifies the concrete 64-byte zero array; an arbitrary
   runtime parent array still needs a construction witness.
 \item Disposal reconstruction needs the spatial join the ledger does not yet
-  provide; the current free rule enforces the loan half and the recorded disposal
-  capability. Exactly one entitlement per allocation is not claimed.
+  provide; a spatial root is refused explicitly
+  (\lean{free?\_none\_of\_spatial\_root}), and the current free rule enforces the
+  loan half and the recorded disposal capability. Exactly one entitlement per
+  allocation is not claimed.
 \item The combined invariant can be extended with provenance roles, the
   delegation invariant and \lean{Disposal.Legal}; the components exist, but they
   are not in \lean{FullInv}. Amortized union-find analysis is also future work,
