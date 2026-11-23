@@ -1253,118 +1253,74 @@ ownership theorem.
 \section{Limitations and threats to validity}
 \label{sec:limits}
 
+\paragraph*{Deliberate boundaries, not defects.}
 \begin{itemize}
-\item \textbf{Access evidence.} The client surfaces'
-  reads and writes carry \lean{CanRead}/\lean{CanWrite} evidence, so an
-  unauthorised access is untypable there; the context-preserving \lean{Owned} fragment
-  does the same, has an explicit outcome and is never refused from a matching,
-  well-formed world (\lean{runOwned\_no\_refusal}). It has no representation
-  index, so a runtime index cannot obtain its evidence in that fragment's
-  syntax; the certified interface supplies that link for algorithms, as
-  \lean{UFRep} demonstrates. The
-  unified language's \lean{write} carries no evidence and is refused at run time
-  (its trace property is \lean{checkWorld\_write\_guard}): that layer is the
-  interpreter, and a typed wrapper over it would be a separate client surface.
-  The checked-backend route supplies the runtime link for algorithms:
-  \lean{UFRep} relates the world's bytes to a parent array and yields access
-  evidence at a runtime index; the chase is the functional search and its result
-  is a root; the checked compression is the functional one and preserves the
-  partition both ways (\lean{compressC\_same\_iff}), including full path
-  compression along the chase's own path
-  (\lean{rootPath\_compress\_same\_iff}).
-\item \textbf{Loans are exclusive suspension at the world level.} The
-  executable borrower is the lender's own identifier: there is no reborrow
-  capability in the world, and no non-root lifetime in the executable language.
-  A suspended leaf can be neither split (both splitters require an active leaf)
-  nor merged (the join refuses non-active children), and disposal is refused
-  while a loan's lender remains live. The loan-state invariant is
-  \lean{LoansOK} (distinct loan identifiers and lenders, live lifetimes, issued
-  lenders, and every lender still a retired leaf), preserved by every
-  context-changing command including loan beginning and ending. Delegation
-  chains with distinct borrowers, nested scopes and share conservation are
-  modelled separately (\lean{Cap/Reborrow.lean}) and bridge to loan records,
-  but are not integrated with ledger leaves or the world's live loan field;
-  the policy-level liveness conjunction is not consulted by the checker. The
-  chain invariant counts each introduced identity once, the base plus the
-  borrowers, and inherits lenders rather than recounting them. The full chain
-  invariant has inhabited one-loan and two-level instances and rejects a base borrower, an issued
-  borrower, a reused loan id, a wrong allocation and an invalid lifetime parent;
-  ending an outer scope while an inner loan is live is refused
-  (\lean{endLink\_outer\_none}).
-\item \textbf{Termination is fuel.} The evaluators are fuel-bounded, with
-  exhaustion a distinct outcome. For the checked union-find a ranked forest gives
-  completion within the rank (\lean{stopsAt\_of\_ranked},
-  \lean{findRootC\_ranked\_root}) and a bounded acyclic forest within $n+1$ steps
-  (\lean{stopsAt\_of\_acyclic}, \lean{findRootC\_acyclic\_root}); a rank proof
-  yields the predicate too (\lean{acyclic\_of\_ranked}); what is not
-  established is termination of arbitrary loops, and tying a particular runtime
-  parent array to a construction history: \lean{Built} records a rank-decreasing
-  union from the identity or zero forest, \lean{built\_ranked} derives
-  \lean{Ranked} (hence \lean{forest\_acyclic}), and \lean{uWorld\_built}
-  certifies the concrete 64-byte zero array. An arbitrary runtime array still
-  needs a construction witness.
-\item \textbf{Sealing is per-declaration, not physical.}
-  \lean{Cap/Sealed.lean} makes the sealed world's constructor, representation
-  field and invariant proof private, so outside the module a world can be held
-  and observed but not manufactured, read or stripped of its invariant. There is
-  no arbitrary-world entry point: the canonical state starts from the empty world
-  (\lean{Sealed.empty}), a proof-facing certified import requires the combined
-  invariant (\lean{Sealed.importCertified}), and a run yields a sealed state only
-  when the checker accepts, carrying the invariant through
-  (\lean{Sealed.run\_invariant}). Negative fixtures check that the constructor
-  and the representation field are unavailable and that no arbitrary-world entry
-  point exists. Lean's private fields/constructor bound the exported interface but not a client's
-  own state transformer, and nothing here seals physical storage: the pure model's
-  copied programs share backends. The isolation claim is relative to a client that
-  uses the exported \lean{Sealed} operations, starts from the canonical empty
-  state, and lets no live handle escape; arbitrary user state transformers,
-  callbacks and repeat executions against foreign state are outside it. The executable-edge claims are listed
-  with an explicit status (\lean{boundaryClaims},
-  \lean{boundary\_no\_physical\_proof}); a safe, opaque runtime remains future
-  work.
-\item \textbf{One invariant, not the whole design invariant.} The combined
-  invariant is \lean{World.FullInv} = \lean{World.TopInv} $\land$
-  \lean{World.LoansOK}: the world bundle, the issuance history and the loan
-  state, preserved by every checked command and by whole executions
-  (\lean{World.checkWorld\_fullInv}) and initialized at the empty world
-  (\lean{World.emptyWorld\_fullInv}). The sealed state carries it. Provenance
-  roles of internal split nodes, the delegation invariant and disposal legality
-  are still outside it.
-\item \textbf{Disposal's loan half is enforced; reconstruction is not.} The
-  recorded disposal capability is checked, removal preserves the world
-  invariant, and disposal is refused while a loan's lender remains live in the
-  owner (\lean{World.freeChecked\_refused\_of\_loan}); the indexed \lean{free}
-  constructor carries that condition. A reconstructed root is not required, and
-  the full rule needs a spatial join for reconstruction, which the ledger does
-  not provide. At most one owner, and hence one recorded disposal capability, per
-  allocation is already in \lean{World.WellFormed} via \lean{Ctx.Functional};
-  no separate one-entitlement invariant is needed, and ``exactly one'' is not
-  claimed since an allocation may be freed or unowned.
-\item \textbf{Marshalling is value-level.} The codec covers the closed
-  \lean{El} types: no pointers, alignment, padding or C arena. Allocation is
-  byte-initialised and preserves \lean{World.WellFormed}; deallocation is the
-  checked disposal route, and \lean{Marshal.read} decodes a represented buffer.
-  A capability-indexed read and a checked write wrapper over \lean{Rep} are not
-  provided, and a client type reachable through \lean{SafeValue} must not be
-  allowed to capture the buffer.
-\item \textbf{Union-find correctness.} The checked route has the
-  representation predicate, bounded represented reads, rank- or
-  acyclicity-bounded chase completion, root correctness, one-step partition
-  equivalence, and full path compression along the path the chase itself takes
-  (\lean{rootPath\_compress\_same\_iff}). The path is executed through the
-  certified write (\lean{compressPathCert}, \lean{compressRootPathCert}); the
-  certificate's final array is \lean{compressAll} of its initial array
-  (\lean{compressRootPathCert\_compressAll}), so the partition equivalence
-  applies to the executed writes (\lean{compressRootPathCert\_same\_iff}). A
-  sealed runner executes the concrete 64-byte instance, proves its root and
-  returns an immutable snapshot (\lean{ufRunner\_findRootSnapshot}). The
-  certified primitives and the full-path certificate are computable; the runner
-  still invokes single-node compression, so the full-path operation is not yet
-  threaded through successive runner states. The context-preserving fragment has
-  no representation index and does not host this chase; the checked route is the
-  algorithm interface. Amortized analysis is not claimed.
-\item \textbf{No verification of C.} The backend exists as a Lean model and a
-  ByteArray refinement only.
+\item The trace language \lean{UCmd} is the interpreter/runtime layer and carries
+  no client evidence. The evidence-bearing surfaces are \lean{IProg},
+  \lean{Owned} and \lean{Cert}; their reads and writes use
+  \lean{CanRead}/\lean{CanWrite} or \lean{UFRep}, according to the surface.
+  \lean{checkWorld\_write\_guard} is the trace's authority property. This is a
+  layering choice, not an authorization claim for raw \lean{UCmd}.
+\item Evaluators are fuel-bounded so totality is explicit; fuel is a modelling
+  device, not a termination theorem. For union-find, \lean{Ranked},
+  \lean{Acyclic} and \lean{Built} give chase completion; arbitrary loops are
+  outside the fragment.
+\item \lean{Sealed} is an exported-API and trusted-client seal: Lean's private
+  fields and constructor prevent construction through that interface, but do not
+  prevent a client from defining its own state transformer. Physical storage
+  isolation is a runtime contract, not a Lean theorem.
+\item \lean{SafeValue} is logical encodability, not confinement; storage holds
+  \lean{El}, never an arbitrary \lean{T}. A capturing client type is excluded
+  from storage by construction. This is a deliberate restriction, not a hidden
+  assumption.
+\end{itemize}
+
+\paragraph*{What implementation work can fix.}
+\begin{itemize}
+\item The sealed runner still invokes single-node compression. The computable
+  full-path certificate exists and identifies its final array with
+  \lean{compressAll}; the missing work is to thread it through successive runner
+  states, preserve \lean{FullInv} and a reusable forest invariant, prove the
+  nontrivial branching update, and compile/execute that same definition.
+\item \lean{Cert} is a specification, not an operational semantics. The
+  compression definitions compose checked reads and writes, but a generic
+  correspondence between certified computations and authorized \lean{UCmd}
+  traces, including intermediate states, is not provided. This is a concrete
+  metatheory obligation, not a flaw in the compression functions.
+\item The marshalling layer has a value-level decoder but not a
+  capability-indexed read or a checked write wrapper preserving \lean{Rep};
+  allocation preserves \lean{WellFormed} but not yet \lean{FullInv}. These can be
+  added, with an encoded-size invariant for writes.
+\item \lean{Built} certifies the concrete 64-byte zero array; an arbitrary
+  runtime parent array still needs a construction witness.
+\item Disposal reconstruction needs the spatial join the ledger does not yet
+  provide; the current free rule enforces the loan half and the recorded disposal
+  capability. Exactly one entitlement per allocation is not claimed.
+\item The combined invariant can be extended with provenance roles, the
+  delegation invariant and \lean{Disposal.Legal}; the components exist, but they
+  are not in \lean{FullInv}. Amortized union-find analysis is also future work,
+  not a correctness claim.
+\end{itemize}
+
+\paragraph*{What is difficult or outside the proved theorem.}
+\begin{itemize}
+\item The executable world still has exclusive suspension, not a distinct usable
+  borrower: the loan's borrower is the lender's own identifier, and
+  \lean{Cap/Reborrow.lean}'s delegation chains are a separate name model. Making
+  the borrower a live authority requires suspended-entitlement accounting,
+  nested restoration and ledger integration, and a new combined invariant. This
+  is the largest gap between the title's borrowing promise and the current
+  executable mechanism.
+\item Physical sealing, reference counts, independent storage, C semantics and
+  the compiler/runtime/ABI boundary are not theorems here. The C backend is not
+  implemented, and the paper does not use it as evidence for the logical
+  ownership result.
+\item Termination of arbitrary loops is outside the fragment. The fragment's
+  evaluators are total by fuel; the union-find algorithm has forest-based
+  completion, not a general termination theorem.
+\item Confinement of an arbitrary client type is not provable from a
+  \lean{SafeValue} bijection: a function can capture storage. The design therefore
+  stores and marshals \lean{El}, not the client view.
 \end{itemize}
 
 \section{Related work}
