@@ -1088,7 +1088,9 @@ the encoded bytes; it preserves \lean{World.WellFormed}
 \lean{Rep} (\lean{alloc\_rep}), and \lean{Marshal.read} decodes the buffer back
 to the ghost value (\lean{read\_rep}); \lean{Marshal.readC} requires
 \lean{Ctx.CanReadRange} over every byte of the represented backend and returns
-the value (\lean{readC\_rep}).
+the value (\lean{readC\_rep}). \lean{Marshal.writeC} similarly requires
+\lean{Ctx.CanWriteRange} and an encoded-length equality, and re-establishes
+\lean{Rep} (\lean{writeC\_rep}).
 Deallocation is the existing checked route:
 \lean{Marshal.free} delegates to \lean{World.freeChecked}, so the recorded
 disposal capability and the no-live-lender condition still apply, and
@@ -1299,11 +1301,12 @@ ownership theorem.
   a generic correspondence for an arbitrary certified computation is not
   provided. This is a concrete metatheory obligation, not a flaw in the
   compression functions.
-\item The marshalling layer has a value-level decoder and a whole-range
+\item The marshalling layer has a value-level decoder, a whole-range
   authorized read (\lean{Marshal.read}, \lean{Marshal.readC},
-  \lean{Ctx.CanReadRange}), but not a checked write wrapper preserving
-  \lean{Rep}; allocation preserves \lean{WellFormed} but not yet
-  \lean{FullInv}. These can be added, with an encoded-size invariant for writes.
+  \lean{Ctx.CanReadRange}) and a range-authorized, same-length write preserving
+  \lean{Rep} (\lean{Marshal.writeC}, \lean{writeC\_rep}). It is not yet
+  connected to the checker trace and does not preserve \lean{FullInv}; allocation
+  preserves \lean{WellFormed} but not yet \lean{FullInv}.
 \item \lean{Built} certifies the concrete 64-byte zero array; an arbitrary
   runtime parent array still needs a construction witness.
 \item Disposal reconstruction needs the spatial join the ledger does not yet

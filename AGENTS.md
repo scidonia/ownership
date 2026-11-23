@@ -365,7 +365,8 @@
   `allocWithChecked_succeeds`; `Marshal.alloc` proves the initial `Rep` and
   `Marshal.read`/`read_rep` decode a represented buffer, and
   `Marshal.readC`/`readC_rep` require `Ctx.CanReadRange` over the backend's
-  bytes; `Marshal.free`
+  bytes; `Marshal.writeC`/`writeC_rep` require `Ctx.CanWriteRange` and an
+  encoded-length equality; `Marshal.free`
   delegates to `World.freeChecked` (`free_wf`). Storage remains `El c`, not an
   arbitrary type: `SafeValue` is encoding, not confinement.
 - `Cap/UFCompress.lean` adds bounded root finding and one-step compression to the

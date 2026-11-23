@@ -311,6 +311,33 @@ theorem readC_rep {c : Code} (m : Marshal c) {w : World} {a : AllocId}
     (hrep : Rep m v b.buf) : readC m w a id b hb hcan = some v :=
   read_rep m hb hrep
 
+/-- Write authority over every byte of a half-open range. -/
+def Ctx.CanWriteRange (Γ : Ctx) (a : AllocId) (id : CapId)
+    (lo hi : Nat) : Prop :=
+  ∀ j, lo ≤ j → j < hi → Ctx.CanWrite Γ a id j
+
+/-- Replace a marshalled buffer by the encoding of `v`, provided the new
+encoding has exactly the backend's length and the caller has write authority
+over the whole range. -/
+def writeC {c : Code} (m : Marshal c) (w : World) (a : AllocId) (id : CapId)
+    (v : El c) (b : Backend) (hlen : (m.codec.encode v).length = b.buf.length)
+    (hb : w.heaps a = some b)
+    (hcan : Ctx.CanWriteRange w.ctx a id 0 b.buf.length) : World :=
+  { w with heaps := fun x =>
+      if x = a then some (Backend.ofBytes (m.codec.encode v)) else w.heaps x }
+
+/-- The range-authorized, same-length write re-establishes the representation. -/
+theorem writeC_rep {c : Code} (m : Marshal c) {w : World} {a : AllocId}
+    {id : CapId} {v : El c} {b : Backend}
+    (hlen : (m.codec.encode v).length = b.buf.length)
+    (hb : w.heaps a = some b)
+    (hcan : Ctx.CanWriteRange w.ctx a id 0 b.buf.length) :
+    ∃ b', (writeC m w a id v b hlen hb hcan).heaps a = some b' ∧
+      Rep m v b'.buf := by
+  refine ⟨Backend.ofBytes (m.codec.encode v), ?_, ?_⟩
+  · simp [writeC]
+  · simpa [Rep, Backend.ofBytes] using m.codec.decode_encode v
+
 /-- Deallocate a marshalled buffer through the checked disposal route. -/
 def free (w : World) (a : AllocId) (d : CapId) : Except String World :=
   w.freeChecked a d
