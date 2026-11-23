@@ -408,6 +408,15 @@ theorem compressPathCert_compressAll {w : World} {a : AllocId} {id : CapId}
   exact map_compressBuf hr256 b0.buf path
 
 
+/-- The checked compression write is exactly one command of the trace
+language, so the trace authority theorem applies to it. -/
+theorem compressC_trace {w w' : World} {a : AllocId} {id : CapId} {n x : Nat}
+    {h : UFRep w a id n} {hx : x < n} {r : Nat}
+    (hw : compressC w a id n h x hx r.toUInt8 = .ok w') :
+    checkWorld w [UCmd.write a id x r.toUInt8] = .ok w' := by
+  change w.writeChecked a id x r.toUInt8 = .ok w' at hw
+  simp [checkWorld, hw]
+
 /-- Execute the full path read off the chase through the certified write:
 compressing every node of `rootPath` to the chase's result. -/
 def compressRootPathCert (a : AllocId) (id : CapId) (n : Nat)

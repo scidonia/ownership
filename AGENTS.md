@@ -287,7 +287,9 @@
   `Same` pair. It is the checked read route over the pure backend, not an
   interpreter, FFI or in-place claim; full path compression and termination
   without fuel remain outside it.
-- `Cap/UFCertified.lean` is the certified algorithm-facing interface: a
+- `Cap/UFCertified.lean` is the certified algorithm-facing interface:
+  `compressC_trace` shows that a checked compression write is a one-command
+  `UCmd` trace, connecting the concrete write to `checkWorld_write_guard`; a
   `Cert pre α post` is a total computation from any world satisfying `pre` to a
   value and world satisfying `post`. `readParentCert` returns a parent value with
   its range proof and its identity as the functional model's `step`;
