@@ -88,9 +88,10 @@
 \maketitle
 
 \begin{abstract}
-Linear type systems forbid aliasing by construction. We ask whether the same
-discipline can be enforced \emph{from outside} the host type system, by a checked
-data structure, and connected to real mutation. We present a borrowing
+Linear and uniqueness type systems restrict how resources may be used, but they
+are not the only way to enforce ownership. We ask whether such a discipline can
+be enforced \emph{from outside} the host type system, by a checked data
+structure, and connected to real mutation. We present a borrowing
 discipline embedded in ordinary dependent type theory (Lean~4): handles are
 freely copyable names with no authority of their own; a ledger of fractional
 shares and byte footprints owns all authority; every operation is checked against
@@ -141,7 +142,24 @@ grants nothing, because copying is not using: a duplicate name is just another
 integer, and the next operation is checked against the current state. A stale
 proof about an earlier state cannot authorise a live mutation.
 
-\paragraph{Contributions.}
+\paragraph*{A first example.} Allocate 64 bytes, split the allocation into a left
+and a right half, and copy the left handle. The copy grants nothing: both names
+denote the same leaf, and the context still contains one left capability. A
+proof that the root capability was writable before the split is not a proof for
+either half. Beginning a loan on the left retires that leaf, so writes through
+the left are refused until the loan ends; the world's loan record and the leaf
+state are checked together. This is the pattern the rest of the paper formalises:
+names are cheap, authority is in the context, and every operation is checked
+against the current state.
+
+\paragraph*{Scope of this revision.} The proved core is a logical authority
+machine. Two promised mechanisms remain incomplete and are not disguised by the
+formal development: executable loans suspend the lender rather than transfer
+usable authority to a distinct borrower, and the sealed runner still performs
+single-node rather than full-path compression. The certified full-path
+computation exists separately. The C refinement is future work.
+
+\paragraph*{Contributions.}
 \begin{enumerate}
 \item A permission calculus in Lean: shares over a context denominator,
   byte-footprint intervals, a decomposition tree with a byte-wise budget, a
@@ -185,10 +203,10 @@ checks every headline theorem, and no proof uses \lean{sorry}. Statements quoted
 below are the declarations in the development, with hypotheses shortened where
 marked.
 
-\section{Handles, authority, and the shape of the discipline}
+\section{The authority machine}
 \label{sec:design}
 
-The design separates three things that linear types conflate:
+This design separates three aspects that are often conflated:
 
 \begin{itemize}
 \item \textbf{identity}: allocation, capability, loan and lifetime identifiers
@@ -249,21 +267,21 @@ the world it executed. This is the sense in which the discipline is sealed at th
 level of the pure model; Section~\ref{sec:limits} is explicit about what sealing
 does and does not mean in Lean.
 
-\section{The permission calculus}
+\subsection{The ledger and coverage}
 \label{sec:calculus}
 
-\paragraph{Shares.} A capability's share of a resource is a fraction $q/D$: a
-numerator over a context-wide denominator. Only the whole share $q=D$ may write;
-splits produce shares that add to exactly the parent's share; hence two partial
-shares can never both write. The arithmetic is not a convention: the write guard
+\paragraph*{Shares.} A capability's share of a resource is a fraction $q/D$: a
+numerator over a context-wide denominator. Only a whole share $q=D$ at a given
+allocation and byte may write; splits produce shares that add to exactly the
+parent's share, so two partial shares cannot both write at the same byte. The arithmetic is not a convention: the write guard
 requires \lean{c.q = D}, and the budget invariant below makes $q = D$
 achievable by at most one capability at a time.
 
-\paragraph{Footprints.} A footprint is a half-open byte interval $[lo,hi)$ of
+\paragraph*{Footprints.} A footprint is a half-open byte interval $[lo,hi)$ of
 one allocation. Splits cut an interval into two; disjointness, adjacency and
 coverage are proved.
 
-\paragraph{The ledger.} One \lean{Owner} per allocation holds a tree of leaves.
+\paragraph*{The ledger.} One \lean{Owner} per allocation holds a tree of leaves.
 A leaf is a capability; internal nodes are \emph{spatial} (children split the
 byte range) or \emph{fractional} (children split the share over the same range):
 
@@ -305,7 +323,7 @@ def Owner.Covered (o : Owner) (D : Nat) : Prop :=
 
 Every byte is exactly accounted for.
 
-\paragraph{What coverage is for.} Coverage is a \emph{per-byte conservation}
+\paragraph*{What coverage is for.} Coverage is a \emph{per-byte conservation}
 statement, and the rest of the design leans on three of its consequences.
 
 \emph{Conservation.} The budget sums the shares of every leaf whose footprint
@@ -368,7 +386,7 @@ theorem Owner.writableB_sound :
 That small theorem is load-bearing: the executable check and the logical guard
 cannot drift.
 
-\section{Contexts: permissions as data}
+\subsection{Contexts and the invariant}
 \label{sec:world}
 
 A program in the discipline never holds authority itself. Authority lives in a
@@ -443,8 +461,8 @@ Read as four independent guarantees, each of which excludes a different attack:
 \begin{itemize}
 \item \textbf{Coverage per owner} (\lean{Covered}, Section~\ref{sec:calculus}):
   at every byte of the allocation the budget is exactly the denominator. A
-  capability cannot be conjured out of nothing, and no byte is accounted for
-  twice.
+  capability cannot be conjured out of nothing, and the per-byte sum is exactly
+  the denominator even when fractional leaves overlap.
 \item \textbf{Leaves within the allocation}: every leaf of an owner's tree has
   that owner's allocation identifier and its footprint ends inside the owner's
   length. A capability for one allocation cannot reach into another.
@@ -472,8 +490,9 @@ def Ctx.ids (C : Ctx) : List CapId := C.owners.flatMap Owner.ids
 def Ctx.Fresh (C : Ctx) (c : CapId) : Prop := c ∉ C.ids
 \end{lstlisting}
 
-\lean{Owner.ids} collects the identifiers that are \emph{access capabilities}:
-the leaves of the tree, plus the owner's root and disposal identifiers. Internal
+\lean{Owner.ids} is \lean{o.disposal :: o.root.ids}: it collects the access
+capability identifiers of the leaves (including the root leaf) plus the disposal
+identifier. Internal
 split nodes carry a \emph{provenance} identifier, which is deliberately excluded
 from \lean{Owner.ids}: an internal node is bookkeeping, not something a client
 may use to access bytes. One subtlety worth stating: a fractional split names its
@@ -595,12 +614,16 @@ are statements about them. What the discipline seals is \emph{authority}: a
 client cannot manufacture a capability's permissions because every operation
 consults the context, and every context-changing operation of the indexed client
 language is indexed by its post-context; the trace language instead checks at
-run time. What Lean does not give us is module opacity, so a hostile client could
-still unfold the definitions and fabricate a context value. Section~
+run time. Lean's private fields and constructor block direct naming outside the
+module, but they do not by themselves stop a client from defining its own state
+transformer; the seal is the exported API together with the trusted-client
+assumption. Section~
 \ref{sec:limits} states this precisely: the seal is a property of the checked
 operations, not of the module system.
 
-\section{The unified checker and interpreter}
+\section{The embedded discipline}
+
+\subsection{The unified checker and interpreter}
 \label{sec:unified}
 
 The executable language is a command list; the checker folds it over the world:
@@ -633,7 +656,7 @@ splits, joins, loans and disposal. Issuance history is added by
 Section~\ref{sec:safety-types}; the older relation \lean{World.Rel} follows
 from \lean{checkWorld\_wf}.
 
-\paragraph{Every write carries its authority.} A checked write is not a bare
+\paragraph*{Every write carries its authority.} A checked write is not a bare
 store:
 \begin{lstlisting}
 def World.writeChecked (w : World) (a : AllocId) (id : CapId)
@@ -660,7 +683,7 @@ read--write ceiling and an in-range index. The trace theorem
 at any position held its guard at the world reached just before it; and because
 the write leaves the context unchanged, the per-byte budget and coverage are
 untouched by stores. Fractional shares are the
-other side of the same rule: a leaf with $q<D$ is \lean{Readable} (positive
+other side of the same rule: an active leaf with $q<D$ is \lean{Readable} (positive
 share, in-range index, any ceiling) but never \lean{Writable}
 (\lean{writable\_not\_shared}); two writable capabilities at one byte are the
 same identifier (\lean{no\_two\_writable}, for a well-formed owner). Splits and
@@ -676,7 +699,7 @@ checked write; the unified language's \lean{write} is the runtime trace
 layer's checked operation, with no client evidence by design
 (Section~\ref{sec:limits}).
 
-\paragraph{Loans are suspension.} A loan record names its own identifier, the
+\paragraph*{Loans are suspension.} A loan record names its own identifier, the
 lender and borrower capabilities, and the lifetime it is bound to:
 
 \begin{lstlisting}
@@ -698,7 +721,7 @@ machinery to keep in sync. Ending the loan restores the leaf. The refusal is a
 theorem with a positive control: the write is accepted before the loan, refused
 while it is outstanding, and accepted again after restoration.
 
-\section{Programs with post-contexts}
+\subsection{Programs with post-contexts}
 \label{sec:programs}
 
 The command language is a trace language: a fixed list of operations. An
@@ -707,7 +730,7 @@ parent and decides where to go next — cannot be a list. We therefore add two
 client interfaces, \lean{Owned} and \lean{IProg}, and a certified
 algorithm-facing interface \lean{Cert} for data-dependent indices.
 
-\paragraph{The context-preserving fragment.} \lean{Owned Γ α} is reads, writes
+\paragraph*{The context-preserving fragment.} \lean{Owned Γ α} is reads, writes
 and monadic binding over a fixed permission context, with every access carrying
 its \lean{CanRead}/\lean{CanWrite} evidence. The fuelled evaluator has an explicit
 outcome (completion, fuel exhaustion, refusal); a successful run preserves the
@@ -716,7 +739,7 @@ typed program is never refused. It deliberately has no representation index:
 data-dependent indices are handled by the certified interface, not by a second,
 weaker access rule.
 
-\paragraph{The indexed interface.} \lean{IProg Γ α Q} starts with context
+\paragraph*{The indexed interface.} \lean{IProg Γ α Q} starts with context
 \lean{Γ}, returns \lean{a : α} and ends with \lean{Q a}. Context-changing
 constructors carry their evidence: allocation needs fresh identifiers, a
 spatial or fractional split or a join needs the ledger transition to succeed,
@@ -745,7 +768,7 @@ records success. The loan state is part of the context index, so evidence that
 depends on outstanding loans can be stated; \lean{beginLoan} and
 \lean{endLoan} carry it explicitly.
 
-\paragraph{Access evidence.} A certified read or write carries its permission:
+\paragraph*{Access evidence.} A certified read or write carries its permission:
 \lean{Ctx.CanWrite Γ a id i} says the owner is found and the ledger's write guard
 accepts; \lean{Ctx.CanRead} says the owner is found and the capability is
 readable at the index. A world that realises the context and satisfies the
@@ -769,7 +792,7 @@ evidence at the program text; \lean{Cap/UFChecked.lean} supplies the runtime
 link for the checked backend through a representation predicate
 (Section~\ref{sec:limits}).
 
-\paragraph{Recursion and loops.} Recursion does not create a new loan: a
+\paragraph*{Recursion and loops.} Recursion does not create a new loan: a
 recursive call can sequentially use the existing exclusive capability while its
 caller is suspended on the stack. A data-dependent index, however, cannot carry
 its evidence at the program text. The certified interface derives it from a
@@ -783,21 +806,21 @@ the chase from node 3 returns root 0 and the compressed array is
 \lean{[0,0,0,0]}; fuel remains the bound for the model search, while the forest
 invariant gives completion for the checked route.
 
-\section{Sealed execution}
+\subsection{Sealed execution}
 \label{sec:sealed}
 
-\paragraph{Certificates.} \lean{Prog pre} packages a command list with the proof
+\paragraph*{Certificates.} \lean{Prog pre} packages a command list with the proof
 that the checker accepts it from \lean{pre}; it cannot exist without the
 derivation. Sequential composition runs an appended list from the first part's
 result, so the second program provably starts in the first's post-world.
 
-\paragraph{Closed runs.} \lean{ClosedProgram} packages commands accepted from the
+\paragraph*{Closed runs.} \lean{ClosedProgram} packages commands accepted from the
 canonical empty world, whose only observation is a snapshot of the final world.
 The indexed interface has the matching closed form: a program that allocates,
 writes and disposes, typed as ending with no owners, accepted, well formed, with
 the disposed allocation's backend gone.
 
-\paragraph{Failure.} Failure is separated by the explicit-outcome evaluator:
+\paragraph*{Failure.} Failure is separated by the explicit-outcome evaluator:
 \lean{IOutcome} distinguishes a completed value and world, fuel exhaustion and a
 refused world check. \lean{evalIProg\_eq\_run} shows the \lean{Option}
 evaluator is that outcome with the refusal cause erased, and
@@ -811,7 +834,7 @@ remaining outcomes for a typed run are completion and exhaustion.
 Resource-preserving failure results for the C backend are planned work
 (Section~\ref{sec:c}).
 
-\section{The type discipline: authority, preservation, and refusal}
+\subsection{The type discipline: authority, preservation, and refusal}
 \label{sec:safety-types}
 
 The discipline delivers three typed statements, not one predicate: an access is
@@ -821,7 +844,7 @@ third is the execution theorem of Section~\ref{sec:programs}. This section
 states the tower and the exact scope of each statement before the case studies
 use them.
 
-\paragraph{Authority.} The write and read guards are propositions about the
+\paragraph*{Authority.} The write and read guards are propositions about the
 capability's leaf. Only a whole share at the index becomes writable; a positive
 share is enough to read, so fractional readers coexist by construction.
 
@@ -841,7 +864,7 @@ def Ctx.CanRead (Γ : Ctx) (a : AllocId) (id : CapId) (i : Nat) : Prop :=
   ∃ o, Γ.findOwner? a = some o ∧ o.Readable id i
 \end{lstlisting}
 
-\paragraph{The lifted invariant.} The component predicates are those of
+\paragraph*{The lifted invariant.} The component predicates are those of
 Section~\ref{sec:world}: coverage, leaves within the allocation, the disposal
 entitlement and the owner, context and world well-formedness, including
 \lean{Ctx.Functional} (one owner per allocation) and \lean{StorageMatches}.
@@ -875,27 +898,10 @@ def World.LoansOK (w : World) : Prop :=
 def World.FullInv (w : World) : Prop := w.TopInv ∧ w.LoansOK
 \end{lstlisting}
 
-\paragraph{Preservation and refusal.} These are the theorem types that connect
+\paragraph*{Preservation and refusal.} These are the theorem types that connect
 the tower to execution:
 
 \begin{lstlisting}
-theorem World.writeChecked_sound :
-  w.writeChecked a id i v = .ok w' →
-  ∃ o b b', w.ctx.findOwner? a = some o ∧ o.Writable w.ctx.D id i ∧
-    w.heaps a = some b ∧ b.write i v = some b' ∧
-    w'.ctx = w.ctx ∧ w'.heaps = (fun x => if x = a then some b' else w.heaps x)
-
-theorem World.write_succeeds :
-  Ctx.CanWrite Γ a id i → w.ctx = Γ → w.WellFormed →
-  ∃ w', w.writeChecked a id i v = .ok w'
-
-theorem World.no_two_canwrite :
-  w.WellFormed → Ctx.CanWrite w.ctx a id1 i → Ctx.CanWrite w.ctx a id2 i → id1 = id2
-
-theorem checkWorld_wf :
-  checkWorld w cs = .ok w' → w.WellFormed → w'.WellFormed
-theorem checkWorld_top :
-  checkWorld w cs = .ok w' → w.TopInv → w'.TopInv
 theorem World.checkWorld_fullInv :
   checkWorld w cs = .ok w' → w.FullInv → w'.FullInv
 
@@ -907,12 +913,10 @@ theorem checkWorld_write_guard :
 theorem evalIProg_post :
   w.ctx = Γ → evalIProg fuel p w = some (a, w') → w.WellFormed →
   w'.ctx = Q a ∧ w'.WellFormed
+
 theorem runIProg_no_refusal :
   w.ctx = Γ → w.WellFormed → ∀ msg, runIProg fuel p w ≠ .refused msg
-theorem runOwned_wf :
-  runOwned fuel p w = .done a w' → w.WellFormed → w'.WellFormed
-theorem runOwned_ctx :
-  runOwned fuel p w = .done a w' → w'.ctx = w.ctx
+
 theorem runOwned_no_refusal :
   w.ctx = Γ → w.WellFormed → ∀ msg, runOwned fuel p w ≠ .refused msg
 \end{lstlisting}
@@ -940,7 +944,7 @@ surfaces are the client layers \lean{IProg}, \lean{Owned} and \lean{Cert}. This
 layering is deliberate: the trace language is what executes and may refuse, not
 what a client writes.
 
-\paragraph{Which surface carries which guarantee.}
+\paragraph*{Which surface carries which guarantee.}
 \begin{itemize}
 \item \lean{UCmd}: no client evidence; the checker/interpreter preserves
   \lean{FullInv} (\lean{World.checkWorld\_fullInv}), every accepted write held
@@ -956,7 +960,22 @@ what a client writes.
   observation is a snapshot.
 \end{itemize}
 
-\paragraph{What must be inhabited.} Several of these types are obligations to
+\paragraph*{How the invariants interact.} The tower is not a list of independent
+checks. \lean{Ctx.ids.Nodup} is only a fact about the live frontier; reuse of a
+retired or freed name is excluded by \lean{Ctx.HistoryOK}, which keeps the
+issuance history and is extended by allocation and both splits. Spatial and
+fractional decomposition share one per-byte budget: a spatial split gives
+disjoint footprints, a fractional split gives overlapping shares that sum to the
+parent, and both preserve the same coverage equation. Suspension is where the
+two views meet: beginning a loan retires the lender's leaf, so the ordinary
+write guard refuses it, while \lean{LoansOK} records that the retired leaf still
+exists; ending the loan restores it. Finally, the representation predicates feed
+the algorithm layer: \lean{UFRep} turns a runtime index into read/write evidence
+and bounds, \lean{Ranked}/\lean{Acyclic} (and the \lean{Built} construction)
+supply chase completion, and \lean{Cert} states the resulting value and
+post-state. The sealed state carries the combined invariant across all of them.
+
+\paragraph*{What must be inhabited.} Several of these types are obligations to
 provide a witness, and several are deliberately empty.
 \begin{itemize}
 \item \lean{World.FullInv} must be inhabited at the start:
@@ -985,7 +1004,7 @@ inhabitant is produced by the checker at run time, and
 layer.
 \end{itemize}
 
-\paragraph{Algorithm-facing types.} The same shape is used by the checked
+\paragraph*{Algorithm-facing types.} The same shape is used by the checked
 union-find. A representation predicate and a rank replace the context guard:
 
 \begin{lstlisting}
@@ -1023,7 +1042,16 @@ world invariant, bounds the root, and proves \lean{Same} in both directions.
 rank privately; \lean{ufRunner\_findRootSnapshot} is a closed execution of the
 concrete 64-byte instance with an immutable observation.
 
-\section{Marshalling the closed code universe}
+The \lean{Cert} abbreviation is a specification, not an operational semantics.
+Any function with the required result relation inhabits it; the compression
+definitions compose checked reads and writes by construction, but a generic
+theorem that an arbitrary \lean{Cert} computation corresponds to an authorized
+\lean{UCmd} trace is not provided. The case study below keeps those statuses
+separate.
+
+\section{Algorithms and artifact}
+
+\subsection{Marshalling the closed code universe}
 \label{sec:marshal}
 
 The closed code universe of Section~\ref{sec:calculus} is a logical model, not
@@ -1076,10 +1104,10 @@ ghost value is harmless after deallocation; an arbitrary capturing \lean{T} woul
 not be. A checked write wrapper over \lean{Rep}, a capability-indexed read, pointers,
 alignment and the C arena are not claimed here; the decoder is a value-level read.
 
-\section{Case studies}
+\subsection{Case studies}
 \label{sec:cases}
 
-\paragraph{Lifecycles.} Three concrete indexed programs exercise the
+\paragraph*{Lifecycles.} Three concrete indexed programs exercise the
 constructors. The spatial lifecycle allocates a fresh 4-byte owner, writes
 through the root capability, splits spatially, writes the left half and
 disposes; it is accepted, ends on its typed post-context, is well formed, and
@@ -1091,7 +1119,7 @@ root leaf and ends it; it is accepted with the suspension and resumption
 evidence carried by the constructors. Each is a concrete indexed run in the
 discipline, not a test harness.
 
-\paragraph{Union-find.} We treat union-find as the \emph{witness} for the
+\paragraph*{Union-find.} We treat union-find as the \emph{witness} for the
 discipline rather than as a correctness target: it is the algorithm whose cost
 distinguishes unique from shared access. The representation is a parent array
 $p$: every node points to its parent, and a root is a node with $p[x]=x$.
@@ -1113,7 +1141,7 @@ union(a, b):
 \end{lstlisting}
 
 The Lean development separates those steps. \lean{UF.findRootF} is the first
-loop, bounded by fuel; \lean{UF.rootPath} is the non-root prefix it visits;
+loop, bounded by fuel; \lean{Cap.rootPath} is the non-root prefix it visits;
 \lean{UF.compress} is the parent rewrite; \lean{findCompressCert} composes the
 chase and the write through \lean{Cert}; and \lean{compressRootPathCert} runs
 the compression over the whole path the chase took. On four nodes:
@@ -1138,7 +1166,7 @@ single node: [0,0,1,0]  (compressSingle_example)
 The difference is the point: preserving the partition would accept both; the
 full-path certificate is what establishes the stronger array.
 
-\paragraph{What is proved, what runs.} The case study has four distinct
+\paragraph*{What is proved, what runs.} The case study has four distinct
 statuses, and the paper does not conflate them.
 
 \begin{itemize}
@@ -1180,14 +1208,14 @@ The context-preserving fragment carries access evidence but no representation
 index, so the data-dependent chase cannot be written there; the checked route is
 the algorithm interface. Amortized analysis is not claimed.
 
-\paragraph{Backends.} Two implementations share one model. The pure backend is a
+\paragraph*{Backends.} Two implementations share one model. The pure backend is a
 byte list with a length proof; the byte-array backend is the same interface over
 Lean's \lean{ByteArray}. The refinement (empty, reads, writes, range fills) is
 proved, and the 64-byte two-range fill through the byte-array route produces the
 reference bytes. The tempting sentence — ``the byte array is updated in place''
 — is exactly what is \emph{not} observable from inside, and we do not claim it.
 
-\section{The C backend: boundary and trust}
+\section{The boundary and trust}
 \label{sec:c}
 
 The sealed-ownership claim ultimately concerns real mutation. The planned
@@ -1218,11 +1246,11 @@ and observations; (2) the implemented C primitives satisfy those contracts under
 a chosen semantics or explicit assumptions — \emph{not implemented}; (3) the
 compiler, runtime and ABI preserve behaviour — either proved or named as trusted.
 A Lean theorem about an abstract external operation does not verify the C body.
-The manuscript must say whether the C implementation is verified,
-translation-validated, or trusted; tests support engineering confidence but do
-not replace that distinction. Two implementation routes are available: Lean
-control flow with C primitives (recommended first), or a custom lowering of the
-fragment with a simulation proof (additional compiler work).
+The present paper establishes level (1) only. The C implementation is neither
+verified nor translation-validated here; the compiler, runtime and ABI are named
+as trusted, and tests would support engineering confidence without replacing
+that distinction. A C refinement is future work, not evidence for the current
+ownership theorem.
 
 \section{Limitations and threats to validity}
 \label{sec:limits}
@@ -1233,8 +1261,9 @@ fragment with a simulation proof (additional compiler work).
   unauthorised access is untypable there; the context-preserving \lean{Owned} fragment
   does the same, has an explicit outcome and is never refused from a matching,
   well-formed world (\lean{runOwned\_no\_refusal}). It has no representation
-  index, so a runtime index cannot obtain its evidence there; that is why the
-  data-dependent chase is in the certified interface, not in the fragment. The
+  index, so a runtime index cannot obtain its evidence in that fragment's
+  syntax; the certified interface supplies that link for algorithms, as
+  \lean{UFRep} demonstrates. The
   unified language's \lean{write} carries no evidence and is refused at run time
   (its trace property is \lean{checkWorld\_write\_guard}): that layer is the
   interpreter, and a typed wrapper over it would be a separate client surface.
@@ -1286,8 +1315,12 @@ fragment with a simulation proof (additional compiler work).
   when the checker accepts, carrying the invariant through
   (\lean{Sealed.run\_invariant}). Negative fixtures check that the constructor
   and the representation field are unavailable and that no arbitrary-world entry
-  point exists. Lean has no stronger module abstraction, and nothing here seals physical storage: the pure
-  model's copied programs share backends. The executable-edge claims are listed
+  point exists. Lean's private fields/constructor bound the exported interface but not a client's
+  own state transformer, and nothing here seals physical storage: the pure model's
+  copied programs share backends. The isolation claim is relative to a client that
+  uses the exported \lean{Sealed} operations, starts from the canonical empty
+  state, and lets no live handle escape; arbitrary user state transformers,
+  callbacks and repeat executions against foreign state are outside it. The executable-edge claims are listed
   with an explicit status (\lean{boundaryClaims},
   \lean{boundary\_no\_physical\_proof}); a safe, opaque runtime remains future
   work.
@@ -1338,18 +1371,44 @@ fragment with a simulation proof (additional compiler work).
 
 \section{Related work}
 
-Borrow checking in Rust enforces aliasing rules in the compiler; we enforce an
-analogous discipline in a proof assistant without changing the compiler.
-Linear and uniqueness type systems (Linear Haskell, Clean's uniqueness types)
-make the discipline part of typing; our handles are freely copyable and the
-discipline lives in state. Separation logic and its implementations (Iris,
-RefinedC) reason about heap ownership with resource algebras very much like our
-shares and footprints; we differ in target (an executable, sealed runner inside
-Lean) and in the explicit trust boundary with C. Verified compilers (CompCert)
-prove preservation of whole-program semantics; our claim is an ownership
-discipline plus a boundary specification, and we do not claim compiler
-verification. Our concern is the discipline a runtime checker can enforce when
-the compiler is unchanged, and the boundary at which that enforcement stops.
+\paragraph*{Fractional ownership and uniqueness.} Marshall and Orchard combine
+fractional permissions with graded uniqueness for ownership and borrowing in a
+language design \cite{marshall}. We adopt the fractional-share and
+whole-share-for-write core, but mechanise it as an embedded authority ledger:
+handles are freely copyable names, authority is checked at each operation, and
+the invariant is preserved by an interpreter. Their type system tracks the
+discipline statically; our additions are historical freshness, a checked
+operational semantics, and an indexed client interface. The comparison is not
+one of expressiveness: we do not claim to replace a uniqueness type system.
+
+\paragraph*{Parameterised computations and indexed state.} \lean{IProg Γ α Q} is
+a specialized parameterised computation whose index carries permissions and
+whose bind threads the post-context into the continuation
+\cite{atkey}. Parameterised notions supply the general monadic structure; the
+ownership invariant, the evidence in the constructors and the no-refusal theorem
+are the content we add. The certified interface is a second indexing discipline
+(pre/post on worlds) for data-dependent algorithms, not a general effect system.
+
+\paragraph*{Encapsulated state.} Launchbury and Peyton Jones encapsulate mutable
+state in a pure language using parametricity, so a state thread's reference
+cannot escape \cite{st}. Our sealed wrapper plays a related encapsulation role
+through private construction and an invariant-bearing state, but it is not a
+parametric type abstraction; permissions are fractional and spatial, and the
+guarantee is an exported-interface/trusted-client claim rather than free theorem.
+The paper is explicit about that difference.
+
+\paragraph*{Borrowing, separation logic, and compilation.} Rust-style borrow
+checking enforces aliasing rules in the compiler \cite{rust}; we enforce an
+analogous discipline in a proof assistant without changing the compiler. Linear
+and uniqueness type systems make the discipline part of typing \cite{linearhaskell,clean};
+our handles are copyable and the discipline lives in state. Separation logic and
+its implementations reason about heap ownership with resource algebras close to
+our shares and footprints \cite{iris,refinedc}; we differ in target (a checked
+interpreter and a sealed runner inside Lean) and in the explicit C boundary.
+Verified compilers prove whole-program semantics preservation \cite{compcert};
+our claim is an ownership discipline plus a boundary specification, not compiler
+verification. The closest systems above are compared at the mechanism level; we
+do not assert that embedding ownership in dependent types is itself new.
 
 \section{Conclusion}
 
@@ -1382,6 +1441,14 @@ D. Dreyer. Iris from the ground up. \emph{JFP} 28, 2018.
 verification of C code with refined ownership types. \emph{PLDI 2021}.
 \bibitem{compcert} X. Leroy. Formal verification of a realistic compiler.
 \emph{CACM} 52(7), 2009.
+\bibitem{marshall} W. Marshall and D. Orchard. Functional ownership through
+fractional uniqueness. \emph{Proc. ACM Program. Lang.} 8(OOPSLA1), 2024.
+\href{https://doi.org/10.1145/3649848}{doi:10.1145/3649848}.
+\bibitem{atkey} R. Atkey. Parameterised notions of computation.
+\emph{J. Functional Programming} 19(3--4), 2009.
+\href{https://doi.org/10.1017/S095679680900728X}{doi:10.1017/S095679680900728X}.
+\bibitem{st} J. Launchbury and S. Peyton Jones. Lazy functional state threads.
+\emph{PLDI} 1994. \href{https://doi.org/10.1145/178243.178246}{doi:10.1145/178243.178246}.
 \end{thebibliography}
 
 \end{document}
