@@ -24,7 +24,7 @@ inductive Code where
 deriving DecidableEq, Repr
 
 /-- The denotation of a code. -/
-def El : Code → Type
+abbrev El : Code → Type
   | .nat => Nat
   | .bool => Bool
   | .uint8 => UInt8

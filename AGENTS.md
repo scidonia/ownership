@@ -344,6 +344,15 @@
   `rootPath`, `compressRootPathCert_compressAll` identifies the final array with
   `UF.compressAll`, and `compressRootPathCert_same_iff` transports the partition
   theorem to the executed writes. The world-level borrower and C stages remain.
+- `Cap/Marshal.lean` is the verified marshalling layer for the closed code
+  universe. `Codec c` carries `encode : El c → List UInt8`, `decode`, and
+  `decode_encode`; `codec` supplies one for every code (tagged products/sums,
+  length-prefixed lists, unary `Nat`). `Marshal c` and `Marshal.Rep` relate a
+  buffer to its ghost `El c` value. `World.allocWithChecked` allocates a fresh
+  owner whose backend is initialised from bytes, with `allocWithChecked_wf` and
+  `allocWithChecked_succeeds`; `Marshal.alloc` proves the initial `Rep` and
+  `Marshal.free` delegates to `World.freeChecked` (`free_wf`). Storage remains
+  `El c`, not an arbitrary type: `SafeValue` is encoding, not confinement.
 - `Cap/UFCompress.lean` adds bounded root finding and one-step compression to the
   functional model: `findRootF` chases parents with fuel, `StopsAt` records a
   reached fixed point, `findRootF_root`/`findRootF_reachable` give the root and

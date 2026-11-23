@@ -163,6 +163,9 @@ proof about an earlier state cannot authorise a live mutation.
   route with a path-compressing search as a program, loans as suspension with a
   delegation-chain model of nested reborrowing, and a byte-array backend refined
   against a pure model (Sections~\ref{sec:cases}).
+\item A verified marshalling layer for the closed code universe: codecs with
+  a round-trip theorem, a buffer representation relation, and byte-initialised
+  allocation with checked disposal (Section~\ref{sec:cases}).
 \item An explicit map of the trust boundary: what is proved, what is
   assumed, and what the C backend would require (Sections~\ref{sec:c} and
   \ref{sec:limits}).
@@ -1060,6 +1063,20 @@ written there. The full path is executed through the certified interface
 \lean{compressAll} of the initial one
 (\lean{compressRootPathCert\_compressAll}) and preserves the partition in both
 directions (\lean{compressRootPathCert\_same\_iff}).
+
+\paragraph{Marshalling.} The closed code universe has a verified byte codec:
+\lean{Codec c} carries \lean{encode : El c → List UInt8}, a total decoder and
+\lean{decode\_encode}; \lean{codec} provides one for every code. The encoding is
+tagged for sums and products, length-prefixed for lists, and unary for \lean{Nat}
+(it is a correctness representation, not a performance one). \lean{Marshal} and
+\lean{Marshal.Rep} relate a buffer to its ghost \lean{El c} value;
+\lean{World.allocWithChecked} allocates a fresh owner whose backend is
+initialised from the encoded bytes, and \lean{Marshal.alloc} proves the initial
+representation. \lean{Marshal.free} delegates to the checked disposal route.
+Storage remains \lean{El c}, never an arbitrary \lean T: the
+\lean{SafeValue} bijection is encoding, not confinement, and a capturing value
+must not outlive the buffer. This is the local byte/inductive representation
+relation; it does not yet include pointers, alignment, or the C arena.
 
 \paragraph{Backends.} Two implementations share one model. The pure backend is a
 byte list with a length proof; the byte-array backend is the same interface over
