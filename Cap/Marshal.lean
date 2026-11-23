@@ -284,17 +284,31 @@ theorem read_rep {c : Code} (m : Marshal c) {w : World} {a : AllocId}
   rw [hb]
   exact hrep
 
-/-- A capability-indexed read: the caller must present read authority at a
-byte of the owning allocation. -/
+/-- Read authority over every byte of a half-open range. -/
+def Ctx.CanReadRange (Γ : Ctx) (a : AllocId) (id : CapId)
+    (lo hi : Nat) : Prop :=
+  ∀ j, lo ≤ j → j < hi → Ctx.CanRead Γ a id j
+
+/-- Every byte of an authorized range is readable. -/
+theorem Ctx.CanReadRange.at {Γ : Ctx} {a : AllocId} {id : CapId} {lo hi j : Nat}
+    (h : Ctx.CanReadRange Γ a id lo hi) (hl : lo ≤ j) (hh : j < hi) :
+    Ctx.CanRead Γ a id j :=
+  h j hl hh
+
+/-- A range-authorized read. The premise covers every byte the decoder may
+inspect (the backend's length), rather than an arbitrary single index. -/
 def readC {c : Code} (m : Marshal c) (w : World) (a : AllocId) (id : CapId)
-    (i : Nat) (h : Ctx.CanRead w.ctx a id i) : Option (El c) :=
+    (b : Backend) (hb : w.heaps a = some b)
+    (h : Ctx.CanReadRange w.ctx a id 0 b.buf.length) : Option (El c) :=
   read m w a
 
-/-- A represented backend with read authority decodes to its value. -/
+/-- A represented backend with whole-range read authority decodes to its
+value. -/
 theorem readC_rep {c : Code} (m : Marshal c) {w : World} {a : AllocId}
-    {id : CapId} {i : Nat} {b : Backend} {v : El c}
-    (hcan : Ctx.CanRead w.ctx a id i) (hb : w.heaps a = some b)
-    (hrep : Rep m v b.buf) : readC m w a id i hcan = some v :=
+    {id : CapId} {b : Backend} {v : El c}
+    (hb : w.heaps a = some b)
+    (hcan : Ctx.CanReadRange w.ctx a id 0 b.buf.length)
+    (hrep : Rep m v b.buf) : readC m w a id b hb hcan = some v :=
   read_rep m hb hrep
 
 /-- Deallocate a marshalled buffer through the checked disposal route. -/
