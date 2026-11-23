@@ -36,25 +36,29 @@ abbrev Cert (pre : World → Prop) (α : Type) (post : World → α → World �
   ∀ w, pre w → { p : α × World // post w p.1 p.2 }
 
 /-- Read one parent entry through the representation predicate. -/
-noncomputable def readParentCert (a : AllocId) (id : CapId) (n x : Nat) (hx : x < n) :
+def readParentCert (a : AllocId) (id : CapId) (n x : Nat) (hx : x < n) :
     Cert (fun w => UFRep w a id n ∧ w.WellFormed) Nat
       (fun w0 v w' => w' = w0 ∧ v < n ∧ v < 256 ∧ UFRep w0 a id n ∧
         w0.WellFormed ∧ ∃ b, w0.heaps a = some b ∧ v = UF.step (UFArr b) x) :=
   fun w h => by
     let hrep := h.1
-    let hsome := hrep.readParent?_some hx
-    let v := Classical.choose hsome
-    have hv : readParent? w a id x (hrep.canRead hx) = some v :=
-      Classical.choose_spec hsome
-    have hlt : v < n := hrep.readParent?_lt hx hv
-    have hbyte : v < 256 := hrep.readParent?_byte_lt hx hv
-    have hex : ∃ b, w.heaps a = some b ∧ v = UF.step (UFArr b) x := by
-      have hrep' := hrep
-      obtain ⟨-, -, b, -, -, -, -, -, -, -, hb, -, -⟩ := hrep'
-      refine ⟨b, hb, ?_⟩
-      rw [UFRep.readParent?_step hrep hb hx] at hv
-      exact (Option.some.inj hv).symm
-    exact ⟨(v, w), rfl, hlt, hbyte, hrep, h.2, hex⟩
+    have hsome := hrep.readParent?_some hx
+    match hv : readParent? w a id x (hrep.canRead hx) with
+    | none =>
+      exact False.elim (by
+        obtain ⟨v, hv'⟩ := hsome
+        rw [hv] at hv'
+        nomatch hv')
+    | some v =>
+      have hlt : v < n := hrep.readParent?_lt hx hv
+      have hbyte : v < 256 := hrep.readParent?_byte_lt hx hv
+      have hex : ∃ b, w.heaps a = some b ∧ v = UF.step (UFArr b) x := by
+        have hrep' := hrep
+        obtain ⟨-, -, b, -, -, -, -, -, -, -, hb, -, -⟩ := hrep'
+        refine ⟨b, hb, ?_⟩
+        rw [UFRep.readParent?_step hrep hb hx] at hv
+        exact (Option.some.inj hv).symm
+      exact ⟨(v, w), rfl, hlt, hbyte, hrep, h.2, hex⟩
 
 /-- The identity computation. -/
 def Cert.pure (a : α) : Cert (fun _ => True) α
@@ -77,7 +81,7 @@ def Cert.bind {pre : World → Prop} {α : Type} {mid : World → α → World �
 
 /-- Compress a represented node to a represented target byte, preserving the
 representation predicate and the world invariant. -/
-noncomputable def compressCert (a : AllocId) (id : CapId) (n x r : Nat)
+def compressCert (a : AllocId) (id : CapId) (n x r : Nat)
     (hx : x < n) (hr : r < n) (hr256 : r < 256) :
     Cert (fun w => UFRep w a id n ∧ w.WellFormed) Unit
       (fun w0 _ w' => UFRep w' a id n ∧ w'.WellFormed ∧
@@ -90,16 +94,20 @@ noncomputable def compressCert (a : AllocId) (id : CapId) (n x r : Nat)
       have hmod : r.toUInt8.toNat = r % 256 := by simp
       omega
     have hu : u.toNat < n := by omega
-    let hok := compressC_ok h.1 h.2 hx u
-    let w' := Classical.choose hok
-    have hw' : compressC w a id n h.1 x hx u = .ok w' := Classical.choose_spec hok
-    have hpost : UFRep w' a id n ∧ w'.WellFormed ∧
-        ∃ b b', w.heaps a = some b ∧ w'.heaps a = some b' ∧
-          b'.buf = b.buf.set x r.toUInt8 := by
-      obtain ⟨b0, b', hb0, hb', hbuf⟩ := compressC_backend hw'
-      exact ⟨UFRep.compress_preserves h.1 hx hu hw', compressC_wf hw' h.2,
-        b0, b', hb0, hb', hbuf⟩
-    exact ⟨((), w'), hpost⟩
+    match hw : compressC w a id n h.1 x hx u with
+    | .error e =>
+      exact False.elim (by
+        obtain ⟨w', hok⟩ := compressC_ok h.1 h.2 hx u
+        rw [hw] at hok
+        nomatch hok)
+    | .ok w' =>
+      have hpost : UFRep w' a id n ∧ w'.WellFormed ∧
+          ∃ b b', w.heaps a = some b ∧ w'.heaps a = some b' ∧
+            b'.buf = b.buf.set x r.toUInt8 := by
+        obtain ⟨b0, b', hb0, hb', hbuf⟩ := compressC_backend hw
+        exact ⟨UFRep.compress_preserves h.1 hx hu hw, compressC_wf hw h.2,
+          b0, b', hb0, hb', hbuf⟩
+      exact ⟨((), w'), hpost⟩
 
 /-- The identity computation meets its specification on any world. -/
 example : Cert (fun _ => True) Nat (fun w a w' => a = 5 ∧ w' = w) :=
@@ -144,7 +152,7 @@ def readThenCompressPost (a : AllocId) (id : CapId) (n x : Nat)
 
 /-- Read a parent and compress the same node to the value read, returning the
 value: the dependent composition the plain bind could not express. -/
-noncomputable def readThenCompressCert (a : AllocId) (id : CapId) (n x : Nat)
+def readThenCompressCert (a : AllocId) (id : CapId) (n x : Nat)
     (hx : x < n) (hn : n ≤ 256) :
     Cert (fun w => UFRep w a id n ∧ w.WellFormed) Nat
       (readThenCompressPost a id n x) :=
@@ -185,7 +193,7 @@ theorem Ranked.reach_lt {p : UF.Arr} {n : Nat} {rank : Nat → Nat}
 
 /-- The certified algorithm: find the root of `x` and compress `x` to it. The
 world must represent a ranked forest over a byte-sized domain (`n ≤ 256`). -/
-noncomputable def findCompressCert (a : AllocId) (id : CapId) (n : Nat) (rank : Nat → Nat)
+def findCompressCert (a : AllocId) (id : CapId) (n : Nat) (rank : Nat → Nat)
     (x : Nat) (hx : x < n) (hn : n ≤ 256) :
     Cert (fun w => UFRep w a id n ∧ w.WellFormed ∧
         ∃ b, w.heaps a = some b ∧ Ranked (UFArr b) n rank) Nat
@@ -196,55 +204,72 @@ noncomputable def findCompressCert (a : AllocId) (id : CapId) (n : Nat) (rank : 
   fun w hpre => by
     let hrep := hpre.1
     let hwf := hpre.2.1
-    let hbRank : ∃ b, w.heaps a = some b ∧ Ranked (UFArr b) n rank := hpre.2.2
-    let b := Classical.choose hbRank
-    have hbR : w.heaps a = some b ∧ Ranked (UFArr b) n rank :=
-      Classical.choose_spec hbRank
-    let hroot := findRootC_ranked_root hrep hbR.1 hbR.2 hx
-    let r := Classical.choose hroot
-    have hr := (Classical.choose_spec hroot).1
-    have hrootp := (Classical.choose_spec hroot).2
-    have hrlt : r < n := by
-      have hstop := stopsAt_of_ranked hbR.2 (rank x + 1) x hx (by omega)
-      exact Ranked.reach_lt hbR.2 hx (findRootC_reachable hrep hbR.1 hx hstop hr)
-    have hr256 : r < 256 := by omega
-    let u : UInt8 := r.toUInt8
-    have huEq : u.toNat = r := by
-      show r.toUInt8.toNat = r
-      have hmod : r.toUInt8.toNat = r % 256 := by simp
-      omega
-    have hu : u.toNat < n := by omega
-    let hok := compressC_ok hrep hwf hx u
-    let w' := Classical.choose hok
-    have hw' : compressC w a id n hrep x hx u = .ok w' := Classical.choose_spec hok
-    have hpost : ∃ b b', w.heaps a = some b ∧ w'.heaps a = some b' ∧
-        UFRep w' a id n ∧ w'.WellFormed ∧ r < n ∧ UF.IsRoot (UFArr b) r ∧
-        b'.buf = b.buf.set x r.toUInt8 ∧
-        (∀ p q, UF.Same (UFArr b') p q ↔ UF.Same (UFArr b) p q) := by
-      obtain ⟨b0, b', hb0, hb', hbuf⟩ := compressC_backend hw'
-      have hb0b : b = b0 := Option.some.inj (hbR.1.symm.trans hb0)
-      rw [← hb0b] at hbuf
-      have hreach : UF.Reach (UFArr b) x r := by
-        have hstop := stopsAt_of_ranked hbR.2 (rank x + 1) x hx (by omega)
-        exact findRootC_reachable hrep hbR.1 hx hstop hr
-      have hxlen : x < (UFArr b).length := by
-        unfold UFArr
-        rw [List.length_map]
-        obtain ⟨-, -, b0', -, -, -, -, -, -, -, hb0', hlen, -⟩ := hrep
-        have hbb : b = b0' := by
-          have h1 := hbR.1
-          rw [hb0'] at h1
-          exact (Option.some.inj h1).symm
-        rw [hbb, hlen]
-        exact hx
-      have hiff : ∀ p q, UF.Same (UFArr b') p q ↔ UF.Same (UFArr b) p q := by
-        have hroot' : UF.IsRoot (UFArr b) u.toNat := by simpa [huEq] using hrootp
-        have hreach' : UF.Reach (UFArr b) x u.toNat := by simpa [huEq] using hreach
-        intro p q
-        exact compressC_same_iff (w' := w') (p := p) (q := q) hw' hbR.1 hb' hxlen hreach' hroot'
-      exact ⟨b, b', hbR.1, hb', UFRep.compress_preserves hrep hx hu hw',
-        compressC_wf hw' hwf, hrlt, hrootp, hbuf, hiff⟩
-    exact ⟨(r, w'), hpost⟩
+    match hb : w.heaps a with
+    | none =>
+      exact False.elim (by
+        obtain ⟨b, hb', _⟩ := hpre.2.2
+        rw [hb] at hb'
+        nomatch hb')
+    | some b =>
+      have hrank : Ranked (UFArr b) n rank := by
+        obtain ⟨b', hb', hr⟩ := hpre.2.2
+        rw [hb] at hb'
+        cases hb'
+        exact hr
+      have hstop : UF.StopsAt (UFArr b) (rank x + 1) x :=
+        stopsAt_of_ranked hrank (rank x + 1) x hx (by omega)
+      match hr : findRootC w a id n hrep (rank x + 1) x hx with
+      | none =>
+        exact False.elim (by
+          obtain ⟨r, hr', _⟩ := findRootC_ranked_root hrep hb hrank hx
+          rw [hr] at hr'
+          nomatch hr')
+      | some r =>
+        have hrootp : UF.IsRoot (UFArr b) r :=
+          findRootC_root hrep hb hx hstop hr
+        have hrlt : r < n :=
+          Ranked.reach_lt hrank hx (findRootC_reachable hrep hb hx hstop hr)
+        have hr256 : r < 256 := by omega
+        let u : UInt8 := r.toUInt8
+        have huEq : u.toNat = r := by
+          show r.toUInt8.toNat = r
+          have hmod : r.toUInt8.toNat = r % 256 := by simp
+          omega
+        have hu : u.toNat < n := by omega
+        match hw : compressC w a id n hrep x hx u with
+        | .error e =>
+          exact False.elim (by
+            obtain ⟨w', hok⟩ := compressC_ok hrep hwf hx u
+            rw [hw] at hok
+            nomatch hok)
+        | .ok w' =>
+          have hpost : ∃ b b', w.heaps a = some b ∧ w'.heaps a = some b' ∧
+              UFRep w' a id n ∧ w'.WellFormed ∧ r < n ∧ UF.IsRoot (UFArr b) r ∧
+              b'.buf = b.buf.set x r.toUInt8 ∧
+              (∀ p q, UF.Same (UFArr b') p q ↔ UF.Same (UFArr b) p q) := by
+            obtain ⟨b0, b', hb0, hb', hbuf⟩ := compressC_backend hw
+            have hb0b : b = b0 := Option.some.inj (hb.symm.trans hb0)
+            rw [← hb0b] at hbuf
+            have hreach : UF.Reach (UFArr b) x r :=
+              findRootC_reachable hrep hb hx hstop hr
+            have hxlen : x < (UFArr b).length := by
+              unfold UFArr
+              rw [List.length_map]
+              obtain ⟨-, -, b0', -, -, -, -, -, -, -, hb0', hlen, -⟩ := hrep
+              have hbb : b = b0' := by
+                have h1 := hb
+                rw [hb0'] at h1
+                exact (Option.some.inj h1).symm
+              rw [hbb, hlen]
+              exact hx
+            have hiff : ∀ p q, UF.Same (UFArr b') p q ↔ UF.Same (UFArr b) p q := by
+              have hroot' : UF.IsRoot (UFArr b) u.toNat := by simpa [huEq] using hrootp
+              have hreach' : UF.Reach (UFArr b) x u.toNat := by simpa [huEq] using hreach
+              intro p q
+              exact compressC_same_iff (w' := w') (p := p) (q := q) hw hb hb' hxlen hreach' hroot'
+            exact ⟨b, b', hb, hb', UFRep.compress_preserves hrep hx hu hw,
+              compressC_wf hw hwf, hrlt, hrootp, hbuf, hiff⟩
+          exact ⟨(r, w'), hpost⟩
 
 /-! ### The path from the chase
 
@@ -336,7 +361,7 @@ theorem map_compressBuf {r : Nat} (hr256 : r < 256) :
     rfl
 
 /-- Compress every node of a path to `r` through the certified write. -/
-noncomputable def compressPathCert (a : AllocId) (id : CapId) (n r : Nat)
+def compressPathCert (a : AllocId) (id : CapId) (n r : Nat)
     (path : List Nat) (hr : r < n) (hr256 : r < 256)
     (hpath : ∀ x ∈ path, x < n) :
     Cert (fun w => UFRep w a id n ∧ w.WellFormed) Unit
@@ -385,7 +410,7 @@ theorem compressPathCert_compressAll {w : World} {a : AllocId} {id : CapId}
 
 /-- Execute the full path read off the chase through the certified write:
 compressing every node of `rootPath` to the chase's result. -/
-noncomputable def compressRootPathCert (a : AllocId) (id : CapId) (n : Nat)
+def compressRootPathCert (a : AllocId) (id : CapId) (n : Nat)
     (rank : Nat → Nat) (b : Backend) (hrank : Ranked (UFArr b) n rank)
     (x : Nat) (hx : x < n) (hn : n ≤ 256) :
     Cert (fun w => UFRep w a id n ∧ w.WellFormed ∧ w.heaps a = some b) Unit
@@ -532,7 +557,7 @@ structure UFRunner (a : AllocId) (id : CapId) (n : Nat) (rank : Nat → Nat) whe
   private hrank : Ranked (UFArr b) n rank
 
 /-- Run find-and-compress on node `x` inside the runner, returning the root. -/
-noncomputable def UFRunner.findRoot {a : AllocId} {id : CapId} {n : Nat}
+def UFRunner.findRoot {a : AllocId} {id : CapId} {n : Nat}
     {rank : Nat → Nat} (s : UFRunner a id n rank) (x : Nat)
     (hx : x < n) (hn : n ≤ 256) : Nat :=
   (findCompressCert a id n rank x hx hn s.w
@@ -540,7 +565,7 @@ noncomputable def UFRunner.findRoot {a : AllocId} {id : CapId} {n : Nat}
 
 /-- Run find-and-compress and return the root together with a copy of the
 allocation's bytes: an immutable observation of the sealed state. -/
-noncomputable def UFRunner.findRootSnapshot {a : AllocId} {id : CapId} {n : Nat}
+def UFRunner.findRootSnapshot {a : AllocId} {id : CapId} {n : Nat}
     {rank : Nat → Nat} (s : UFRunner a id n rank) (x : Nat)
     (hx : x < n) (hn : n ≤ 256) : Nat × List UInt8 :=
   let r := findCompressCert a id n rank x hx hn s.w
@@ -548,7 +573,7 @@ noncomputable def UFRunner.findRootSnapshot {a : AllocId} {id : CapId} {n : Nat}
   (r.1.1, ((r.1.2.heaps a).map (·.buf)).getD [])
 
 /-- The concrete runner over the 64-byte zero forest. -/
-noncomputable def ufRunner : UFRunner ⟨0⟩ ⟨1⟩ 64 zeroRank :=
+def ufRunner : UFRunner ⟨0⟩ ⟨1⟩ 64 zeroRank :=
   UFRunner.mk uWorld ⟨uWorld_top, uWorld_loansOK⟩ uWorld_ufRep
     (Backend.empty 64) rfl uWorld_ranked
 

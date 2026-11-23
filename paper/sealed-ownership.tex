@@ -1302,9 +1302,11 @@ fragment with a simulation proof (additional compiler work).
   applies to the executed writes (\lean{compressRootPathCert\_same\_iff}). A
   sealed runner executes the concrete 64-byte instance, proves its root and
   returns an immutable snapshot (\lean{ufRunner\_findRootSnapshot}). The
-  context-preserving fragment has no representation index and does not host this
-  chase; the checked route is the algorithm interface. Amortized analysis is not
-  claimed.
+  certified primitives and the full-path certificate are computable; the runner
+  still invokes single-node compression, so the full-path operation is not yet
+  threaded through successive runner states. The context-preserving fragment has
+  no representation index and does not host this chase; the checked route is the
+  algorithm interface. Amortized analysis is not claimed.
 \item \textbf{No verification of C.} The backend exists as a Lean model and a
   ByteArray refinement only.
 \end{itemize}
