@@ -1091,7 +1091,41 @@ discipline, not a test harness.
 
 \paragraph{Union-find.} We treat union-find as the \emph{witness} for the
 discipline rather than as a correctness target: it is the algorithm whose cost
-distinguishes unique from shared access. Four layers exist. (i) The functional
+distinguishes unique from shared access. The representation is a parent array
+$p$: every node points to its parent, and a root is a node with $p[x]=x$.
+\emph{Find} follows parent pointers to a root; path compression then points the
+visited nodes directly at that root. \emph{Union} finds both roots and links one
+under the other:
+
+\begin{lstlisting}
+find(x):
+  r = x
+  while p[r] != r: r = p[r]
+  while p[x] != x:
+    next = p[x]; p[x] = r; x = next
+  return r
+
+union(a, b):
+  ra = find(a); rb = find(b)
+  if ra != rb: p[rb] = ra
+\end{lstlisting}
+
+The Lean development separates those steps. \lean{UF.findRootF} is the first
+loop, bounded by fuel; \lean{UF.rootPath} is the non-root prefix it visits;
+\lean{UF.compress} is the parent rewrite; \lean{findCompressCert} composes the
+chase and the write through \lean{Cert}; and \lean{compressRootPathCert} runs
+the compression over the whole path the chase took. On four nodes:
+
+\begin{lstlisting}
+p = [0,1,2,3]
+union(0,1) -> [0,0,2,3]
+union(2,3) -> [0,0,2,2]
+union(0,2) -> [0,0,0,2]
+find(3): 3 -> 2 -> 0, compress -> [0,0,0,0]
+\end{lstlisting}
+
+After the three unions every pair is \lean{Same}; the chase from node 3 returns
+root 0, and the compressed array is the constant array. Four layers exist. (i) The functional
 model: reachability, \lean{Same} as an equivalence, simple union, the concrete
 partition \lean{[0,0,0,2]} with every pair \lean{Same}, bounded root finding and
 one-step compression. (ii) The checked trace: unions issued through
