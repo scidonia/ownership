@@ -1190,7 +1190,9 @@ statuses, and the paper does not conflate them.
   one-step partition equivalence, and
   \lean{compressRootPathCert\_compressAll}/\lean{\_same\_iff} identify the
   full-path certificate's final array with \lean{compressAll} and transfer the
-  partition theorem. \lean{Cert} is a specification layer: the actual compression
+  partition theorem. The \lean{FullInv}-preserving variants
+  \lean{compressCertFull}, \lean{compressPathCertFull} and
+  \lean{compressRootPathCertFull} keep the combined invariant along the path. \lean{Cert} is a specification layer: the actual compression
   write has a one-command trace (\lean{compressC\_trace}), while a generic
   theorem that an arbitrary \lean{Cert} computation corresponds to an authorized
   \lean{UCmd} trace is not provided.
@@ -1279,10 +1281,12 @@ ownership theorem.
 \paragraph*{What implementation work can fix.}
 \begin{itemize}
 \item The sealed runner still invokes single-node compression. The computable
-  full-path certificate exists and identifies its final array with
-  \lean{compressAll}; the missing work is to thread it through successive runner
-  states, preserve \lean{FullInv} and a reusable forest invariant, prove the
-  nontrivial branching update, and compile/execute that same definition.
+  full-path certificate exists, identifies its final array with
+  \lean{compressAll}, and its \lean{FullInv}-preserving variant
+  \lean{compressRootPathCertFull} keeps the combined invariant. The missing work
+  is to thread it through successive runner states, retain a reusable forest
+  invariant, prove the nontrivial branching update, and compile/execute that same
+  definition.
 \item \lean{Cert} is a specification, not an operational semantics. The
   actual compression write is a one-command authorized trace
   (\lean{compressC\_trace}); a generic correspondence for arbitrary certified

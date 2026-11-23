@@ -35,6 +35,20 @@ abbrev Cert (pre : World → Prop) (α : Type) (post : World → α → World �
     Type :=
   ∀ w, pre w → { p : α × World // post w p.1 p.2 }
 
+/-- A checked write preserves the combined invariant. -/
+theorem World.writeChecked_fullInv {w w' : World} {a : AllocId} {id : CapId}
+    {i : Nat} {v : UInt8} (hw : w.writeChecked a id i v = .ok w')
+    (h : w.FullInv) : w'.FullInv :=
+  ⟨⟨World.writeChecked_wf hw h.1.1, World.historyOK_write hw h.1.2⟩,
+    World.loansOK_write hw h.2⟩
+
+/-- The compression write preserves the combined invariant. -/
+theorem compressC_fullInv {w w' : World} {a : AllocId} {id : CapId} {n x : Nat}
+    {h : UFRep w a id n} {hx : x < n} {u : UInt8}
+    (hw : compressC w a id n h x hx u = .ok w') (hinv : w.FullInv) :
+    w'.FullInv :=
+  World.writeChecked_fullInv (by simpa [compressC] using hw) hinv
+
 /-- Read one parent entry through the representation predicate. -/
 def readParentCert (a : AllocId) (id : CapId) (n x : Nat) (hx : x < n) :
     Cert (fun w => UFRep w a id n ∧ w.WellFormed) Nat
@@ -107,6 +121,35 @@ def compressCert (a : AllocId) (id : CapId) (n x r : Nat)
         obtain ⟨b0, b', hb0, hb', hbuf⟩ := compressC_backend hw
         exact ⟨UFRep.compress_preserves h.1 hx hu hw, compressC_wf hw h.2,
           b0, b', hb0, hb', hbuf⟩
+      exact ⟨((), w'), hpost⟩
+
+/-- Compression preserving the combined invariant. -/
+def compressCertFull (a : AllocId) (id : CapId) (n x r : Nat)
+    (hx : x < n) (hr : r < n) (hr256 : r < 256) :
+    Cert (fun w => UFRep w a id n ∧ w.FullInv) Unit
+      (fun w0 _ w' => UFRep w' a id n ∧ w'.FullInv ∧
+        ∃ b b', w0.heaps a = some b ∧ w'.heaps a = some b' ∧
+          b'.buf = b.buf.set x r.toUInt8) :=
+  fun w h => by
+    let u : UInt8 := r.toUInt8
+    have huEq : u.toNat = r := by
+      show r.toUInt8.toNat = r
+      have hmod : r.toUInt8.toNat = r % 256 := by simp
+      omega
+    have hu : u.toNat < n := by omega
+    match hw : compressC w a id n h.1 x hx u with
+    | .error e =>
+      exact False.elim (by
+        obtain ⟨w', hok⟩ := compressC_ok h.1 h.2.1.1 hx u
+        rw [hw] at hok
+        nomatch hok)
+    | .ok w' =>
+      have hpost : UFRep w' a id n ∧ w'.FullInv ∧
+          ∃ b b', w.heaps a = some b ∧ w'.heaps a = some b' ∧
+            b'.buf = b.buf.set x r.toUInt8 := by
+        obtain ⟨b0, b', hb0, hb', hbuf⟩ := compressC_backend hw
+        exact ⟨UFRep.compress_preserves h.1 hx hu hw,
+          compressC_fullInv hw h.2, b0, b', hb0, hb', hbuf⟩
       exact ⟨((), w'), hpost⟩
 
 /-- The identity computation meets its specification on any world. -/
@@ -416,6 +459,59 @@ theorem compressC_trace {w w' : World} {a : AllocId} {id : CapId} {n x : Nat}
     checkWorld w [UCmd.write a id x r.toUInt8] = .ok w' := by
   change w.writeChecked a id x r.toUInt8 = .ok w' at hw
   simp [checkWorld, hw]
+
+/-- Full-path compression preserving the combined invariant. -/
+def compressPathCertFull (a : AllocId) (id : CapId) (n r : Nat)
+    (path : List Nat) (hr : r < n) (hr256 : r < 256)
+    (hpath : ∀ x ∈ path, x < n) :
+    Cert (fun w => UFRep w a id n ∧ w.FullInv) Unit
+      (fun w0 _ w' => UFRep w' a id n ∧ w'.FullInv ∧
+        ∃ b0 b', w0.heaps a = some b0 ∧ w'.heaps a = some b' ∧
+          b'.buf = compressBuf r b0.buf path) :=
+  match path with
+  | [] => fun w hw => by
+    have hpost : UFRep w a id n ∧ w.FullInv ∧
+        ∃ b0 b', w.heaps a = some b0 ∧ w.heaps a = some b' ∧
+          b'.buf = compressBuf r b0.buf [] := by
+      obtain ⟨-, -, b, -, -, -, -, -, -, -, hb, -, -⟩ := hw.1
+      exact ⟨hw.1, hw.2, b, b, hb, hb, rfl⟩
+    exact ⟨((), w), hpost⟩
+  | x :: xs => fun w hw => by
+    let r1 := compressCertFull a id n x r (hpath x (by simp)) hr hr256 w hw
+    have hpre1 : UFRep r1.1.2 a id n ∧ r1.1.2.FullInv :=
+      ⟨r1.property.1, r1.property.2.1⟩
+    let r2 := compressPathCertFull a id n r xs hr hr256
+      (fun y hy => hpath y (by simp [hy])) r1.1.2 hpre1
+    have hpost : UFRep r2.1.2 a id n ∧ r2.1.2.FullInv ∧
+        ∃ b0 b', w.heaps a = some b0 ∧ r2.1.2.heaps a = some b' ∧
+          b'.buf = compressBuf r b0.buf (x :: xs) := by
+      obtain ⟨hrep1, hfull1, b0, b1, hb0, hb1, hbuf1⟩ := r1.property
+      obtain ⟨hrep2, hfull2, b1', b2, hb1', hb2, hbuf2⟩ := r2.property
+      have hb1eq : b1' = b1 := Option.some.inj (hb1'.symm.trans hb1)
+      rw [hb1eq] at hbuf2
+      refine ⟨hrep2, hfull2, b0, b2, hb0, hb2, ?_⟩
+      rw [hbuf2, hbuf1]
+      rfl
+    exact ⟨((), r2.1.2), hpost⟩
+
+/-- Execute the full path and preserve the combined invariant. -/
+def compressRootPathCertFull (a : AllocId) (id : CapId) (n : Nat)
+    (rank : Nat → Nat) (b : Backend) (hrank : Ranked (UFArr b) n rank)
+    (x : Nat) (hx : x < n) (hn : n ≤ 256) :
+    Cert (fun w => UFRep w a id n ∧ w.FullInv ∧ w.heaps a = some b) Unit
+      (fun w0 _ w' => UFRep w' a id n ∧ w'.FullInv ∧
+        ∃ b0 b', w0.heaps a = some b0 ∧ w'.heaps a = some b' ∧
+          b'.buf = compressBuf (UF.findRootF (UFArr b) (rank x + 1) x) b0.buf
+            (rootPath (UFArr b) (rank x + 1) x)) := by
+  intro w hw
+  have hr : UF.findRootF (UFArr b) (rank x + 1) x < n :=
+    findRootF_lt hrank.1 hx
+  have hr256 : UF.findRootF (UFArr b) (rank x + 1) x < 256 := by omega
+  have hpath : ∀ y ∈ rootPath (UFArr b) (rank x + 1) x, y < n := by
+    intro y hy
+    exact Ranked.reach_lt hrank hx (rootPath_mem_reach_from hy)
+  exact compressPathCertFull a id n (UF.findRootF (UFArr b) (rank x + 1) x)
+    (rootPath (UFArr b) (rank x + 1) x) hr hr256 hpath w ⟨hw.1, hw.2.1⟩
 
 /-- Execute the full path read off the chase through the certified write:
 compressing every node of `rootPath` to the chase's result. -/
