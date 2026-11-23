@@ -1041,11 +1041,12 @@ rank privately; \lean{ufRunner\_findRootSnapshot} is a closed execution of the
 concrete 64-byte instance with an immutable observation.
 
 The \lean{Cert} abbreviation is a specification, not an operational semantics.
-Any function with the required result relation inhabits it. The actual
-compression write is exactly a one-command \lean{UCmd} trace
-(\lean{compressC\_trace}), so \lean{checkWorld\_write\_guard} applies to it; a
-generic theorem that an arbitrary \lean{Cert} computation corresponds to an
-authorized trace is not provided. The case study below keeps those statuses
+Any function with the required result relation inhabits it. The actual compression write is a one-command \lean{UCmd} trace
+(\lean{compressC\_trace}), and the full-path certificates' results are exactly
+the checked trace results (\lean{compressPathCertFull\_trace},
+\lean{compressRootPathCertFull\_trace}); \lean{checkWorld\_write\_guard} applies
+to their intermediate writes. A generic theorem for an arbitrary \lean{Cert}
+computation is not provided. The case study below keeps those statuses
 separate.
 
 \section{Algorithms and artifact}
@@ -1196,9 +1197,10 @@ statuses, and the paper does not conflate them.
   partition theorem. The \lean{FullInv}-preserving variants
   \lean{compressCertFull}, \lean{compressPathCertFull} and
   \lean{compressRootPathCertFull} keep the combined invariant along the path. \lean{Cert} is a specification layer: the actual compression
-  write has a one-command trace (\lean{compressC\_trace}), while a generic
-  theorem that an arbitrary \lean{Cert} computation corresponds to an authorized
-  \lean{UCmd} trace is not provided.
+  write and the full path have checked-trace correspondences
+  (\lean{compressC\_trace}, \lean{compressPathCertFull\_trace},
+  \lean{compressRootPathCertFull\_trace}), while a generic theorem for an
+  arbitrary \lean{Cert} computation is not provided.
 \item \textbf{Sealed runner and execution.} \lean{UFRunner} carries
   \lean{FullInv}, \lean{UFRep}, the backend and the rank; its computable
   \lean{findRoot}/\lean{findRootSnapshot} executes on the zero 64-byte forest
@@ -1291,11 +1293,12 @@ ownership theorem.
   invariant, prove the nontrivial branching update, and compile/execute that same
   definition.
 \item \lean{Cert} is a specification, not an operational semantics. The
-  actual compression write is a one-command authorized trace
-  (\lean{compressC\_trace}); a generic correspondence for arbitrary certified
-  computations and full paths, including intermediate states, is not provided.
-  This is a concrete metatheory obligation, not a flaw in the compression
-  functions.
+  actual compression write and the full path have authorized-trace
+  correspondences (\lean{compressC\_trace},
+  \lean{compressPathCertFull\_trace}, \lean{compressRootPathCertFull\_trace});
+  a generic correspondence for an arbitrary certified computation is not
+  provided. This is a concrete metatheory obligation, not a flaw in the
+  compression functions.
 \item The marshalling layer has a value-level decoder and a whole-range
   authorized read (\lean{Marshal.read}, \lean{Marshal.readC},
   \lean{Ctx.CanReadRange}), but not a checked write wrapper preserving

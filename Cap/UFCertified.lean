@@ -129,7 +129,8 @@ def compressCertFull (a : AllocId) (id : CapId) (n x r : Nat)
     Cert (fun w => UFRep w a id n ∧ w.FullInv) Unit
       (fun w0 _ w' => UFRep w' a id n ∧ w'.FullInv ∧
         ∃ b b', w0.heaps a = some b ∧ w'.heaps a = some b' ∧
-          b'.buf = b.buf.set x r.toUInt8) :=
+          b'.buf = b.buf.set x r.toUInt8 ∧
+        checkWorld w0 [UCmd.write a id x r.toUInt8] = .ok w') :=
   fun w h => by
     let u : UInt8 := r.toUInt8
     have huEq : u.toNat = r := by
@@ -146,11 +147,25 @@ def compressCertFull (a : AllocId) (id : CapId) (n x r : Nat)
     | .ok w' =>
       have hpost : UFRep w' a id n ∧ w'.FullInv ∧
           ∃ b b', w.heaps a = some b ∧ w'.heaps a = some b' ∧
-            b'.buf = b.buf.set x r.toUInt8 := by
+            b'.buf = b.buf.set x r.toUInt8 ∧
+          checkWorld w [UCmd.write a id x r.toUInt8] = .ok w' := by
         obtain ⟨b0, b', hb0, hb', hbuf⟩ := compressC_backend hw
+        have htrace : checkWorld w [UCmd.write a id x r.toUInt8] = .ok w' := by
+          change w.writeChecked a id x r.toUInt8 = .ok w' at hw
+          simp [checkWorld, hw]
         exact ⟨UFRep.compress_preserves h.1 hx hu hw,
-          compressC_fullInv hw h.2, b0, b', hb0, hb', hbuf⟩
+          compressC_fullInv hw h.2, b0, b', hb0, hb', hbuf, htrace⟩
       exact ⟨((), w'), hpost⟩
+
+/-- The full certificate's postcondition includes the one-command trace. -/
+theorem compressCertFull_trace {w : World} {a : AllocId} {id : CapId}
+    {n x r : Nat} {hx : x < n} {hr : r < n} {hr256 : r < 256}
+    (hw : UFRep w a id n ∧ w.FullInv) :
+    ∃ w', (compressCertFull a id n x r hx hr hr256 w hw).1.2 = w' ∧
+      checkWorld w [UCmd.write a id x r.toUInt8] = .ok w' := by
+  obtain ⟨-, -, -, -, -, -, -, htrace⟩ :=
+    (compressCertFull a id n x r hx hr hr256 w hw).property
+  exact ⟨_, rfl, htrace⟩
 
 /-- The identity computation meets its specification on any world. -/
 example : Cert (fun _ => True) Nat (fun w a w' => a = 5 ∧ w' = w) :=
@@ -460,6 +475,11 @@ theorem compressC_trace {w w' : World} {a : AllocId} {id : CapId} {n x : Nat}
   change w.writeChecked a id x r.toUInt8 = .ok w' at hw
   simp [checkWorld, hw]
 
+/-- The `UCmd` trace of writing every path node to the same root. -/
+def pathTrace (a : AllocId) (id : CapId) (r : Nat) : List Nat → List UCmd
+  | [] => []
+  | x :: xs => UCmd.write a id x r.toUInt8 :: pathTrace a id r xs
+
 /-- Full-path compression preserving the combined invariant. -/
 def compressPathCertFull (a : AllocId) (id : CapId) (n r : Nat)
     (path : List Nat) (hr : r < n) (hr256 : r < 256)
@@ -467,14 +487,16 @@ def compressPathCertFull (a : AllocId) (id : CapId) (n r : Nat)
     Cert (fun w => UFRep w a id n ∧ w.FullInv) Unit
       (fun w0 _ w' => UFRep w' a id n ∧ w'.FullInv ∧
         ∃ b0 b', w0.heaps a = some b0 ∧ w'.heaps a = some b' ∧
-          b'.buf = compressBuf r b0.buf path) :=
+          b'.buf = compressBuf r b0.buf path ∧
+        checkWorld w0 (pathTrace a id r path) = .ok w') :=
   match path with
   | [] => fun w hw => by
     have hpost : UFRep w a id n ∧ w.FullInv ∧
         ∃ b0 b', w.heaps a = some b0 ∧ w.heaps a = some b' ∧
-          b'.buf = compressBuf r b0.buf [] := by
+          b'.buf = compressBuf r b0.buf [] ∧
+        checkWorld w (pathTrace a id r []) = .ok w := by
       obtain ⟨-, -, b, -, -, -, -, -, -, -, hb, -, -⟩ := hw.1
-      exact ⟨hw.1, hw.2, b, b, hb, hb, rfl⟩
+      exact ⟨hw.1, hw.2, b, b, hb, hb, rfl, by simp [pathTrace, checkWorld]⟩
     exact ⟨((), w), hpost⟩
   | x :: xs => fun w hw => by
     let r1 := compressCertFull a id n x r (hpath x (by simp)) hr hr256 w hw
@@ -484,14 +506,18 @@ def compressPathCertFull (a : AllocId) (id : CapId) (n r : Nat)
       (fun y hy => hpath y (by simp [hy])) r1.1.2 hpre1
     have hpost : UFRep r2.1.2 a id n ∧ r2.1.2.FullInv ∧
         ∃ b0 b', w.heaps a = some b0 ∧ r2.1.2.heaps a = some b' ∧
-          b'.buf = compressBuf r b0.buf (x :: xs) := by
-      obtain ⟨hrep1, hfull1, b0, b1, hb0, hb1, hbuf1⟩ := r1.property
-      obtain ⟨hrep2, hfull2, b1', b2, hb1', hb2, hbuf2⟩ := r2.property
+          b'.buf = compressBuf r b0.buf (x :: xs) ∧
+        checkWorld w (pathTrace a id r (x :: xs)) = .ok r2.1.2 := by
+      obtain ⟨hrep1, hfull1, b0, b1, hb0, hb1, hbuf1, htrace1⟩ := r1.property
+      obtain ⟨hrep2, hfull2, b1', b2, hb1', hb2, hbuf2, htrace2⟩ := r2.property
       have hb1eq : b1' = b1 := Option.some.inj (hb1'.symm.trans hb1)
       rw [hb1eq] at hbuf2
-      refine ⟨hrep2, hfull2, b0, b2, hb0, hb2, ?_⟩
-      rw [hbuf2, hbuf1]
-      rfl
+      refine ⟨hrep2, hfull2, b0, b2, hb0, hb2, ?_, ?_⟩
+      · rw [hbuf2, hbuf1]; rfl
+      · have happ := checkWorld_append [UCmd.write a id x r.toUInt8]
+          (pathTrace a id r xs) w r1.1.2 htrace1
+        rw [List.singleton_append] at happ
+        exact happ.trans htrace2
     exact ⟨((), r2.1.2), hpost⟩
 
 /-- Execute the full path and preserve the combined invariant. -/
@@ -502,7 +528,10 @@ def compressRootPathCertFull (a : AllocId) (id : CapId) (n : Nat)
       (fun w0 _ w' => UFRep w' a id n ∧ w'.FullInv ∧
         ∃ b0 b', w0.heaps a = some b0 ∧ w'.heaps a = some b' ∧
           b'.buf = compressBuf (UF.findRootF (UFArr b) (rank x + 1) x) b0.buf
-            (rootPath (UFArr b) (rank x + 1) x)) := by
+            (rootPath (UFArr b) (rank x + 1) x) ∧
+        checkWorld w0
+          (pathTrace a id (UF.findRootF (UFArr b) (rank x + 1) x)
+            (rootPath (UFArr b) (rank x + 1) x)) = .ok w') := by
   intro w hw
   have hr : UF.findRootF (UFArr b) (rank x + 1) x < n :=
     findRootF_lt hrank.1 hx
@@ -512,6 +541,30 @@ def compressRootPathCertFull (a : AllocId) (id : CapId) (n : Nat)
     exact Ranked.reach_lt hrank hx (rootPath_mem_reach_from hy)
   exact compressPathCertFull a id n (UF.findRootF (UFArr b) (rank x + 1) x)
     (rootPath (UFArr b) (rank x + 1) x) hr hr256 hpath w ⟨hw.1, hw.2.1⟩
+
+/-- The full-path certificate's result is the checked trace result. -/
+theorem compressPathCertFull_trace {w : World} {a : AllocId} {id : CapId}
+    {n r : Nat} {path : List Nat} (hr : r < n) (hr256 : r < 256)
+    (hpath : ∀ x ∈ path, x < n) (hw : UFRep w a id n ∧ w.FullInv) :
+    ∃ w', (compressPathCertFull a id n r path hr hr256 hpath w hw).1.2 = w' ∧
+      checkWorld w (pathTrace a id r path) = .ok w' := by
+  obtain ⟨-, -, -, -, -, -, -, htrace⟩ :=
+    (compressPathCertFull a id n r path hr hr256 hpath w hw).property
+  exact ⟨_, rfl, htrace⟩
+
+/-- The chase-derived full-path certificate's result is the checked trace
+result. -/
+theorem compressRootPathCertFull_trace {w : World} {a : AllocId} {id : CapId}
+    {n : Nat} {rank : Nat → Nat} {b : Backend} {hrank : Ranked (UFArr b) n rank}
+    {x : Nat} (hx : x < n) (hn : n ≤ 256)
+    (hw : UFRep w a id n ∧ w.FullInv ∧ w.heaps a = some b) :
+    ∃ w', (compressRootPathCertFull a id n rank b hrank x hx hn w hw).1.2 = w' ∧
+      checkWorld w
+        (pathTrace a id (UF.findRootF (UFArr b) (rank x + 1) x)
+          (rootPath (UFArr b) (rank x + 1) x)) = .ok w' := by
+  obtain ⟨-, -, -, -, -, -, -, htrace⟩ :=
+    (compressRootPathCertFull a id n rank b hrank x hx hn w hw).property
+  exact ⟨_, rfl, htrace⟩
 
 /-- Execute the full path read off the chase through the certified write:
 compressing every node of `rootPath` to the chase's result. -/

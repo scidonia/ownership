@@ -291,7 +291,9 @@
   `compressC_trace` shows that a checked compression write is a one-command
   `UCmd` trace, connecting the concrete write to `checkWorld_write_guard`;
   `compressCertFull`/`compressPathCertFull`/`compressRootPathCertFull` preserve
-  `FullInv` along the compression (the first two also preserve `UFRep`); a
+  `FullInv` along the compression (the first two also preserve `UFRep`);
+  `compressPathCertFull_trace`/`compressRootPathCertFull_trace` identify their
+  results with the corresponding `checkWorld` trace; a
   `Cert pre α post` is a total computation from any world satisfying `pre` to a
   value and world satisfying `post`. `readParentCert` returns a parent value with
   its range proof and its identity as the functional model's `step`;
