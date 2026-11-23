@@ -366,8 +366,9 @@
   `Marshal.read`/`read_rep` decode a represented buffer, and
   `Marshal.readC`/`readC_rep` require `Ctx.CanReadRange` over the backend's
   bytes; `Marshal.writeC`/`writeC_rep`/`writeC_fullInv` require
-  `Ctx.CanWriteRange` and an encoded-length equality, and preserve `Rep` and
-  `FullInv`; `Marshal.free`
+  `Ctx.CanWriteRange` and an encoded-length equality, preserve `Rep` and
+  `FullInv`, and have an accepted byte-wise checker trace (`writeC_trace_ok`);
+  `Marshal.free`
   delegates to `World.freeChecked` (`free_wf`), and `alloc_fullInv` lifts
   byte-initialised allocation to `FullInv`. Storage remains `El c`, not an
   arbitrary type: `SafeValue` is encoding, not confinement.

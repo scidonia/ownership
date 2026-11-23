@@ -1091,8 +1091,9 @@ to the ghost value (\lean{read\_rep}); \lean{Marshal.readC} requires
 the value (\lean{readC\_rep}). \lean{Marshal.writeC} similarly requires
 \lean{Ctx.CanWriteRange} and an encoded-length equality, and re-establishes
 \lean{Rep} (\lean{writeC\_rep}) and preserves \lean{FullInv}
-(\lean{writeC\_fullInv}).
-Deallocation is the existing checked route:
+(\lean{writeC\_fullInv}). A byte-wise trace over the same range is accepted by
+the checker (\lean{writeC\_trace\_ok}), though its final world is not yet proved
+equal to \lean{writeC}. Deallocation is the existing checked route:
 \lean{Marshal.free} delegates to \lean{World.freeChecked}, so the recorded
 disposal capability and the no-live-lender condition still apply, and
 \lean{Marshal.free\_wf} preserves the invariant. The decoded \lean{El c} value is
@@ -1307,8 +1308,9 @@ ownership theorem.
   \lean{Ctx.CanReadRange}) and a range-authorized, same-length write preserving
   \lean{Rep} (\lean{Marshal.writeC}, \lean{writeC\_rep}). Allocation preserves
   \lean{FullInv} (\lean{alloc\_fullInv}); the write preserves \lean{Rep} and
-  \lean{FullInv} (\lean{writeC\_rep}, \lean{writeC\_fullInv}) but is not yet
-  connected to the checker trace.
+  \lean{FullInv} (\lean{writeC\_rep}, \lean{writeC\_fullInv}); a byte-wise checker trace is
+  accepted (\lean{writeC\_trace\_ok}), but its final world is not yet identified
+  with \lean{writeC}.
 \item \lean{Built} certifies the concrete 64-byte zero array; an arbitrary
   runtime parent array still needs a construction witness.
 \item Disposal reconstruction needs the spatial join the ledger does not yet

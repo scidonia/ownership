@@ -422,6 +422,44 @@ theorem writeC_fullInv {c : Code} (m : Marshal c) {w : World} {a : AllocId}
   · change w.LoansOK
     exact hinv.2
 
+/-- A byte-wise write trace for a buffer encoding. -/
+def writeCmds (a : AllocId) (id : CapId) (start : Nat) : List UInt8 → List UCmd
+  | [] => []
+  | v :: vs => UCmd.write a id start v :: writeCmds a id (start + 1) vs
+
+/-- A byte-wise write trace whose indices stay inside an authorized range is
+accepted by the checker. -/
+theorem checkWorld_writeCmds_ok {w : World} {a : AllocId} {id : CapId}
+    {start n : Nat} {bytes : List UInt8}
+    (hle : start + bytes.length ≤ n)
+    (hcan : Ctx.CanWriteRange w.ctx a id 0 n)
+    (hwf : w.WellFormed) :
+    (checkWorld w (writeCmds a id start bytes)).isOk = true := by
+  induction bytes generalizing start w with
+  | nil => rfl
+  | cons v vs ih =>
+    have hle' : start + (vs.length + 1) ≤ n := by
+      simpa [Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using hle
+    have hstart : start < n := by omega
+    have hc : Ctx.CanWrite w.ctx a id start := hcan start (Nat.zero_le _) hstart
+    obtain ⟨w', hw'⟩ := World.write_succeeds (w := w) hc rfl hwf
+    have hwf' : w'.WellFormed := World.writeChecked_wf hw' hwf
+    obtain ⟨o, b, b', hfind, hguard, hb, hbw, hctx', hheaps⟩ :=
+      World.writeChecked_sound hw'
+    rw [writeCmds, checkWorld, hw']
+    apply ih (w := w') (start := start + 1) (by omega)
+      (by simpa [hctx'] using hcan) hwf'
+
+/-- The range-authorized, same-length write is accepted by a checker trace. -/
+theorem writeC_trace_ok {c : Code} (m : Marshal c) {w : World} {a : AllocId}
+    {id : CapId} {v : El c} {b : Backend}
+    (hlen : (m.codec.encode v).length = b.buf.length)
+    (hb : w.heaps a = some b)
+    (hcan : Ctx.CanWriteRange w.ctx a id 0 b.buf.length)
+    (hinv : w.FullInv) :
+    (checkWorld w (writeCmds a id 0 (m.codec.encode v))).isOk = true :=
+  checkWorld_writeCmds_ok (n := b.buf.length) (by omega) hcan hinv.1.1
+
 /-- Deallocate a marshalled buffer through the checked disposal route. -/
 def free (w : World) (a : AllocId) (d : CapId) : Except String World :=
   w.freeChecked a d
