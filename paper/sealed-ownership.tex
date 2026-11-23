@@ -1319,6 +1319,10 @@ ownership theorem.
   (\lean{free?\_none\_of\_spatial\_root}), and the current free rule enforces the
   loan half and the recorded disposal capability. Exactly one entitlement per
   allocation is not claimed.
+\item The marshalling controls cover the whole-range product read, the
+  left-only spatial refusal, same-length replacement, differently sized
+  encodings, and the empty-range policy: an empty range is vacuously authorized
+  but still requires an existing backend.
 \item The combined invariant can be extended with provenance roles, the
   delegation invariant and \lean{Disposal.Legal}; the components exist, but they
   are not in \lean{FullInv}. Amortized union-find analysis is also future work,

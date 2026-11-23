@@ -368,7 +368,10 @@
   bytes; `Marshal.writeC`/`writeC_rep`/`writeC_fullInv` require
   `Ctx.CanWriteRange` and an encoded-length equality, preserve `Rep` and
   `FullInv`, and their byte-wise checker trace reaches exactly `writeC`
-  (`writeC_trace_ok`, `writeC_trace_eq`);
+  (`writeC_trace_ok`, `writeC_trace_eq`); `bench/CapMarshal.lean` exercises
+  whole-range product decoding, the left-only spatial refusal, same-length
+  replacement, differently sized encodings, and the empty-range policy (an
+  existing empty backend is still required);
   `Marshal.free` delegates to `World.freeChecked` (`free_wf`, `free_fullInv`),
   and `alloc_fullInv` lifts byte-initialised allocation to `FullInv`. Storage remains `El c`, not an
   arbitrary type: `SafeValue` is encoding, not confinement.
