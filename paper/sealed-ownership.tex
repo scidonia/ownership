@@ -1069,7 +1069,10 @@ with \lean{findRootC\_acyclic\_root} the certified corollary; roots are fixed
 points and are not excluded, which the one-node-root control witnesses. A rank
 implies the predicate (\lean{acyclic\_of\_ranked}), so the ranked route also
 discharges acyclicity; the concrete 64-byte zero forest is acyclic
-(\lean{uWorld\_acyclic}).
+(\lean{uWorld\_acyclic}). The construction view is \lean{Built}: the identity
+forest with rank its index, closed under linking a larger-ranked root under a
+smaller-ranked one; \lean{built\_ranked} preserves the rank and
+\lean{forest\_acyclic} derives acyclicity from a construction witness.
 
 A certified computation's postcondition is where the algorithm's invariants are
 stated: \lean{findCompressCert} returns a root, preserves \lean{UFRep} and the
@@ -1125,9 +1128,10 @@ concrete 64-byte instance with an immutable observation.
   \lean{findRootC\_ranked\_root}) and a bounded acyclic forest within $n+1$ steps
   (\lean{stopsAt\_of\_acyclic}, \lean{findRootC\_acyclic\_root}); a rank proof
   yields the predicate too (\lean{acyclic\_of\_ranked}); what is not
-  established is termination of arbitrary loops, and deriving the forest
-  predicate (a rank or acyclicity) from the parent array's construction rather
-  than supplying it.
+  established is termination of arbitrary loops, and tying a particular runtime
+  parent array to a construction history: \lean{Built} records a rank-decreasing
+  union from the identity forest and \lean{built\_ranked} derives \lean{Ranked}
+  (hence \lean{forest\_acyclic}), but the array-to-history step is supplied.
 \item \textbf{Sealing is per-declaration, not physical.}
   \lean{Cap/Sealed.lean} makes the sealed world's constructor, representation
   field and invariant proof private, so outside the module a world can be held
@@ -1200,9 +1204,8 @@ A borrowing discipline need not be a type system. Handles as names, a ledger of
 fractional shares and footprints, and a checker that is also the interpreter give
 an ownership discipline in ordinary Lean, with machine-checked preservation and
 a program interface whose refused operations do not typecheck. The remaining work
-is well-defined: a forest predicate (rank or acyclicity) derived from the
-parent array's construction for the checked union-find, integrating the
-delegation chain
+is well-defined: a construction certificate tying a particular parent array to
+the rank-decreasing \lean{Built} history, integrating the delegation chain
 with ledger leaves and the world's live loans, physical-storage sealing, and the
 C backend with its three trust levels made explicit.
 

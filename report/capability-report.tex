@@ -839,7 +839,10 @@ completion within $n+1$ without a rank (\texttt{stopsAt\_of\_acyclic},
 (\texttt{acyclic\_of\_ranked}), so proving a rank also discharges the acyclic
 route; the concrete 64-byte zero forest is acyclic
 (\texttt{uWorld\_acyclic}), and its chase through that route returns 0 with
-$n+1$ fuel (\texttt{uWorld\_findRoot\_acyclic}). Orbits are linear, a root reaches only
+$n+1$ fuel (\texttt{uWorld\_findRoot\_acyclic}). The construction predicate
+\texttt{Built} starts from the identity forest and links a larger-ranked root
+under a smaller-ranked one; \texttt{built\_ranked} preserves the rank and
+\texttt{forest\_acyclic} derives acyclicity from a construction witness. Orbits are linear, a root reaches only
 itself, and compression to a root preserves the partition in both directions
 (\texttt{compressC\_same\_iff}); full path compression
 (\texttt{UF.compressAll}, \texttt{compressAll\_same\_iff}) preserves the
