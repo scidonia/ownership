@@ -555,6 +555,14 @@ shows the certificate it would have to emit, not proof-producing elaboration.
   in `bench/CapFreshness.lean`). It is a deep syntax and checker for the owner layer
   only, not surface elaboration, not a heap semantics, and acceptance is checker
   acceptance rather than execution safety.
+- `Cap/Retag.lean` and `Cap/Borrow.lean` are the first executable slice of live
+  borrowing on the retag accounting model: `Tree.retag` renames a leaf without
+  changing its budget (`Tree.retag_budget`), `Owner.retagLeaf?` requires an active
+  lender and a fresh name (`retagLeaf?_budget`, `_covered`, `_len`), and
+  `World.beginBorrowChecked`/`endBorrowChecked` retag the active leaf to a
+  distinct borrower and back. `bench/CapBorrow.lean` exercises borrower write,
+  lender refusal, loan removal and restoration. The transitions are not yet in
+  `UCmd`, `LoansOK`/`FullInv`, or the typed interface.
 - `Cap/Reborrow.lean` is the delegation-chain bookkeeping: a `Link` records one
   outstanding loan (loan identifier, allocation, lender, distinct borrower,
   lifetime), `Chain base ls` requires each link's lender to be the chain's current

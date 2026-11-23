@@ -48,6 +48,7 @@ check_ok NatThunkAdmission.lean
 check_ok UniverseDemo.lean
 check_ok CapNegative.lean
 check_ok CapMarshal.lean
+check_ok CapBorrow.lean
 check_ok CapSealAccept.lean
 check_ok CapFreshness.lean
 check_ok OwnedAccept.lean
