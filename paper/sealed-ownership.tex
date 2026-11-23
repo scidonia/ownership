@@ -102,9 +102,9 @@ We report the current state of the implementation: a spatially and fractionally
 splitting ledger with byte budgets, a command language with allocation, writes,
 splits, joins, loans and disposal, sealed certificates with sequential
 composition, a closed-run lifecycle, a verified byte codec for the closed code
-universe with byte-initialised allocation and checked disposal, and union-find as
-a client, including a path-compressing search that runs as a program in the
-discipline. The paper also
+universe with byte-initialised allocation, a value-level decoder and checked
+disposal, and union-find as a client, including a path-compressing search that
+runs as a program in the discipline. The paper also
 states precisely what is \emph{not} established here: reads are observations; loans
 at the world level are exclusive suspension rather than a reborrow capability
 (delegation chains are separate bookkeeping); termination is fuel; the sealed
@@ -166,8 +166,9 @@ proof about an earlier state cannot authorise a live mutation.
   delegation-chain model of nested reborrowing, and a byte-array backend refined
   against a pure model (Sections~\ref{sec:cases}).
 \item A verified marshalling layer for the closed code universe: codecs with
-  a round-trip theorem, a buffer representation relation, and byte-initialised
-  allocation with checked disposal (Section~\ref{sec:marshal}).
+  a round-trip theorem, a buffer representation relation, byte-initialised
+  allocation, a value-level decoder and checked disposal
+  (Section~\ref{sec:marshal}).
 \item An explicit map of the trust boundary: what is proved, what is
   assumed, and what the C backend would require (Sections~\ref{sec:c} and
   \ref{sec:limits}).
@@ -1062,7 +1063,8 @@ disposal capability and the no-live-lender condition still apply, and
 a ghost: it carries no authority, and a copied ghost value cannot access the
 buffer. A concrete example on the 64-byte world (\lean{marshal\_example})
 allocates a \lean{Nat × Bool} buffer, proves its backend represents the value,
-and leaves the encoded bytes in the owner's backend.
+and reads \lean{(3, true)} back from it; the encoded bytes remain in the owner's
+backend.
 
 The confinement caveat is unchanged. \lean{SafeValue T} is a bijection to a
 code, not a statement that a \lean{T} retains nothing; a capturing function can
