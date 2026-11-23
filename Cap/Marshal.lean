@@ -392,6 +392,36 @@ theorem alloc_fullInv {c : Code} (m : Marshal c) {w w' : World} {v : El c}
     w'.FullInv :=
   World.allocWithChecked_fullInv (by simpa [alloc] using h) hinv
 
+/-- The range-authorized, same-length write preserves the combined invariant. -/
+theorem writeC_fullInv {c : Code} (m : Marshal c) {w : World} {a : AllocId}
+    {id : CapId} {v : El c} {b : Backend}
+    (hlen : (m.codec.encode v).length = b.buf.length)
+    (hb : w.heaps a = some b)
+    (hcan : Ctx.CanWriteRange w.ctx a id 0 b.buf.length)
+    (hinv : w.FullInv) : (writeC m w a id v b hlen hb hcan).FullInv := by
+  let w' := writeC m w a id v b hlen hb hcan
+  have hwf : w'.WellFormed := by
+    refine ⟨hinv.1.1.1, hinv.1.1.2.1, ?_⟩
+    intro a' o' hfind
+    by_cases hx : a' = a
+    · cases hx
+      unfold w' writeC at hfind ⊢
+      simp only [if_pos] at hfind ⊢
+      have hb0 : w.heaps a = some b := hb
+      have hlen0 : b.buf.length = o'.len := by
+        obtain ⟨b0, hb0', hlen0⟩ := hinv.1.1.2.2 a o' hfind
+        exact (Option.some.inj (hb0'.symm.trans hb0)) ▸ hlen0
+      refine ⟨Backend.ofBytes (m.codec.encode v), rfl, ?_⟩
+      simp [Backend.ofBytes, hlen, hlen0]
+    · unfold w' writeC at hfind ⊢
+      simp only [if_neg hx] at hfind ⊢
+      exact hinv.1.1.2.2 a' o' hfind
+  refine ⟨⟨hwf, ?_⟩, ?_⟩
+  · change Ctx.HistoryOK w.ctx
+    exact hinv.1.2
+  · change w.LoansOK
+    exact hinv.2
+
 /-- Deallocate a marshalled buffer through the checked disposal route. -/
 def free (w : World) (a : AllocId) (d : CapId) : Except String World :=
   w.freeChecked a d

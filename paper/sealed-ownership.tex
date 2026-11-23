@@ -1090,7 +1090,8 @@ to the ghost value (\lean{read\_rep}); \lean{Marshal.readC} requires
 \lean{Ctx.CanReadRange} over every byte of the represented backend and returns
 the value (\lean{readC\_rep}). \lean{Marshal.writeC} similarly requires
 \lean{Ctx.CanWriteRange} and an encoded-length equality, and re-establishes
-\lean{Rep} (\lean{writeC\_rep}).
+\lean{Rep} (\lean{writeC\_rep}) and preserves \lean{FullInv}
+(\lean{writeC\_fullInv}).
 Deallocation is the existing checked route:
 \lean{Marshal.free} delegates to \lean{World.freeChecked}, so the recorded
 disposal capability and the no-live-lender condition still apply, and
@@ -1305,8 +1306,9 @@ ownership theorem.
   authorized read (\lean{Marshal.read}, \lean{Marshal.readC},
   \lean{Ctx.CanReadRange}) and a range-authorized, same-length write preserving
   \lean{Rep} (\lean{Marshal.writeC}, \lean{writeC\_rep}). Allocation preserves
-  \lean{FullInv} (\lean{alloc\_fullInv}); the write is not yet connected to the
-  checker trace and its \lean{FullInv} preservation is not proved.
+  \lean{FullInv} (\lean{alloc\_fullInv}); the write preserves \lean{Rep} and
+  \lean{FullInv} (\lean{writeC\_rep}, \lean{writeC\_fullInv}) but is not yet
+  connected to the checker trace.
 \item \lean{Built} certifies the concrete 64-byte zero array; an arbitrary
   runtime parent array still needs a construction witness.
 \item Disposal reconstruction needs the spatial join the ledger does not yet
