@@ -143,16 +143,18 @@ proof about an earlier state cannot authorise a live mutation.
 \item A permission calculus in Lean: shares over a context denominator,
   byte-footprint intervals, a decomposition tree with a byte-wise budget, a
   decidable write guard proved equal to its logical form, and a multi-owner
-  context whose invariant (coverage, leaves within their allocation, distinct
-  capability identifiers, one owner per allocation, storage agreement) is
-  preserved by every transition (Sections~\ref{sec:calculus}--\ref{sec:world}).
+  context whose context and world invariants (coverage, leaves within their
+  allocation, distinct capability identifiers, allocation distinctness, one
+  owner per allocation, storage agreement) are preserved by every transition (Sections~\ref{sec:calculus}--\ref{sec:world}).
 \item An executable command language whose checker is its interpreter and a
-  theorem that every accepted execution preserves the world invariant
+  theorem that every accepted execution preserves the combined invariant:
+  world well-formedness, issuance history and the loan state
   (Section~\ref{sec:unified}).
-\item A result-returning, indexed program interface in which reads and
-  data-dependent control flow compose; context-changing constructors carry their
-  evidence, so refused operations are untypable rather than failing at run time
-  (Section~\ref{sec:programs}).
+\item A result-returning, indexed program interface whose context-changing
+  constructors carry their evidence, so refused operations are untypable rather
+  than failing at run time; a certified interface supplies representation
+  predicates for data-dependent indices and composes those computations
+  dependently (Sections~\ref{sec:programs} and~\ref{sec:safety-types}).
 \item Sealed certificates: programs packaged with their acceptance derivation,
   sequential composition through the actual intermediate world, and a closed-run
   lifecycle from the canonical empty world with snapshots as the only
@@ -166,7 +168,10 @@ proof about an earlier state cannot authorise a live mutation.
   \ref{sec:limits}).
 \end{enumerate}
 
-The implementation is ordinary Lean with no axioms beyond the standard three
+Section~\ref{sec:safety-types} is the synthesis: it states the cumulative
+invariant tower and the three typed statements (authority, preservation,
+no-refusal) before the case studies use them. The implementation is ordinary
+Lean with no axioms beyond the standard three
 (\lean{propext}, \lean{Classical.choice}, \lean{Quot.sound}); an axiom audit
 checks every headline theorem, and no proof uses \lean{sorry}. Statements quoted
 below are the declarations in the development, with hypotheses shortened where
@@ -527,7 +532,6 @@ bytes. The world adds them:
 structure World where
   ctx : Ctx
   heaps : AllocId → Option Backend
-  loans : LoanCtx
 
 def World.WellFormed (w : World) : Prop :=
   w.ctx.WellFormed
@@ -581,8 +585,9 @@ Contexts are ordinary Lean values, and their definitions are public. This is a
 deliberate split: \emph{reasoning} needs the definitions, and the theorems above
 are statements about them. What the discipline seals is \emph{authority}: a
 client cannot manufacture a capability's permissions because every operation
-consults the context and every context-changing operation is indexed by its
-result. What Lean does not give us is module opacity, so a hostile client could
+consults the context, and every context-changing operation of the indexed client
+language is indexed by its post-context; the trace language instead checks at
+run time. What Lean does not give us is module opacity, so a hostile client could
 still unfold the definitions and fabricate a context value. Section~
 \ref{sec:limits} states this precisely: the seal is a property of the checked
 operations, not of the module system.
@@ -612,9 +617,13 @@ theorem checkWorld_wf :
     checkWorld w cs = .ok w' → w.WellFormed → w'.WellFormed
 \end{lstlisting}
 
-Accepted execution preserves coverage, freshness, owner uniqueness and storage
-agreement — through allocation, writes, spatial and fractional splits, joins,
-loans and disposal. The older relation \lean{World.Rel} follows from it.
+Accepted execution preserves coverage, distinct identifiers, owner uniqueness
+and storage agreement — through allocation, writes, spatial and fractional
+splits, joins, loans and disposal. Issuance history is added by
+\lean{checkWorld\_top}, and the loan state by
+\lean{World.checkWorld\_fullInv}, the full-bundle theorem stated in
+Section~\ref{sec:safety-types}; the older relation \lean{World.Rel} follows
+from \lean{checkWorld\_wf}.
 
 \paragraph{Every write carries its authority.} A checked write is not a bare
 store:
@@ -655,8 +664,8 @@ permission-changing transitions, and they preserve coverage
 (\lean{World.write\_succeeds}), and two certified writes at a byte name one
 capability (\lean{World.no\_two\_canwrite}). The context-preserving
 \lean{Owned} fragment's accesses carry the same evidence and its writes pass the
-checked write; the unified language's \lean{write} is the remaining route whose
-guard is produced by the checker at run time rather than by the type
+checked write; the unified language's \lean{write} is the runtime trace
+layer's checked operation, with no client evidence by design
 (Section~\ref{sec:limits}).
 
 \paragraph{Loans are suspension.} A loan record names its own identifier, the
@@ -687,7 +696,8 @@ while it is outstanding, and accepted again after restoration.
 The command language is a trace language: a fixed list of operations. An
 algorithm with data-dependent control flow — union-find's search, which reads a
 parent and decides where to go next — cannot be a list. We therefore add two
-interfaces.
+client interfaces, \lean{Owned} and \lean{IProg}, and a certified
+algorithm-facing interface \lean{Cert} for data-dependent indices.
 
 \paragraph{The context-preserving fragment.} \lean{Owned Γ α} is reads, writes
 and monadic binding over a fixed permission context, with every access carrying
@@ -700,9 +710,11 @@ weaker access rule.
 
 \paragraph{The indexed interface.} \lean{IProg Γ α Q} starts with context
 \lean{Γ}, returns \lean{a : α} and ends with \lean{Q a}. Context-changing
-constructors carry their evidence: allocation needs fresh identifiers, a spatial
-split needs the ledger transition to succeed, disposal needs the disposal check.
-A refused operation is therefore not a program at all. For example, the
+constructors carry their evidence: allocation needs fresh identifiers, a
+spatial or fractional split or a join needs the ledger transition to succeed,
+a loan beginning or ending needs the owner, leaf, freshness, liveness and
+suspension/resumption facts, and disposal needs the disposal check. A refused
+operation is therefore not a program at all. For example, the
 freshness evidence for reusing a parent capability as a child is uninhabited:
 
 \begin{lstlisting}
@@ -722,7 +734,8 @@ Execution from a world matching the typing context ends in a world matching the
 postcondition, with the invariant preserved. Post-contexts are computed with
 \lean{Option.getD} so the type function stays computable while the evidence
 records success. The loan state is part of the context index, so evidence that
-depends on outstanding loans can be stated.
+depends on outstanding loans can be stated; \lean{beginLoan} and
+\lean{endLoan} carry it explicitly.
 
 \paragraph{Access evidence.} A certified read or write carries its permission:
 \lean{Ctx.CanWrite Γ a id i} says the owner is found and the ledger's write guard
@@ -734,7 +747,9 @@ certified access is never refused, and \lean{World.no\_two\_canwrite} proves
 that two certified writes at one byte of one allocation name the same
 capability. An unauthorised access is therefore not a well-typed program: the
 evidence cannot be manufactured for a capability that may not act there. Every indexed constructor's evidence covers its checker:
-\lean{splitAtChecked\_succeeds}, \lean{World.allocChecked\_succeeds} and
+\lean{splitAtChecked\_succeeds}, \lean{splitFractionChecked\_succeeds},
+\lean{joinChecked\_succeeds}, \lean{beginLoanChecked\_succeeds},
+\lean{endLoanChecked\_succeeds}, \lean{World.allocChecked\_succeeds} and
 \lean{World.freeChecked\_succeeds} join the two access success lemmas, so a
 typed command is never refused. Making that a statement about executions needs
 the outcome separated: \lean{IOutcome} distinguishes completion, fuel exhaustion
@@ -752,12 +767,13 @@ caller is suspended on the stack. A data-dependent index, however, cannot carry
 its evidence at the program text. The certified interface derives it from a
 representation predicate: \lean{UFRep.canRead}/\lean{canWrite} turn a runtime
 index into the access evidence, \lean{findRootC} is the chase (completion bounded
-by a forest rank), and \lean{findCompressCert} compresses the queried node to the
-root it reached, with the root, representation, invariant and partition
-preserved (Section~\ref{sec:safety-types}). On the four-node example the chase
-from node 3 returns root 0 and the compressed array is \lean{[0,0,0,0]}; fuel
-remains the bound for the model search, while the ranked invariant gives
-completion for the checked route.
+by a rank or an acyclicity predicate; \lean{Built} derives either from a
+rank-decreasing union history), and \lean{findCompressCert} compresses the
+queried node to the root it reached, with the root, representation, invariant and
+partition preserved (Section~\ref{sec:safety-types}). On the four-node example
+the chase from node 3 returns root 0 and the compressed array is
+\lean{[0,0,0,0]}; fuel remains the bound for the model search, while the forest
+invariant gives completion for the checked route.
 
 \section{Sealed execution}
 \label{sec:sealed}
@@ -780,21 +796,238 @@ evaluator is that outcome with the refusal cause erased, and
 \lean{runIProg\_no\_refusal} proves a typed program is never refused: each
 command's check is discharged by its typing evidence
 (\lean{write\_succeeds}, \lean{allocChecked\_succeeds},
-\lean{splitAtChecked\_succeeds}, \lean{freeChecked\_succeeds}). The only
+\lean{splitAtChecked\_succeeds}, \lean{splitFractionChecked\_succeeds},
+\lean{joinChecked\_succeeds}, \lean{beginLoanChecked\_succeeds},
+\lean{endLoanChecked\_succeeds}, \lean{freeChecked\_succeeds}). The only
 remaining outcomes for a typed run are completion and exhaustion.
 Resource-preserving failure results for the C backend are planned work
 (Section~\ref{sec:c}).
 
+\section{The type discipline: authority, preservation, and refusal}
+\label{sec:safety-types}
+
+The discipline delivers three typed statements, not one predicate: an access is
+licensed by the context, an accepted transition preserves the invariant, and a
+typed program is never refused. The first two share one invariant tower; the
+third is the execution theorem of Section~\ref{sec:programs}. This section
+states the tower and the exact scope of each statement before the case studies
+use them.
+
+\paragraph{Authority.} The write and read guards are propositions about the
+capability's leaf. Only a whole share at the index becomes writable; a positive
+share is enough to read, so fractional readers coexist by construction.
+
+\begin{lstlisting}
+def Owner.Writable (o : Owner) (D : Nat) (id : CapId) (i : Nat) : Prop :=
+  ∃ c, o.root.find? id = some c ∧ c.state = .active ∧ c.q = D ∧
+    c.ceiling = .readWrite ∧ c.lo ≤ i ∧ i < c.hi
+
+def Owner.Readable (o : Owner) (id : CapId) (i : Nat) : Prop :=
+  ∃ c, o.root.find? id = some c ∧ c.state = .active ∧ 0 < c.q ∧
+    c.lo ≤ i ∧ i < c.hi
+
+def Ctx.CanWrite (Γ : Ctx) (a : AllocId) (id : CapId) (i : Nat) : Prop :=
+  ∃ o, Γ.findOwner? a = some o ∧ o.writableB Γ.D id i = true
+
+def Ctx.CanRead (Γ : Ctx) (a : AllocId) (id : CapId) (i : Nat) : Prop :=
+  ∃ o, Γ.findOwner? a = some o ∧ o.Readable id i
+\end{lstlisting}
+
+\paragraph{The lifted invariant.} The component predicates are those of
+Section~\ref{sec:world}: coverage, leaves within the allocation, the disposal
+entitlement and the owner, context and world well-formedness, including
+\lean{Ctx.Functional} (one owner per allocation) and \lean{StorageMatches}.
+The tower is cumulative, and each layer names what it adds:
+\lean{Owner.WellFormed} (coverage, leaves, entitlement) is lifted to
+\lean{Ctx.WellFormed} (plus distinct allocation and capability identifiers),
+then to \lean{World.WellFormed} (plus functional lookup and storage agreement),
+then to \lean{World.TopInv} (plus the issuance history), and finally to
+\lean{World.FullInv} (plus the loan-state invariant). The checker is run
+against the full bundle; the indexed fragments state the world layer their
+evaluators need. On top of the component predicates sit the issuance history,
+the loan-state invariant and the combined invariant:
+\begin{lstlisting}
+def Ctx.HistoryOK (C : Ctx) : Prop :=
+  C.issued.Nodup ∧ ∀ c ∈ C.ids, c ∈ C.issued
+
+def World.TopInv (w : World) : Prop :=
+  w.WellFormed ∧ Ctx.HistoryOK w.ctx
+
+def World.LenderRetired (w : World) : Prop :=
+  ∀ l ∈ w.ctx.loans.loans, ∃ o ∈ w.ctx.owners,
+    ∃ c, o.root.find? l.lender = some c ∧ c.state = .retired
+
+def World.LoansOK (w : World) : Prop :=
+  (w.ctx.loans.loans.map (·.id)).Nodup ∧
+  (w.ctx.loans.loans.map (·.lender)).Nodup ∧
+  (∀ l ∈ w.ctx.loans.loans, w.ctx.loans.live l.lifetime = true) ∧
+  (∀ l ∈ w.ctx.loans.loans, l.lender ∈ w.ctx.issued) ∧
+  World.LenderRetired w
+
+def World.FullInv (w : World) : Prop := w.TopInv ∧ w.LoansOK
+\end{lstlisting}
+
+\paragraph{Preservation and refusal.} These are the theorem types that connect
+the tower to execution:
+
+\begin{lstlisting}
+theorem World.writeChecked_sound :
+  w.writeChecked a id i v = .ok w' →
+  ∃ o b b', w.ctx.findOwner? a = some o ∧ o.Writable w.ctx.D id i ∧
+    w.heaps a = some b ∧ b.write i v = some b' ∧
+    w'.ctx = w.ctx ∧ w'.heaps = (fun x => if x = a then some b' else w.heaps x)
+
+theorem World.write_succeeds :
+  Ctx.CanWrite Γ a id i → w.ctx = Γ → w.WellFormed →
+  ∃ w', w.writeChecked a id i v = .ok w'
+
+theorem World.no_two_canwrite :
+  w.WellFormed → Ctx.CanWrite w.ctx a id1 i → Ctx.CanWrite w.ctx a id2 i → id1 = id2
+
+theorem checkWorld_wf :
+  checkWorld w cs = .ok w' → w.WellFormed → w'.WellFormed
+theorem checkWorld_top :
+  checkWorld w cs = .ok w' → w.TopInv → w'.TopInv
+theorem World.checkWorld_fullInv :
+  checkWorld w cs = .ok w' → w.FullInv → w'.FullInv
+
+theorem checkWorld_write_guard :
+  checkWorld w (pre ++ UCmd.write a id i v :: post) = .ok w' →
+  ∃ wm, checkWorld w pre = .ok wm ∧
+    ∃ o, wm.ctx.findOwner? a = some o ∧ o.Writable wm.ctx.D id i
+
+theorem evalIProg_post :
+  w.ctx = Γ → evalIProg fuel p w = some (a, w') → w.WellFormed →
+  w'.ctx = Q a ∧ w'.WellFormed
+theorem runIProg_no_refusal :
+  w.ctx = Γ → w.WellFormed → ∀ msg, runIProg fuel p w ≠ .refused msg
+theorem runOwned_wf :
+  runOwned fuel p w = .done a w' → w.WellFormed → w'.WellFormed
+theorem runOwned_ctx :
+  runOwned fuel p w = .done a w' → w'.ctx = w.ctx
+theorem runOwned_no_refusal :
+  w.ctx = Γ → w.WellFormed → ∀ msg, runOwned fuel p w ≠ .refused msg
+\end{lstlisting}
+
+The three parts answer different questions and their scopes differ. Authority is
+per access: an accepted write reports, through \lean{writeChecked\_sound}, the
+owner found in the context, the guard \lean{o.Writable} (active, whole share,
+read--write ceiling, in range), and the unchanged context, so the store changed
+no permission and the per-byte budget is untouched;
+\lean{checkWorld\_write\_guard} lifts that report to any position in an
+accepted trace. Preservation is per
+execution and per layer: \lean{World.checkWorld\_fullInv} keeps the full tower
+for the checker, while \lean{evalIProg\_post} and \lean{runOwned\_wf} keep
+\lean{World.WellFormed} for the indexed fragments.
+No-refusal is per typed program: it holds for \lean{IProg} and for the
+context-preserving \lean{Owned} fragment, whose read and write constructors carry
+\lean{Ctx.CanRead}/\lean{Ctx.CanWrite} evidence and whose
+\lean{runOwned\_no\_refusal} is stated for a matching, well-formed world.
+\lean{Owned} has no representation index, so a runtime index cannot acquire its
+evidence there; that is why the data-dependent chase is not in this fragment.
+The unified language's \lean{UCmd} is the runtime trace layer: its commands
+carry no evidence, and the checker refuses at run time; its authority property
+is the trace theorem \lean{checkWorld\_write\_guard}. The evidence-bearing
+surfaces are the client layers \lean{IProg}, \lean{Owned} and \lean{Cert}. This
+layering is deliberate: the trace language is what executes and may refuse, not
+what a client writes.
+
+\paragraph{Which surface carries which guarantee.}
+\begin{itemize}
+\item \lean{UCmd}: no client evidence; the checker/interpreter preserves
+  \lean{FullInv} (\lean{World.checkWorld\_fullInv}), every accepted write held
+  its guard (\lean{checkWorld\_write\_guard}), and refusal happens at run time.
+\item \lean{IProg}: evidence in the constructors; a run lands on its typed
+  post-context and preserves \lean{World.WellFormed}, and a typed program is
+  never refused (\lean{evalIProg\_post}, \lean{runIProg\_no\_refusal}).
+\item \lean{Owned}: access evidence in reads and writes; the context is fixed,
+  \lean{World.WellFormed} is preserved, and a typed program is never refused.
+\item \lean{Cert}: a precondition the caller must inhabit; an algorithm's
+  representation and postcondition, with no separate evaluator refusal notion.
+\item \lean{Sealed}: a private \lean{FullInv}; a run preserves it, and the only
+  observation is a snapshot.
+\end{itemize}
+
+\paragraph{What must be inhabited.} Several of these types are obligations to
+provide a witness, and several are deliberately empty.
+\begin{itemize}
+\item \lean{World.FullInv} must be inhabited at the start:
+\lean{emptyWorld\_fullInv}. A \lean{Sealed} value carries an inhabitant
+privately, \lean{Sealed.empty} provides it, \lean{Sealed.importCertified}
+demands one, and \lean{Sealed.run\_invariant} returns one. A malformed world has
+no entry point.
+\item Access evidence must be inhabited by the caller: \lean{IProg}'s read and
+write constructors take \lean{Ctx.CanRead}/\lean{Ctx.CanWrite}; without a
+witness the access is not a program. For an illegal reuse the corresponding
+evidence is deliberately uninhabited (\lean{stale\_child\_refused},
+\lean{reuseSplit\_refused}), so untypability, not a runtime failure, is the
+guarantee there.
+\item An algorithm's precondition must be inhabited to execute a \lean{Cert}:
+\lean{UFRep} and \lean{Ranked} hold of the concrete 64-byte world
+(\lean{uWorld\_ufRep}, \lean{uWorld\_ranked}), \lean{UFRunner} carries them,
+and \lean{Chain.WF} is inhabited by the concrete one- and two-level instances.
+A \lean{Cert} is a function requiring \lean{pre}; a failed representation
+admits no run.
+\item The context-preserving fragment's accesses take their evidence from the
+caller, exactly as \lean{IProg}'s do; an index that arrives at run time cannot
+supply it, which is why the chase uses \lean{UFRep}'s inhabitants instead. The
+unified language's \lean{write} is not a client typing rule: its guard's
+inhabitant is produced by the checker at run time, and
+\lean{checkWorld\_write\_guard} is the authority statement of that runtime
+layer.
+\end{itemize}
+
+\paragraph{Algorithm-facing types.} The same shape is used by the checked
+union-find. A representation predicate and a rank replace the context guard:
+
+\begin{lstlisting}
+def UFRep (w : World) (a : AllocId) (id : CapId) (n : Nat) : Prop :=
+  ∃ o c b, w.ctx.findOwner? a = some o ∧ o.root.find? id = some c ∧
+    c.state = .active ∧ c.q = w.ctx.D ∧ c.ceiling = .readWrite ∧
+    c.lo = 0 ∧ c.hi = n ∧ w.heaps a = some b ∧ b.buf.length = n ∧
+    ∀ i, i < n → ∃ v, b.buf[i]? = some v ∧ v.toNat < n
+
+def Ranked (p : UF.Arr) (n : Nat) (rank : Nat → Nat) : Prop :=
+  (∀ i, i < n → UF.step p i < n) ∧
+  ∀ i, i < n → UF.IsRoot p i ∨ rank (UF.step p i) < rank i
+
+abbrev Cert (pre : World → Prop) (α : Type)
+    (post : World → α → World → Prop) : Type :=
+  ∀ w, pre w → { p : α × World // post w p.1 p.2 }
+\end{lstlisting}
+The rank is one route; \lean{Acyclic} is the other. It excludes a positive
+iterate returning to an in-range non-root, and \lean{stopsAt\_of\_acyclic}
+completes the chase within $n+1$ steps by pigeonhole over the $n+1$ iterates,
+with \lean{findRootC\_acyclic\_root} the certified corollary; roots are fixed
+points and are not excluded, which the one-node-root control witnesses. A rank
+implies the predicate (\lean{acyclic\_of\_ranked}), so the ranked route also
+discharges acyclicity; the concrete 64-byte zero forest is acyclic
+(\lean{uWorld\_acyclic}). The construction view is \lean{Built}: the identity
+forest with rank its index, closed under linking a larger-ranked root under a
+smaller-ranked one; \lean{built\_ranked} preserves the rank and
+\lean{forest\_acyclic} derives acyclicity from a construction witness.
+
+A certified computation's postcondition is where the algorithm's invariants are
+stated: \lean{findCompressCert} returns a root, preserves \lean{UFRep} and the
+world invariant, bounds the root, and proves \lean{Same} in both directions.
+\lean{UFRunner} carries \lean{FullInv}, the representation, the backend and the
+rank privately; \lean{ufRunner\_findRootSnapshot} is a closed execution of the
+concrete 64-byte instance with an immutable observation.
+
 \section{Case studies}
 \label{sec:cases}
 
-\paragraph{A spatial and fractional lifecycle.} A program allocates a fresh
-4-byte owner, writes through the root capability, splits spatially, writes the
-left half, splits that half fractionally into two half-shares, joins them back
-into a whole share, writes again, and disposes. The fractional split leaves two
-half-shares, neither writable; the join restores the whole share and the second
-write is accepted again. The lifecycle is accepted, ends well formed, and leaves
-a pre-existing 64-byte backend untouched.
+\paragraph{Lifecycles.} Three concrete indexed programs exercise the
+constructors. The spatial lifecycle allocates a fresh 4-byte owner, writes
+through the root capability, splits spatially, writes the left half and
+disposes; it is accepted, ends on its typed post-context, is well formed, and
+leaves a pre-existing 64-byte backend untouched. The fractional lifecycle
+allocates, splits the whole share into $32+32$, and joins the two children back;
+it is accepted, the halves are not writable before the join, and the join
+restores the whole share. The loan lifecycle allocates, begins a loan on the
+root leaf and ends it; it is accepted with the suspension and resumption
+evidence carried by the constructors. Each is a concrete indexed run in the
+discipline, not a test harness.
 
 \paragraph{Union-find.} We treat union-find as the \emph{witness} for the
 discipline rather than as a correctness target: it is the algorithm whose cost
@@ -872,215 +1105,6 @@ not replace that distinction. Two implementation routes are available: Lean
 control flow with C primitives (recommended first), or a custom lowering of the
 fragment with a simulation proof (additional compiler work).
 
-\section{The type structure of program safety}
-\label{sec:safety-types}
-
-Program safety here is three typed statements, not one predicate: an access is
-licensed by the context, an accepted transition preserves the invariant, and a
-typed program is never refused. The first two share one invariant tower; the
-third is the execution theorem of Section~\ref{sec:programs}.
-
-\paragraph{Authority.} The write and read guards are propositions about the
-capability's leaf. Only a whole share at the index becomes writable; a positive
-share is enough to read, so fractional readers coexist by construction.
-
-\begin{lstlisting}
-def Owner.Writable (o : Owner) (D : Nat) (id : CapId) (i : Nat) : Prop :=
-  ∃ c, o.root.find? id = some c ∧ c.state = .active ∧ c.q = D ∧
-    c.ceiling = .readWrite ∧ c.lo ≤ i ∧ i < c.hi
-
-def Owner.Readable (o : Owner) (id : CapId) (i : Nat) : Prop :=
-  ∃ c, o.root.find? id = some c ∧ c.state = .active ∧ 0 < c.q ∧
-    c.lo ≤ i ∧ i < c.hi
-
-def Ctx.CanWrite (Γ : Ctx) (a : AllocId) (id : CapId) (i : Nat) : Prop :=
-  ∃ o, Γ.findOwner? a = some o ∧ o.writableB Γ.D id i = true
-
-def Ctx.CanRead (Γ : Ctx) (a : AllocId) (id : CapId) (i : Nat) : Prop :=
-  ∃ o, Γ.findOwner? a = some o ∧ o.Readable id i
-\end{lstlisting}
-
-\paragraph{The invariant tower.} Each layer is a predicate on the next layer's
-data; the data structures themselves are those of Section~\ref{sec:calculus}.
-
-\begin{lstlisting}
-def Owner.Covered (o : Owner) (D : Nat) : Prop :=
-  ∀ x, x < o.len → o.root.budget x = D
-
-def Owner.LeavesWithin (o : Owner) : Prop :=
-  ∀ id c, o.root.find? id = some c → c.alloc = o.alloc ∧ c.hi ≤ o.len
-
-def Owner.DisposalPresent (o : Owner) : Prop :=
-  (∃ c, o.root.find? o.disposal = some c) ∨ o.disposal ∉ o.root.ids
-
-def Owner.WellFormed (o : Owner) (D : Nat) : Prop :=
-  o.Covered D ∧ o.LeavesWithin ∧ o.DisposalPresent
-
-def Ctx.Realizes (C : Ctx) : Prop :=
-  (∀ o ∈ C.owners, o.Covered C.D) ∧ (C.owners.map (·.alloc)).Nodup
-
-def Ctx.Functional (C : Ctx) : Prop :=
-  ∀ a o o', C.findOwner? a = some o → o' ∈ C.owners → o'.alloc = a → o' = o
-
-def Ctx.WellFormed (C : Ctx) : Prop :=
-  C.Realizes ∧ (∀ o ∈ C.owners, o.WellFormed C.D) ∧ C.ids.Nodup
-
-def World.StorageMatches (w : World) : Prop :=
-  ∀ a o, w.ctx.findOwner? a = some o →
-    ∃ b, w.heaps a = some b ∧ b.buf.length = o.len
-
-def World.WellFormed (w : World) : Prop :=
-  Ctx.WellFormed w.ctx ∧ Ctx.Functional w.ctx ∧ w.StorageMatches
-
-def Ctx.HistoryOK (C : Ctx) : Prop :=
-  C.issued.Nodup ∧ ∀ c ∈ C.ids, c ∈ C.issued
-
-def World.TopInv (w : World) : Prop :=
-  w.WellFormed ∧ Ctx.HistoryOK w.ctx
-
-def World.LenderRetired (w : World) : Prop :=
-  ∀ l ∈ w.ctx.loans.loans, ∃ o ∈ w.ctx.owners,
-    ∃ c, o.root.find? l.lender = some c ∧ c.state = .retired
-
-def World.LoansOK (w : World) : Prop :=
-  (w.ctx.loans.loans.map (·.id)).Nodup ∧
-  (w.ctx.loans.loans.map (·.lender)).Nodup ∧
-  (∀ l ∈ w.ctx.loans.loans, w.ctx.loans.live l.lifetime = true) ∧
-  (∀ l ∈ w.ctx.loans.loans, l.lender ∈ w.ctx.issued) ∧
-  World.LenderRetired w
-
-def World.FullInv (w : World) : Prop := w.TopInv ∧ w.LoansOK
-\end{lstlisting}
-
-\paragraph{Preservation and refusal.} These are the theorem types that connect
-the tower to execution:
-
-\begin{lstlisting}
-theorem World.writeChecked_sound :
-  w.writeChecked a id i v = .ok w' →
-  ∃ o b b', w.ctx.findOwner? a = some o ∧ o.Writable w.ctx.D id i ∧
-    w.heaps a = some b ∧ b.write i v = some b' ∧
-    w'.ctx = w.ctx ∧ w'.heaps = (fun x => if x = a then some b' else w.heaps x)
-
-theorem World.write_succeeds :
-  Ctx.CanWrite Γ a id i → w.ctx = Γ → w.WellFormed →
-  ∃ w', w.writeChecked a id i v = .ok w'
-
-theorem World.no_two_canwrite :
-  w.WellFormed → Ctx.CanWrite w.ctx a id1 i → Ctx.CanWrite w.ctx a id2 i → id1 = id2
-
-theorem checkWorld_wf :
-  checkWorld w cs = .ok w' → w.WellFormed → w'.WellFormed
-theorem checkWorld_top :
-  checkWorld w cs = .ok w' → w.TopInv → w'.TopInv
-theorem World.checkWorld_fullInv :
-  checkWorld w cs = .ok w' → w.FullInv → w'.FullInv
-
-theorem checkWorld_write_guard :
-  checkWorld w (pre ++ UCmd.write a id i v :: post) = .ok w' →
-  ∃ wm, checkWorld w pre = .ok wm ∧
-    ∃ o, wm.ctx.findOwner? a = some o ∧ o.Writable wm.ctx.D id i
-
-theorem evalIProg_post :
-  w.ctx = Γ → evalIProg fuel p w = some (a, w') → w.WellFormed →
-  w'.ctx = Q a ∧ w'.WellFormed
-theorem runIProg_no_refusal :
-  w.ctx = Γ → w.WellFormed → ∀ msg, runIProg fuel p w ≠ .refused msg
-theorem runOwned_wf :
-  runOwned fuel p w = .done a w' → w.WellFormed → w'.WellFormed
-theorem runOwned_ctx :
-  runOwned fuel p w = .done a w' → w'.ctx = w.ctx
-theorem runOwned_no_refusal :
-  w.ctx = Γ → w.WellFormed → ∀ msg, runOwned fuel p w ≠ .refused msg
-\end{lstlisting}
-
-The three parts answer different questions and their scopes differ. Authority is
-per access: an accepted write reports, through \lean{writeChecked\_sound}, the
-owner found in the context, the guard \lean{o.Writable} (active, whole share,
-read--write ceiling, in range), and the unchanged context, so the store changed
-no permission and the per-byte budget is untouched;
-\lean{checkWorld\_write\_guard} lifts that report to any position in an
-accepted trace. Preservation is per
-execution: every accepted command and every accepted run keeps the tower.
-No-refusal is per typed program: it holds for \lean{IProg} and for the
-context-preserving \lean{Owned} fragment, whose read and write constructors carry
-\lean{Ctx.CanRead}/\lean{Ctx.CanWrite} evidence and whose
-\lean{runOwned\_no\_refusal} is stated for a matching, well-formed world.
-\lean{Owned} has no representation index, so a runtime index cannot acquire its
-evidence there; that is why the data-dependent chase is not in this fragment.
-The unified language's \lean{UCmd} is the runtime trace layer: its commands
-carry no evidence, and the checker refuses at run time; its authority property
-is the trace theorem \lean{checkWorld\_write\_guard}. The evidence-bearing
-surfaces are the client layers \lean{IProg}, \lean{Owned} and \lean{Cert}. This
-layering is deliberate: the trace language is what executes and may refuse, not
-what a client writes.
-
-\paragraph{What must be inhabited.} Several of these types are obligations to
-provide a witness, and several are deliberately empty.
-\begin{itemize}
-\item \lean{World.FullInv} must be inhabited at the start:
-\lean{emptyWorld\_fullInv}. A \lean{Sealed} value carries an inhabitant
-privately, \lean{Sealed.empty} provides it, \lean{Sealed.importCertified}
-demands one, and \lean{Sealed.run\_invariant} returns one. A malformed world has
-no entry point.
-\item Access evidence must be inhabited by the caller: \lean{IProg}'s read and
-write constructors take \lean{Ctx.CanRead}/\lean{Ctx.CanWrite}; without a
-witness the access is not a program. For an illegal reuse the corresponding
-evidence is deliberately uninhabited (\lean{stale\_child\_refused},
-\lean{reuseSplit\_refused}), so untypability, not a runtime failure, is the
-guarantee there.
-\item An algorithm's precondition must be inhabited to execute a \lean{Cert}:
-\lean{UFRep} and \lean{Ranked} hold of the concrete 64-byte world
-(\lean{uWorld\_ufRep}, \lean{uWorld\_ranked}), \lean{UFRunner} carries them,
-and \lean{Chain.WF} is inhabited by the concrete one- and two-level instances.
-A \lean{Cert} is a function requiring \lean{pre}; a failed representation
-admits no run.
-\item The context-preserving fragment's accesses take their evidence from the
-caller, exactly as \lean{IProg}'s do; an index that arrives at run time cannot
-supply it, which is why the chase uses \lean{UFRep}'s inhabitants instead. The
-unified language's \lean{write} still carries no evidence: its guard's
-inhabitant is produced by the checker at run time, so the authority statement
-there is the per-write consequence of an accepted write. This is the remaining
-access-typing gap of Section~\ref{sec:limits}.
-\end{itemize}
-
-\paragraph{Algorithm-facing types.} The same shape is used by the checked
-union-find. A representation predicate and a rank replace the context guard:
-
-\begin{lstlisting}
-def UFRep (w : World) (a : AllocId) (id : CapId) (n : Nat) : Prop :=
-  ∃ o c b, w.ctx.findOwner? a = some o ∧ o.root.find? id = some c ∧
-    c.state = .active ∧ c.q = w.ctx.D ∧ c.ceiling = .readWrite ∧
-    c.lo = 0 ∧ c.hi = n ∧ w.heaps a = some b ∧ b.buf.length = n ∧
-    ∀ i, i < n → ∃ v, b.buf[i]? = some v ∧ v.toNat < n
-
-def Ranked (p : UF.Arr) (n : Nat) (rank : Nat → Nat) : Prop :=
-  (∀ i, i < n → UF.step p i < n) ∧
-  ∀ i, i < n → UF.IsRoot p i ∨ rank (UF.step p i) < rank i
-
-abbrev Cert (pre : World → Prop) (α : Type)
-    (post : World → α → World → Prop) : Type :=
-  ∀ w, pre w → { p : α × World // post w p.1 p.2 }
-\end{lstlisting}
-The rank is one route; \lean{Acyclic} is the other. It excludes a positive
-iterate returning to an in-range non-root, and \lean{stopsAt\_of\_acyclic}
-completes the chase within $n+1$ steps by pigeonhole over the $n+1$ iterates,
-with \lean{findRootC\_acyclic\_root} the certified corollary; roots are fixed
-points and are not excluded, which the one-node-root control witnesses. A rank
-implies the predicate (\lean{acyclic\_of\_ranked}), so the ranked route also
-discharges acyclicity; the concrete 64-byte zero forest is acyclic
-(\lean{uWorld\_acyclic}). The construction view is \lean{Built}: the identity
-forest with rank its index, closed under linking a larger-ranked root under a
-smaller-ranked one; \lean{built\_ranked} preserves the rank and
-\lean{forest\_acyclic} derives acyclicity from a construction witness.
-
-A certified computation's postcondition is where the algorithm's invariants are
-stated: \lean{findCompressCert} returns a root, preserves \lean{UFRep} and the
-world invariant, bounds the root, and proves \lean{Same} in both directions.
-\lean{UFRunner} carries \lean{FullInv}, the representation, the backend and the
-rank privately; \lean{ufRunner\_findRootSnapshot} is a closed execution of the
-concrete 64-byte instance with an immutable observation.
-
 \section{Limitations and threats to validity}
 \label{sec:limits}
 
@@ -1101,8 +1125,7 @@ concrete 64-byte instance with an immutable observation.
   is a root; the checked compression is the functional one and preserves the
   partition both ways (\lean{compressC\_same\_iff}), including full path
   compression along the chase's own path
-  (\lean{rootPath\_compress\_same\_iff}). The path's execution is stated with
-  the union-find correctness paragraph below.
+  (\lean{rootPath\_compress\_same\_iff}).
 \item \textbf{Loans are exclusive suspension at the world level.} The
   executable borrower is the lender's own identifier: there is no reborrow
   capability in the world, and no non-root lifetime in the executable language.
