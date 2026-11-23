@@ -1007,10 +1007,11 @@ with \lean{findRootC\_acyclic\_root} the certified corollary; roots are fixed
 points and are not excluded, which the one-node-root control witnesses. A rank
 implies the predicate (\lean{acyclic\_of\_ranked}), so the ranked route also
 discharges acyclicity; the concrete 64-byte zero forest is acyclic
-(\lean{uWorld\_acyclic}). The construction view is \lean{Built}: the identity
-forest with rank its index, closed under linking a larger-ranked root under a
-smaller-ranked one; \lean{built\_ranked} preserves the rank and
-\lean{forest\_acyclic} derives acyclicity from a construction witness.
+(\lean{uWorld\_acyclic}). The construction view is \lean{Built}: the identity or
+zero forest with rank its index, closed under linking a larger-ranked root under
+a smaller-ranked one; \lean{built\_ranked} preserves the rank,
+\lean{forest\_acyclic} derives acyclicity from a construction witness, and
+\lean{uWorld\_built} certifies the concrete 64-byte zero array.
 
 A certified computation's postcondition is where the algorithm's invariants are
 stated: \lean{findCompressCert} returns a root, preserves \lean{UFRep} and the
@@ -1053,7 +1054,8 @@ freshness checks as \lean{World.allocChecked}, but installs a backend containing
 the encoded bytes; it preserves \lean{World.WellFormed}
 (\lean{allocWithChecked\_wf}) and succeeds from the fresh-identifier premises
 (\lean{allocWithChecked\_succeeds}). \lean{Marshal.alloc} then gives the initial
-\lean{Rep} (\lean{alloc\_rep}). Deallocation is the existing checked route:
+\lean{Rep} (\lean{alloc\_rep}), and \lean{Marshal.read} decodes the buffer back
+to the ghost value (\lean{read\_rep}). Deallocation is the existing checked route:
 \lean{Marshal.free} delegates to \lean{World.freeChecked}, so the recorded
 disposal capability and the no-live-lender condition still apply, and
 \lean{Marshal.free\_wf} preserves the invariant. The decoded \lean{El c} value is
@@ -1067,8 +1069,8 @@ code, not a statement that a \lean{T} retains nothing; a capturing function can
 be bijective with \lean{El .nat}. Storage is therefore \lean{El c}, never an
 arbitrary \lean{T}. A decoded \lean{El} has no references or closures, so a stale
 ghost value is harmless after deallocation; an arbitrary capturing \lean{T} would
-not be. A checked read/write wrapper over \lean{Rep}, pointers, alignment and the
-C arena are not claimed here.
+not be. A checked write wrapper over \lean{Rep}, a capability-indexed read, pointers,
+alignment and the C arena are not claimed here; the decoder is a value-level read.
 
 \section{Case studies}
 \label{sec:cases}
@@ -1209,8 +1211,10 @@ fragment with a simulation proof (additional compiler work).
   yields the predicate too (\lean{acyclic\_of\_ranked}); what is not
   established is termination of arbitrary loops, and tying a particular runtime
   parent array to a construction history: \lean{Built} records a rank-decreasing
-  union from the identity forest and \lean{built\_ranked} derives \lean{Ranked}
-  (hence \lean{forest\_acyclic}), but the array-to-history step is supplied.
+  union from the identity or zero forest, \lean{built\_ranked} derives
+  \lean{Ranked} (hence \lean{forest\_acyclic}), and \lean{uWorld\_built}
+  certifies the concrete 64-byte zero array. An arbitrary runtime array still
+  needs a construction witness.
 \item \textbf{Sealing is per-declaration, not physical.}
   \lean{Cap/Sealed.lean} makes the sealed world's constructor, representation
   field and invariant proof private, so outside the module a world can be held
@@ -1247,7 +1251,8 @@ fragment with a simulation proof (additional compiler work).
 \item \textbf{Marshalling is value-level.} The codec covers the closed
   \lean{El} types: no pointers, alignment, padding or C arena. Allocation is
   byte-initialised and preserves \lean{World.WellFormed}; deallocation is the
-  checked disposal route. A checked read/write wrapper over \lean{Rep} is not
+  checked disposal route, and \lean{Marshal.read} decodes a represented buffer.
+  A capability-indexed read and a checked write wrapper over \lean{Rep} are not
   provided, and a client type reachable through \lean{SafeValue} must not be
   allowed to capture the buffer.
 \item \textbf{Union-find correctness.} The checked route has the

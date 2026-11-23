@@ -27,6 +27,13 @@ theorem step_range {n i : Nat} (hi : i < n) :
   rw [List.getD_eq_getElem?_getD, List.getElem?_range hi]
   rfl
 
+/-- The zero forest's step is zero for every in-range node. -/
+theorem step_replicate_zero {n i : Nat} (hi : i < n) :
+    UF.step (List.replicate n 0) i = 0 := by
+  unfold UF.step UF.parentOf
+  rw [List.getD_eq_getElem?_getD, List.getElem?_replicate]
+  simp [hi]
+
 /-- Linking `b` under `a` rewrites `b`'s parent to `a`. -/
 theorem step_union_self {p : UF.Arr} {a b : Nat} (hb : b < p.length) :
     UF.step (UF.union p a b) b = a := by
@@ -39,11 +46,12 @@ theorem step_union_of_ne {p : UF.Arr} {a b x : Nat} (hx : x ≠ b) :
     UF.step (UF.union p a b) x = UF.step p x :=
   UF.step_set_of_ne p a b x hx
 
-/-- A parent array built from the identity forest by rank-decreasing union:
-link a larger-ranked root under a smaller-ranked one. The rank is an index, so
-each step carries its measure. -/
+/-- A parent array built from the identity or zero forest by rank-decreasing
+union: link a larger-ranked root under a smaller-ranked one. The rank is an
+index, so each step carries its measure. -/
 inductive Built : UF.Arr → Nat → (Nat → Nat) → Prop
   | init (n : Nat) : Built (List.range n) n (fun i => i)
+  | zero (n : Nat) : Built (List.replicate n 0) n (fun i => i)
   | union {p : UF.Arr} {n : Nat} {rank : Nat → Nat} (h : Built p n rank)
       {a b : Nat} (ha : UF.IsRoot p a) (hb : UF.IsRoot p b)
       (haN : a < n) (hbN : b < n) (hlt : rank a < rank b) :
@@ -53,6 +61,7 @@ inductive Built : UF.Arr → Nat → (Nat → Nat) → Prop
 theorem built_length : ∀ {p : UF.Arr} {n : Nat} {rank : Nat → Nat},
     Built p n rank → p.length = n
   | _, _, _, .init n => by simp
+  | _, _, _, .zero n => by simp
   | _, _, _, .union h _ _ _ _ _ => by
     rw [UF.union, List.length_set, built_length h]
 
@@ -70,6 +79,21 @@ theorem built_ranked : ∀ {p : UF.Arr} {n : Nat} {rank : Nat → Nat},
       left
       unfold UF.IsRoot
       rw [step_range hi]
+  | _, _, _, .zero n => by
+    constructor
+    · intro i hi
+      rw [step_replicate_zero hi]
+      omega
+    · intro i hi
+      by_cases h0 : i = 0
+      · left
+        unfold UF.IsRoot
+        subst h0
+        rw [step_replicate_zero hi]
+      · right
+        rw [step_replicate_zero hi]
+        change 0 < i
+        omega
   | _, _, _, @Built.union p n rank h a b ha hb haN hbN hlt => by
     have hr := built_ranked h
     have hlen := built_length h

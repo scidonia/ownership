@@ -270,6 +270,20 @@ theorem alloc_rep {c : Code} (m : Marshal c) {w w' : World} {v : El c}
     · simp at h
   · simp at h
 
+/-- Decode the buffer at an allocation back to its ghost value. -/
+def read {c : Code} (m : Marshal c) (w : World) (a : AllocId) : Option (El c) :=
+  match w.heaps a with
+  | some b => m.codec.decode b.buf
+  | none => none
+
+/-- A represented backend decodes to its value. -/
+theorem read_rep {c : Code} (m : Marshal c) {w : World} {a : AllocId}
+    {b : Backend} {v : El c} (hb : w.heaps a = some b) (hrep : Rep m v b.buf) :
+    read m w a = some v := by
+  unfold read
+  rw [hb]
+  exact hrep
+
 /-- Deallocate a marshalled buffer through the checked disposal route. -/
 def free (w : World) (a : AllocId) (d : CapId) : Except String World :=
   w.freeChecked a d
@@ -291,7 +305,8 @@ example : (codec (.prod .nat .bool)).decode
 theorem marshal_example : ∃ w' b,
     Marshal.alloc ⟨codec (.prod .nat .bool)⟩ uWorld (3, true) ⟨7⟩ ⟨8⟩ (by decide) = .ok w' ∧
       w'.heaps ⟨uWorld.ctx.nextAlloc⟩ = some b ∧
-      Marshal.Rep ⟨codec (.prod .nat .bool)⟩ (3, true) b.buf := by
+      Marshal.Rep ⟨codec (.prod .nat .bool)⟩ (3, true) b.buf ∧
+      Marshal.read ⟨codec (.prod .nat .bool)⟩ w' ⟨uWorld.ctx.nextAlloc⟩ = some (3, true) := by
   obtain ⟨w', hw'⟩ := World.allocWithChecked_succeeds (w := uWorld)
     (bytes := (codec (.prod .nat .bool)).encode (3, true))
     (rootId := ⟨7⟩) (disposal := ⟨8⟩) (pos := by decide) (by decide) (by decide)
@@ -301,7 +316,8 @@ theorem marshal_example : ∃ w' b,
   obtain ⟨b, hb, hrep⟩ := Marshal.alloc_rep (m := ⟨codec (.prod .nat .bool)⟩)
     (w := uWorld) (v := (3, true)) (rootId := ⟨7⟩) (disposal := ⟨8⟩)
     (pos := by decide) hw''
-  exact ⟨w', b, hw'', hb, hrep⟩
+  exact ⟨w', b, hw'', hb, hrep,
+    Marshal.read_rep ⟨codec (.prod .nat .bool)⟩ hb hrep⟩
 
 /-- The canonical codec round-trips a list of bytes. -/
 example : (codec (.list .uint8)).decode

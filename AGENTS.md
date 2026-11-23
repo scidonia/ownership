@@ -315,12 +315,13 @@
   `iter_root`), so `uWorld_ranked` yields the concrete instance `uWorld_acyclic`;
   the bridge uses no choice axiom. `findRootF_lt` and `findRootC_lt` bound a
   completed chase by the represented length. `Cap/UFForest.lean` adds the
-  construction predicate `Built p n rank`: the identity forest with rank its
-  index, closed under linking two roots with the second of larger rank.
+  construction predicate `Built p n rank`: the identity or zero forest with rank
+  its index, closed under linking two roots with the second of larger rank.
   `built_length`, `built_ranked` (same rank) and `built_bounds` hold, and
   `forest_acyclic` derives `Acyclic` from a `Forest` witness; a concrete union
-  step and its acyclicity are examples. Deriving the forest predicate from the parent
-  array's construction remains outside it. The partition equivalence is
+  step and its acyclicity are examples. `uWorld_built` certifies the concrete
+  64-byte zero array (`Built.zero`); an arbitrary runtime array still needs a
+  construction witness. The partition equivalence is
   `compressC_same_iff`/`compress_same_iff_of_root`, built on orbit linearity
   (`reach_or_reach_of_common`), the root-is-terminal fact (`root_reach_eq`) and
   root-reach preservation (`reach_root_compress`). Full path compression is
@@ -351,8 +352,9 @@
   buffer to its ghost `El c` value. `World.allocWithChecked` allocates a fresh
   owner whose backend is initialised from bytes, with `allocWithChecked_wf` and
   `allocWithChecked_succeeds`; `Marshal.alloc` proves the initial `Rep` and
-  `Marshal.free` delegates to `World.freeChecked` (`free_wf`). Storage remains
-  `El c`, not an arbitrary type: `SafeValue` is encoding, not confinement.
+  `Marshal.read`/`read_rep` decode a represented buffer; `Marshal.free`
+  delegates to `World.freeChecked` (`free_wf`). Storage remains `El c`, not an
+  arbitrary type: `SafeValue` is encoding, not confinement.
 - `Cap/UFCompress.lean` adds bounded root finding and one-step compression to the
   functional model: `findRootF` chases parents with fuel, `StopsAt` records a
   reached fixed point, `findRootF_root`/`findRootF_reachable` give the root and

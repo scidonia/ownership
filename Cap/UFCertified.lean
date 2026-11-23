@@ -25,6 +25,7 @@ algorithm inside the sealed lifecycle remain outside this module.
 -/
 import Cap.FullInv
 import Cap.UFChecked
+import Cap.UFForest
 
 namespace Cap
 
@@ -495,6 +496,10 @@ theorem uWorld_ranked : Ranked (UFArr (Backend.empty 64)) 64 zeroRank := by
 /-- The concrete 64-byte zero forest is acyclic. -/
 theorem uWorld_acyclic : Acyclic (UFArr (Backend.empty 64)) 64 :=
   acyclic_of_ranked uWorld_ranked
+
+/-- The concrete 64-byte zero forest has a construction history. -/
+theorem uWorld_built : Built (UFArr (Backend.empty 64)) 64 (fun i => i) := by
+  simpa [UFArr, Backend.empty] using Built.zero 64
 
 /-- The concrete 64-byte zero forest's chase through the acyclicity route: with
 `n + 1` fuel at node 3 it returns the root 0. -/
