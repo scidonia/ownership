@@ -518,6 +518,17 @@ theorem uWorld_ranked : Ranked (UFArr (Backend.empty 64)) 64 zeroRank := by
       rw [uEmpty_step hi]
       simp [zeroRank, h0]
 
+/-- Full path compression on the branching example: `[0,0,1,2]` with the path
+`3 -> 2 -> 1 -> 0` becomes the constant array. -/
+theorem compressAll_example :
+    UF.compressAll [0, 0, 1, 2] 0 [3, 2, 1] = [0, 0, 0, 0] := by
+  decide
+
+/-- Single-node compression of the same start only rewrites node 3. -/
+theorem compressSingle_example :
+    UF.compress [0, 0, 1, 2] 3 0 = [0, 0, 1, 0] := by
+  decide
+
 /-- The concrete 64-byte zero forest is acyclic. -/
 theorem uWorld_acyclic : Acyclic (UFArr (Backend.empty 64)) 64 :=
   acyclic_of_ranked uWorld_ranked

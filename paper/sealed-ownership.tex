@@ -103,8 +103,9 @@ splitting ledger with byte budgets, a command language with allocation, writes,
 splits, joins, loans and disposal, sealed certificates with sequential
 composition, a closed-run lifecycle, a verified byte codec for the closed code
 universe with byte-initialised allocation, a value-level decoder and checked
-disposal, and union-find as a client, including a path-compressing search that
-runs as a program in the discipline. The paper also
+disposal, and union-find as a client, with a certified full-path compression
+and a sealed single-node runner; a state-threaded compiled execution is not
+claimed. The paper also
 states precisely what is \emph{not} established here: reads are observations; loans
 at the world level are exclusive suspension rather than a reborrow capability
 (delegation chains are separate bookkeeping); termination is fuel; the sealed
@@ -161,10 +162,11 @@ proof about an earlier state cannot authorise a live mutation.
   sequential composition through the actual intermediate world, and a closed-run
   lifecycle from the canonical empty world with snapshots as the only
   observation (Section~\ref{sec:sealed}).
-\item Case studies: a spatial fill lifecycle, union-find through the checked
-  route with a path-compressing search as a program, loans as suspension with a
-  delegation-chain model of nested reborrowing, and a byte-array backend refined
-  against a pure model (Sections~\ref{sec:cases}).
+\item Case studies: a spatial fill lifecycle; union-find with a functional
+  model, a computable certified full-path compression, and a sealed single-node
+  runner; loans as suspension with a delegation-chain model of nested
+  reborrowing; and a byte-array backend refined against a pure model
+  (Sections~\ref{sec:cases}).
 \item A verified marshalling layer for the closed code universe: codecs with
   a round-trip theorem, a buffer representation relation, byte-initialised
   allocation, a value-level decoder and checked disposal
@@ -1124,36 +1126,59 @@ union(0,2) -> [0,0,0,2]
 find(3): 3 -> 2 -> 0, compress -> [0,0,0,0]
 \end{lstlisting}
 
-After the three unions every pair is \lean{Same}; the chase from node 3 returns
-root 0, and the compressed array is the constant array. Four layers exist. (i) The functional
-model: reachability, \lean{Same} as an equivalence, simple union, the concrete
-partition \lean{[0,0,0,2]} with every pair \lean{Same}, bounded root finding and
-one-step compression. (ii) The checked trace: unions issued through
-\lean{World.writeChecked} land on a backend whose parent array is exactly the
-functional model's \lean{[0,0,0,2]}, and the world remains well formed. (iii)
-The checked-backend route: \lean{UFRep} relates the world's bytes to a parent
-array, a runtime index below its length yields the access evidence
-(\lean{UFRep.canRead}, \lean{UFRep.canWrite}), and represented reads are proved
-in range. Under a ranked forest the chase stops at a root,
-\lean{findRootC\_ranked\_root}; under a bounded acyclic forest it stops within
-$n+1$ steps (\lean{stopsAt\_of\_acyclic}, \lean{findRootC\_acyclic\_root}), no
-rank function needed. A completed chase is the functional search and
-its result is a root; the checked compression is the functional compression and
-preserves the partition in both directions (\lean{compressC\_same\_iff});
-full path compression along the path the chase itself takes preserves it too
-(\lean{rootPath\_compress\_same\_iff}). The certified interface
-(\lean{Cert}) reads, compresses and runs find-and-compress with those
-guarantees; dependent composition (\lean{Cert.bindDep}) gives a
-read-then-compress program, and a sealed runner executes the concrete 64-byte
-instance, proving its root and returning an immutable 64-zero-byte snapshot
-(\lean{ufRunner\_findRootSnapshot}). (iv) The program interface: the checked
-route is the algorithm interface. The context-preserving fragment carries access
-evidence but no representation index, so the data-dependent chase cannot be
-written there. The full path is executed through the certified interface
-(\lean{compressPathCert}, \lean{compressRootPathCert}); its final array is
-\lean{compressAll} of the initial one
-(\lean{compressRootPathCert\_compressAll}) and preserves the partition in both
-directions (\lean{compressRootPathCert\_same\_iff}).
+The model's full-path example is the branching shape from the review:
+
+\begin{lstlisting}
+p = [0,0,1,2]
+find(3): 3 -> 2 -> 1 -> 0
+full path:  [0,0,0,0]   (compressAll_example)
+single node: [0,0,1,0]  (compressSingle_example)
+\end{lstlisting}
+
+The difference is the point: preserving the partition would accept both; the
+full-path certificate is what establishes the stronger array.
+
+\paragraph{What is proved, what runs.} The case study has four distinct
+statuses, and the paper does not conflate them.
+
+\begin{itemize}
+\item \textbf{Functional model.} Reachability, \lean{Same} as an equivalence,
+  simple union, bounded root finding, one-step compression and \lean{compressAll}
+  are defined and proved. The concrete partition \lean{[0,0,0,2]} has every pair
+  \lean{Same}; \lean{compressAll\_example} and \lean{compressSingle\_example}
+  distinguish full-path from single-node compression on \lean{[0,0,1,2]}.
+\item \textbf{Checked trace and checked backend.} Unions through
+  \lean{World.writeChecked} land on the functional parent array and preserve
+  \lean{World.WellFormed}. \lean{UFRep} relates the world's bytes to a parent
+  array, \lean{UFRep.canRead}/\lean{canWrite} derive access evidence at a runtime
+  index, represented reads are in range, and \lean{findRootC} is the checked
+  chase. \lean{findRootC\_ranked\_root} and
+  \lean{findRootC\_acyclic\_root} give completion under a rank or a bounded
+  acyclic forest.
+\item \textbf{Certified computation.} \lean{readParentCert}, \lean{compressCert},
+  \lean{findCompressCert}, \lean{compressPathCert} and
+  \lean{compressRootPathCert} are computable definitions: no computational
+  \lean{Classical.choose} and no \lean{noncomputable}. They compose checked
+  reads and writes through \lean{Cert}; \lean{compressC\_same\_iff} gives
+  one-step partition equivalence, and
+  \lean{compressRootPathCert\_compressAll}/\lean{\_same\_iff} identify the
+  full-path certificate's final array with \lean{compressAll} and transfer the
+  partition theorem. \lean{Cert} is a specification layer: the compression
+  definitions compose the intended checked writes, but a generic theorem that an
+  arbitrary \lean{Cert} computation corresponds to an authorized \lean{UCmd}
+  trace is not provided.
+\item \textbf{Sealed runner and execution.} \lean{UFRunner} carries
+  \lean{FullInv}, \lean{UFRep}, the backend and the rank; its computable
+  \lean{findRoot}/\lean{findRootSnapshot} executes on the zero 64-byte forest
+  and returns root 0 and 64 zero bytes. It still invokes \emph{single-node}
+  compression, not the full-path certificate. Threading the full-path operation
+  through successive runner states, preserving \lean{FullInv} and a reusable
+  forest invariant, and a compiled binary execution are not claimed.
+\end{itemize}
+
+The context-preserving fragment carries access evidence but no representation
+index, so the data-dependent chase cannot be written there; the checked route is
+the algorithm interface. Amortized analysis is not claimed.
 
 \paragraph{Backends.} Two implementations share one model. The pure backend is a
 byte list with a length proof; the byte-array backend is the same interface over
@@ -1331,11 +1356,15 @@ the compiler is unchanged, and the boundary at which that enforcement stops.
 A borrowing discipline need not be a type system. Handles as names, a ledger of
 fractional shares and footprints, and a checker that is also the interpreter give
 an ownership discipline in ordinary Lean, with machine-checked preservation and
-a program interface whose refused operations do not typecheck. The remaining work
-is well-defined: a construction certificate tying a particular parent array to
-the rank-decreasing \lean{Built} history, integrating the delegation chain
-with ledger leaves and the world's live loans, physical-storage sealing, and the
-C backend with its three trust levels made explicit.
+a program interface whose refused operations do not typecheck. The immediate
+gate is execution: thread the computable full-path certificate through the
+sealed runner, preserve \lean{FullInv} and a reusable forest invariant, and
+demonstrate the branching \lean{[0,0,1,2]} computation in compiled form. The
+remaining work is then well-defined: a construction certificate tying a
+particular parent array to the rank-decreasing \lean{Built} history,
+integrating the delegation chain with ledger leaves and the world's live loans,
+physical-storage sealing, and the C backend with its three trust levels made
+explicit.
 
 \begin{thebibliography}{9}
 \bibitem{lean4} L. de Moura and S. Ullrich. The Lean~4 theorem prover and

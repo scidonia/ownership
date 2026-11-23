@@ -330,8 +330,10 @@
   partition preserved in both directions, and the concrete 3→2→1 path lands on
   the constant array. `UFRunner` seals a world with the combined invariant, the
   representation, its backend and the rank (private fields);
-  `UFRunner.findRoot` runs the algorithm, and `ufRunner_findRoot` proves the
-  closed execution on the concrete 64-byte zero forest returns root 0; the
+  `UFRunner.findRoot` runs single-node find-and-compress, and `ufRunner_findRoot`
+  proves the closed execution on the concrete 64-byte zero forest returns root 0;
+  it is computable and evaluates, but is not yet the full-path state-threaded
+  runner; the
   acyclicity route's run of the same forest is `uWorld_findRoot_acyclic` (65 fuel
   at node 3, root 0);
   `UFRunner.findRootSnapshot` returns the root with a copy of the allocation's
@@ -344,7 +346,10 @@
   `compressCert` over a node list; `compressRootPathCert` runs the fold on
   `rootPath`, `compressRootPathCert_compressAll` identifies the final array with
   `UF.compressAll`, and `compressRootPathCert_same_iff` transports the partition
-  theorem to the executed writes. The world-level borrower and C stages remain.
+  theorem to the executed writes; `compressAll_example`/`compressSingle_example`
+  distinguish [0,0,1,2] full-path from single-node compression. These
+  certificates are computable, but the sealed runner is not yet threaded through
+  the full path. The world-level borrower and C stages remain.
 - `Cap/Marshal.lean` is the verified marshalling layer for the closed code
   universe. `Codec c` carries `encode : El c → List UInt8`, `decode`, and
   `decode_encode`; `codec` supplies one for every code (tagged products/sums,
