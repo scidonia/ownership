@@ -484,6 +484,153 @@ theorem free_fullInv {w w' : World} {a : AllocId} {d : CapId}
     (h : free w a d = .ok w') (hinv : w.FullInv) : w'.FullInv :=
   World.freeChecked_fullInv h hinv
 
+/-- Write a byte list from `start`, threading the backend write state. -/
+def writeBackend (b : Backend) (start : Nat) : List UInt8 → Option Backend
+  | [] => some b
+  | v :: vs => (b.write start v).bind (fun b' => writeBackend b' (start + 1) vs)
+
+/-- The byte-wise backend writes replace the range and preserve the prefix and suffix. -/
+theorem writeBackend_buf {b : Backend} {start : Nat} {bytes : List UInt8}
+    (h : start + bytes.length ≤ b.buf.length) :
+    ∃ b', writeBackend b start bytes = some b' ∧
+      b'.buf = b.buf.take start ++ bytes ++ b.buf.drop (start + bytes.length) := by
+  induction bytes generalizing b start with
+  | nil =>
+    refine ⟨b, rfl, ?_⟩
+    simp [List.take_append_drop]
+  | cons v vs ih =>
+    have hlt : start < b.buf.length := by
+      have h' : start + (vs.length + 1) ≤ b.buf.length := by simpa using h
+      omega
+    obtain ⟨b1, hb1⟩ : ∃ b1, b.write start v = some b1 := by
+      unfold Backend.write
+      rw [if_pos hlt]
+      exact ⟨_, rfl⟩
+    have hbuf1 : b1.buf = b.buf.set start v := Backend.write_buf hb1
+    have hlen1 : b1.buf.length = b.buf.length := by rw [hbuf1, List.length_set]
+    have hbound1 : start + 1 + vs.length ≤ b1.buf.length := by
+      rw [hlen1]
+      have h' : start + vs.length + 1 ≤ b.buf.length := by
+        simpa [Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using h
+      omega
+    obtain ⟨b2, hb2, hbuf2⟩ := ih (b := b1) (start := start + 1) hbound1
+    refine ⟨b2, ?_, ?_⟩
+    · simp [writeBackend, hb1, hb2]
+    · rw [hbuf2]
+      rw [hbuf1]
+      rw [List.take_set]
+      have htake : start < (b.buf.take (start + 1)).length := by
+        rw [List.length_take]
+        omega
+      rw [List.set_eq_take_append_cons_drop]
+      rw [if_pos htake]
+      rw [List.drop_set_of_lt (by omega)]
+      simp [List.take_take, Nat.add_assoc, List.append_assoc]
+      omega
+
+
+
+/-- The byte-wise checker trace reaches the backend `writeBackend` computes, with the
+    same context and only the target allocation changed. -/
+theorem checkWorld_writeCmds_eq {w : World} {a : AllocId} {id : CapId}
+    {start n : Nat} {bytes : List UInt8} {b : Backend}
+    (hbn : b.buf.length ≤ n)
+    (hle : start + bytes.length ≤ b.buf.length)
+    (hb : w.heaps a = some b)
+    (hcan : Ctx.CanWriteRange w.ctx a id 0 n)
+    (hwf : w.WellFormed) :
+    ∃ w' b', checkWorld w (writeCmds a id start bytes) = .ok w' ∧
+      w'.ctx = w.ctx ∧
+      w'.heaps = (fun x => if x = a then some b' else w.heaps x) ∧
+      writeBackend b start bytes = some b' := by
+  induction bytes generalizing start w b with
+  | nil =>
+    refine ⟨w, b, rfl, rfl, ?_, rfl⟩
+    funext x
+    by_cases hx : x = a <;> simp [hx, hb]
+  | cons v vs ih =>
+    have hstart : start < n := by
+      have h' : start + (vs.length + 1) ≤ n := by
+        have hb' : start + (vs.length + 1) ≤ b.buf.length := by simpa using hle
+        omega
+      omega
+    have hc : Ctx.CanWrite w.ctx a id start := hcan start (Nat.zero_le _) hstart
+    obtain ⟨w1, hw1⟩ := World.write_succeeds (w := w) hc rfl hwf
+    have hwf1 : w1.WellFormed := World.writeChecked_wf hw1 hwf
+    obtain ⟨o, b0, b1, hfind, hguard, hb0, hbw, hctx1, hheaps1⟩ :=
+      World.writeChecked_sound hw1
+    have hb_eq : b = b0 := Option.some.inj (hb.symm.trans hb0)
+    subst b0
+    have hlen1 : b1.buf.length = b.buf.length := by
+      rw [Backend.write_buf hbw]
+      exact List.length_set (as := b.buf) (i := start) (a := v)
+    have hle1 : start + 1 + vs.length ≤ b1.buf.length := by
+      rw [hlen1]
+      have h' : start + (vs.length + 1) ≤ b.buf.length := by simpa using hle
+      omega
+    have hheaps1a : w1.heaps a = some b1 := by
+      rw [hheaps1]
+      simp
+    obtain ⟨w2, b2, hw2, hctx2, hheaps2, hb2⟩ :=
+      ih (b := b1) (start := start + 1) (by omega) hle1 hheaps1a
+        (by simpa [hctx1] using hcan) hwf1
+    refine ⟨w2, b2, ?_, hctx2.trans hctx1, ?_, ?_⟩
+    · unfold writeCmds checkWorld
+      rw [hw1]
+      exact hw2
+    · rw [hheaps2, hheaps1]
+      funext x
+      by_cases hx : x = a <;> simp [hx]
+    · simp [writeBackend, hbw, hb2]
+
+
+
+/-- Writing a full buffer from zero yields exactly `Backend.ofBytes`. -/
+theorem writeBackend_full {b : Backend} {bytes : List UInt8}
+    (hlen : bytes.length = b.buf.length) :
+    writeBackend b 0 bytes = some (Backend.ofBytes bytes) := by
+  obtain ⟨b', hb', hbuf⟩ :=
+    writeBackend_buf (b := b) (start := 0) (bytes := bytes) (by omega)
+  have hbuf_eq : b'.buf = bytes := by
+    rw [hbuf]
+    simp [hlen]
+  have hb_eq : b' = Backend.ofBytes bytes := by
+    cases b' with
+    | mk buf len hlen' =>
+      simp only [Backend.ofBytes]
+      have hbuf_eq' : buf = bytes := by simpa using hbuf_eq
+      have hlen_eq : len = bytes.length := by
+        rw [← hlen', hbuf_eq']
+      simp [hbuf_eq', hlen_eq]
+  rw [hb', hb_eq]
+
+
+
+/-- The accepted byte-wise trace reaches exactly `writeC`. -/
+theorem writeC_trace_eq {c : Code} (m : Marshal c) {w : World} {a : AllocId}
+    {id : CapId} {v : El c} {b : Backend}
+    (hlen : (m.codec.encode v).length = b.buf.length)
+    (hb : w.heaps a = some b)
+    (hcan : Ctx.CanWriteRange w.ctx a id 0 b.buf.length)
+    (hinv : w.FullInv) :
+    checkWorld w (writeCmds a id 0 (m.codec.encode v)) = .ok (writeC m w a id v b hlen hb hcan) := by
+  have hle : 0 + (m.codec.encode v).length ≤ b.buf.length := by omega
+  obtain ⟨w', b', hcheck, hctx, hheaps, hb'⟩ :=
+    checkWorld_writeCmds_eq (n := b.buf.length) (Nat.le_refl b.buf.length) hle hb hcan hinv.1.1
+  have hfull : writeBackend b 0 (m.codec.encode v) = some (Backend.ofBytes (m.codec.encode v)) :=
+    writeBackend_full hlen
+  have hb_eq : b' = Backend.ofBytes (m.codec.encode v) :=
+    Option.some.inj (hb'.symm.trans hfull)
+  subst b'
+  have hw_eq : w' = writeC m w a id v b hlen hb hcan := by
+    cases w' with
+    | mk ctx heaps =>
+      simp only [writeC]
+      have hctx' : ctx = w.ctx := hctx
+      have hheaps' : heaps = (fun x => if x = a then some (Backend.ofBytes (m.codec.encode v)) else w.heaps x) := hheaps
+      simp [hctx', hheaps']
+  rw [hcheck, hw_eq]
+
 end Marshal
 
 /-- The canonical codec round-trips a product. -/
