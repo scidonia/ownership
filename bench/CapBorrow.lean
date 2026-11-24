@@ -71,3 +71,11 @@ private def innerBorrowed : World :=
       (match w.endBorrowChecked ⟨0⟩ ⟨10⟩ with
        | .error _ => false
        | .ok w1 => (w1.endBorrowChecked ⟨0⟩ ⟨9⟩).isOk))
+
+#guard (match uWorld.beginBorrowChecked ⟨0⟩ ⟨1⟩ ⟨3⟩ ⟨9⟩ with
+  | .error _ => false
+  | .ok w => (w.splitAtChecked ⟨0⟩ ⟨3⟩ ⟨5⟩ ⟨6⟩ 32).isOk = false)
+
+#guard (match borrowed.endBorrowChecked ⟨0⟩ ⟨9⟩ with
+  | .error _ => false
+  | .ok w => (w.splitAtChecked ⟨0⟩ ⟨1⟩ ⟨5⟩ ⟨6⟩ 32).isOk)

@@ -249,13 +249,15 @@ def World.splitAtChecked (w : World) (a : AllocId) (id id1 id2 : CapId) (k : Nat
   match w.ctx.findOwner? a with
   | none => .error "split: no owner for the allocation"
   | some o =>
-    if hf : o.FreshIds id1 id2 ∧ id1 ∉ w.ctx.ids ∧ id2 ∉ w.ctx.ids
-              ∧ id1 ∉ w.ctx.issued ∧ id2 ∉ w.ctx.issued
-              ∧ (∃ c, o.root.find? id = some c ∧ c.state = .active) then
-      match hs : w.ctx.splitAtOwner? o id id1 id2 k with
-      | some C' => .ok { w with ctx := { C' with issued := id1 :: id2 :: w.ctx.issued } }
-      | none => .error "split: refused"
-    else .error "split: capability identifiers are not fresh"
+    if ∀ l ∈ w.ctx.loans.loans, l.alloc ≠ a then
+      if hf : o.FreshIds id1 id2 ∧ id1 ∉ w.ctx.ids ∧ id2 ∉ w.ctx.ids
+                ∧ id1 ∉ w.ctx.issued ∧ id2 ∉ w.ctx.issued
+                ∧ (∃ c, o.root.find? id = some c ∧ c.state = .active) then
+        match hs : w.ctx.splitAtOwner? o id id1 id2 k with
+        | some C' => .ok { w with ctx := { C' with issued := id1 :: id2 :: w.ctx.issued } }
+        | none => .error "split: refused"
+      else .error "split: capability identifiers are not fresh"
+    else .error "split: outstanding loan"
 
 theorem World.splitAtChecked_sound {w w' : World} {a : AllocId} {id id1 id2 : CapId}
     {k : Nat} (h : w.splitAtChecked a id id1 id2 k = .ok w') :
@@ -268,11 +270,14 @@ theorem World.splitAtChecked_sound {w w' : World} {a : AllocId} {id id1 id2 : Ca
   · simp at h
   · rename_i o hf
     split at h
-    · rename_i hfr
+    · rename_i halloc
       split at h
-      · rename_i C' hs
-        simp only [Except.ok.injEq] at h
-        exact ⟨o, C', hf, hfr.1, hfr.2.1, hfr.2.2.1, hs, h.symm⟩
+      · rename_i hfr
+        split at h
+        · rename_i C' hs
+          simp only [Except.ok.injEq] at h
+          exact ⟨o, C', hf, hfr.1, hfr.2.1, hfr.2.2.1, hs, h.symm⟩
+        · simp at h
       · simp at h
     · simp at h
 
@@ -440,13 +445,15 @@ def World.splitFractionChecked (w : World) (a : AllocId) (id id1 id2 : CapId)
   match w.ctx.findOwner? a with
   | none => .error "split: no owner for the allocation"
   | some o =>
-    if o.FreshIds id1 id2 ∧ id1 ∉ w.ctx.ids ∧ id2 ∉ w.ctx.ids
-        ∧ id1 ∉ w.ctx.issued ∧ id2 ∉ w.ctx.issued
-        ∧ (∃ c, o.root.find? id = some c ∧ c.state = .active) then
-      match w.ctx.splitFractionOwner? o id id1 id2 q1 q2 p1 p2 with
-      | some C' => .ok { w with ctx := { C' with issued := id1 :: id2 :: w.ctx.issued } }
-      | none => .error "split: refused"
-    else .error "split: capability identifiers are not fresh"
+    if ∀ l ∈ w.ctx.loans.loans, l.alloc ≠ a then
+      if o.FreshIds id1 id2 ∧ id1 ∉ w.ctx.ids ∧ id2 ∉ w.ctx.ids
+          ∧ id1 ∉ w.ctx.issued ∧ id2 ∉ w.ctx.issued
+          ∧ (∃ c, o.root.find? id = some c ∧ c.state = .active) then
+        match w.ctx.splitFractionOwner? o id id1 id2 q1 q2 p1 p2 with
+        | some C' => .ok { w with ctx := { C' with issued := id1 :: id2 :: w.ctx.issued } }
+        | none => .error "split: refused"
+      else .error "split: capability identifiers are not fresh"
+    else .error "split: outstanding loan"
 
 /-- A successful fractional split preserves the world invariant. -/
 theorem World.splitFractionChecked_wf {w w' : World} {a : AllocId} {id id1 id2 : CapId}
@@ -458,32 +465,35 @@ theorem World.splitFractionChecked_wf {w w' : World} {a : AllocId} {id id1 id2 :
   · simp at h
   · rename_i o hf'
     split at h
-    · rename_i hfr
+    · rename_i halloc
       split at h
-      · rename_i C' hs
-        simp only [Except.ok.injEq] at h
-        cases h
-        have hmem : o ∈ w.ctx.owners := List.mem_of_find?_eq_some hf'
-        have hs' := hs
-        unfold Ctx.splitFractionOwner? at hs
-        cases ho : o.splitFraction? id id1 id2 q1 q2 p1 p2 with
-        | none => simp [ho] at hs
-        | some o' =>
-          simp only [ho, Option.map_some, Option.some.injEq] at hs
-          subst C'
-          have hwfC : (w.ctx.update o.alloc o').WellFormed :=
-            Ctx.splitFractionOwner_wellFormed hwf.1 hmem hfr.1 hfr.2.1 hfr.2.2.1 hs'
-          have ho'alloc : o'.alloc = o.alloc := Owner.splitFraction?_alloc ho
-          have ho'len : o'.len = o.len := Owner.splitFraction?_len ho
-          have hfun : (w.ctx.update o.alloc o').Functional :=
-            Ctx.update_functional ho'alloc hwf.1.1.2
-          have hoalloc : o.alloc = a := by
-            have := List.find?_some (p := fun x : Owner => decide (x.alloc = a))
-              (by simpa [Ctx.findOwner?] using hf')
-            simpa using this
-          have hfa : w.ctx.findOwner? o.alloc = some o := by
-            simpa [hoalloc] using hf'
-          exact ⟨hwfC, hfun, World.update_storage hwf hfa ho'alloc ho'len⟩
+      · rename_i hfr
+        split at h
+        · rename_i C' hs
+          simp only [Except.ok.injEq] at h
+          cases h
+          have hmem : o ∈ w.ctx.owners := List.mem_of_find?_eq_some hf'
+          have hs' := hs
+          unfold Ctx.splitFractionOwner? at hs
+          cases ho : o.splitFraction? id id1 id2 q1 q2 p1 p2 with
+          | none => simp [ho] at hs
+          | some o' =>
+            simp only [ho, Option.map_some, Option.some.injEq] at hs
+            subst C'
+            have hwfC : (w.ctx.update o.alloc o').WellFormed :=
+              Ctx.splitFractionOwner_wellFormed hwf.1 hmem hfr.1 hfr.2.1 hfr.2.2.1 hs'
+            have ho'alloc : o'.alloc = o.alloc := Owner.splitFraction?_alloc ho
+            have ho'len : o'.len = o.len := Owner.splitFraction?_len ho
+            have hfun : (w.ctx.update o.alloc o').Functional :=
+              Ctx.update_functional ho'alloc hwf.1.1.2
+            have hoalloc : o.alloc = a := by
+              have := List.find?_some (p := fun x : Owner => decide (x.alloc = a))
+                (by simpa [Ctx.findOwner?] using hf')
+              simpa using this
+            have hfa : w.ctx.findOwner? o.alloc = some o := by
+              simpa [hoalloc] using hf'
+            exact ⟨hwfC, hfun, World.update_storage hwf hfa ho'alloc ho'len⟩
+        · simp at h
       · simp at h
     · simp at h
 

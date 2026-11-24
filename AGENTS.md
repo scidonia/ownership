@@ -562,12 +562,13 @@ shows the certificate it would have to emit, not proof-producing elaboration.
   changing its budget (`Tree.retag_budget`), `Owner.retagLeaf?` requires an active
   lender and a fresh name (`retagLeaf?_budget`, `_covered`, `_len`), and
   `World.beginBorrowChecked`/`endBorrowChecked` retag the active leaf to a
-  distinct borrower and back; return refuses while another loan for the same
-  allocation is live. `bench/CapBorrow.lean` exercises borrower write, lender
-  refusal, loan removal, restoration, free-during-borrow refusal and nested
-  return order. The transitions are not yet in `UCmd`, `LoansOK`/`FullInv`, or
-  the typed interface, and splits during a borrow remain an open restoration
-  obligation.
+  distinct borrower and back; return refuses while another loan borrowed from
+  the same borrower is live. Splits refuse while any loan is outstanding for the
+  allocation, and the typed split constructors carry that evidence.
+  `bench/CapBorrow.lean` exercises borrower write, lender refusal, loan removal,
+  restoration, free-during-borrow refusal, split-during-borrow refusal and
+  nested return order. The transitions are not yet in `UCmd`, `LoansOK`/`FullInv`,
+  or the typed interface.
 - `Cap/Reborrow.lean` is the delegation-chain bookkeeping: a `Link` records one
   outstanding loan (loan identifier, allocation, lender, distinct borrower,
   lifetime), `Chain base ls` requires each link's lender to be the chain's current

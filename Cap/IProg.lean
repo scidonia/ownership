@@ -47,7 +47,8 @@ inductive IProg : (Γ : Ctx) → (α : Type) → (α → Ctx) → Type 1 where
              ∧ rootId ∉ Γ.issued ∧ disposal ∉ Γ.issued) :
       IProg Γ AllocId (fun _ => Γ.alloc ⟨Γ.nextAlloc⟩ n pos rootId disposal hf)
   | splitAt (a : AllocId) (id id1 id2 : CapId) (k : Nat) (o : Owner)
-      (hfind : Γ.findOwner? a = some o) (hfids : o.FreshIds id1 id2)
+      (hfind : Γ.findOwner? a = some o)
+      (halloc : ∀ l ∈ Γ.loans.loans, l.alloc ≠ a) (hfids : o.FreshIds id1 id2)
       (hfresh1 : id1 ∉ Γ.ids) (hfresh2 : id2 ∉ Γ.ids)
       (hissued1 : id1 ∉ Γ.issued) (hissued2 : id2 ∉ Γ.issued)
       (hact : ∃ c, o.root.find? id = some c ∧ c.state = .active)
@@ -56,7 +57,9 @@ inductive IProg : (Γ : Ctx) → (α : Type) → (α → Ctx) → Type 1 where
                                issued := id1 :: id2 :: Γ.issued })
   | splitFraction (a : AllocId) (id id1 id2 : CapId) (q1 q2 : Nat)
       (p1 : 0 < q1) (p2 : 0 < q2) (o : Owner)
-      (hfind : Γ.findOwner? a = some o) (hfids : o.FreshIds id1 id2)
+      (hfind : Γ.findOwner? a = some o)
+      (halloc : ∀ l ∈ Γ.loans.loans, l.alloc ≠ a)
+      (hfids : o.FreshIds id1 id2)
       (hfresh1 : id1 ∉ Γ.ids) (hfresh2 : id2 ∉ Γ.ids)
       (hissued1 : id1 ∉ Γ.issued) (hissued2 : id2 ∉ Γ.issued)
       (hact : ∃ c, o.root.find? id = some c ∧ c.state = .active)
@@ -140,11 +143,11 @@ def evalIProg (fuel : Nat) {Γ : Ctx} {α : Type} {Q : α → Ctx} (p : IProg Γ
       | .ok w' => some (⟨Γ.nextAlloc⟩, w')
       | .error _ => none
     else none
-  | fuel + 1, .splitAt a id id1 id2 k _ _ _ _ _ _ _ _ _ =>
+  | fuel + 1, .splitAt a id id1 id2 k _ _ _ _ _ _ _ _ _ _ =>
     match w.splitAtChecked a id id1 id2 k with
     | .ok w' => some ((), w')
     | .error _ => none
-  | fuel + 1, .splitFraction a id id1 id2 q1 q2 p1 p2 _ _ _ _ _ _ _ _ _ =>
+  | fuel + 1, .splitFraction a id id1 id2 q1 q2 p1 p2 _ _ _ _ _ _ _ _ _ _ =>
     match w.splitFractionChecked a id id1 id2 q1 q2 p1 p2 with
     | .ok w' => some ((), w')
     | .error _ => none
@@ -198,11 +201,11 @@ def runIProg (fuel : Nat) {Γ : Ctx} {α : Type} {Q : α → Ctx} (p : IProg Γ 
       | .ok w' => .done (⟨Γ.nextAlloc⟩) w'
       | .error msg => .refused msg
     else .exhausted
-  | fuel + 1, .splitAt a id id1 id2 k _ _ _ _ _ _ _ _ _ =>
+  | fuel + 1, .splitAt a id id1 id2 k _ _ _ _ _ _ _ _ _ _ =>
     match w.splitAtChecked a id id1 id2 k with
     | .ok w' => .done () w'
     | .error msg => .refused msg
-  | fuel + 1, .splitFraction a id id1 id2 q1 q2 p1 p2 _ _ _ _ _ _ _ _ _ =>
+  | fuel + 1, .splitFraction a id id1 id2 q1 q2 p1 p2 _ _ _ _ _ _ _ _ _ _ =>
     match w.splitFractionChecked a id id1 id2 q1 q2 p1 p2 with
     | .ok w' => .done () w'
     | .error msg => .refused msg
@@ -292,7 +295,8 @@ check the world-level split performs, including historical freshness. This is
 the interface-side counterpart of the checker's history check. -/
 theorem splitAtChecked_succeeds {w : World} {Γ : Ctx} {a : AllocId}
     {id id1 id2 : CapId} {k : Nat} {o : Owner}
-    (hfind : Γ.findOwner? a = some o) (hfids : o.FreshIds id1 id2)
+    (hfind : Γ.findOwner? a = some o)
+    (halloc : ∀ l ∈ Γ.loans.loans, l.alloc ≠ a) (hfids : o.FreshIds id1 id2)
     (hfresh1 : id1 ∉ Γ.ids) (hfresh2 : id2 ∉ Γ.ids)
     (hissued1 : id1 ∉ Γ.issued) (hissued2 : id2 ∉ Γ.issued)
     (hact : ∃ c, o.root.find? id = some c ∧ c.state = .active)
@@ -302,6 +306,7 @@ theorem splitAtChecked_succeeds {w : World} {Γ : Ctx} {a : AllocId}
   unfold World.splitAtChecked
   rw [hΓ]
   simp only [hfind]
+  rw [if_pos halloc]
   rw [dif_pos ⟨hfids, hfresh1, hfresh2, hissued1, hissued2, hact⟩]
   split
   · rfl
@@ -334,7 +339,8 @@ theorem splitAtChecked_post {w w' : World} {Γ : Ctx} {a : AllocId}
 discharges the world-level checks. -/
 theorem splitFractionChecked_succeeds {w : World} {Γ : Ctx} {a : AllocId}
     {id id1 id2 : CapId} {q1 q2 : Nat} {p1 : 0 < q1} {p2 : 0 < q2} {o : Owner}
-    (hfind : Γ.findOwner? a = some o) (hfids : o.FreshIds id1 id2)
+    (hfind : Γ.findOwner? a = some o)
+    (halloc : ∀ l ∈ Γ.loans.loans, l.alloc ≠ a) (hfids : o.FreshIds id1 id2)
     (hfresh1 : id1 ∉ Γ.ids) (hfresh2 : id2 ∉ Γ.ids)
     (hissued1 : id1 ∉ Γ.issued) (hissued2 : id2 ∉ Γ.issued)
     (hact : ∃ c, o.root.find? id = some c ∧ c.state = .active)
@@ -344,6 +350,7 @@ theorem splitFractionChecked_succeeds {w : World} {Γ : Ctx} {a : AllocId}
   unfold World.splitFractionChecked
   rw [hΓ]
   simp only [hfind]
+  rw [if_pos halloc]
   rw [if_pos ⟨hfids, hfresh1, hfresh2, hissued1, hissued2, hact⟩]
   split
   · rfl
@@ -355,13 +362,15 @@ theorem splitFractionChecked_succeeds {w : World} {Γ : Ctx} {a : AllocId}
 /-- A checked fractional split realises its typed post-context. -/
 theorem splitFractionChecked_post {w w' : World} {Γ : Ctx} {a : AllocId}
     {id id1 id2 : CapId} {q1 q2 : Nat} {p1 : 0 < q1} {p2 : 0 < q2} {o : Owner}
-    (hfind : Γ.findOwner? a = some o) (hΓ : w.ctx = Γ)
+    (hfind : Γ.findOwner? a = some o)
+    (halloc : ∀ l ∈ Γ.loans.loans, l.alloc ≠ a) (hΓ : w.ctx = Γ)
     (hw : w.splitFractionChecked a id id1 id2 q1 q2 p1 p2 = .ok w') :
     w'.ctx = { (Γ.splitFractionOwner? o id id1 id2 q1 q2 p1 p2).getD Γ with
                 issued := id1 :: id2 :: Γ.issued } := by
   unfold World.splitFractionChecked at hw
   rw [hΓ] at hw
   simp only [hfind] at hw
+  rw [if_pos halloc] at hw
   by_cases hfr : o.FreshIds id1 id2 ∧ id1 ∉ Γ.ids ∧ id2 ∉ Γ.ids ∧
       id1 ∉ Γ.issued ∧ id2 ∉ Γ.issued ∧
       (∃ c, o.root.find? id = some c ∧ c.state = .active)
@@ -567,7 +576,7 @@ theorem evalIProg_post (w : World) (fuel : Nat) :
           exact ⟨allocChecked_post hf hfr hΓ hpos hw, World.allocChecked_wf hw hwf⟩
       · simp only [evalIProg, hpos] at h
         nomatch h
-    | splitAt a0 id0 id1 id2 k o hfind hfids hfresh1 hfresh2 hissued1 hissued2 hact hs =>
+    | splitAt a0 id0 id1 id2 k o hfind halloc hfids hfresh1 hfresh2 hissued1 hissued2 hact hs =>
       cases hw : w.splitAtChecked a0 id0 id1 id2 k with
       | error e =>
         simp only [evalIProg, hw] at h
@@ -576,7 +585,7 @@ theorem evalIProg_post (w : World) (fuel : Nat) :
         simp only [evalIProg, hw] at h
         obtain ⟨-, rfl⟩ := Option.some.inj h
         exact ⟨splitAtChecked_post hfind hs hΓ hw, World.splitAtChecked_wf hw hwf⟩
-    | splitFraction a0 id0 id1 id2 q1 q2 p1 p2 o hfind hfids hf1 hf2 hi1 hi2 hact hs =>
+    | splitFraction a0 id0 id1 id2 q1 q2 p1 p2 o hfind halloc hfids hf1 hf2 hi1 hi2 hact hs =>
       cases hw : w.splitFractionChecked a0 id0 id1 id2 q1 q2 p1 p2 with
       | error e =>
         simp only [evalIProg, hw] at h
@@ -584,7 +593,7 @@ theorem evalIProg_post (w : World) (fuel : Nat) :
       | ok w1 =>
         simp only [evalIProg, hw] at h
         obtain ⟨-, rfl⟩ := Option.some.inj h
-        exact ⟨splitFractionChecked_post hfind hΓ hw,
+        exact ⟨splitFractionChecked_post hfind halloc hΓ hw,
           World.splitFractionChecked_wf hw hwf⟩
     | join a0 node newId o hfind hfresh hs =>
       cases hw : w.joinChecked a0 node newId with
@@ -683,24 +692,24 @@ theorem runIProg_no_refusal (w : World) (fuel : Nat) :
           cases h
       · simp only [dif_neg hpos] at h
         cases h
-    | splitAt a id id1 id2 k o hfind hfids hfresh1 hfresh2 hissued1 hissued2 hact hs =>
+    | splitAt a id id1 id2 k o hfind halloc hfids hfresh1 hfresh2 hissued1 hissued2 hact hs =>
       simp only [runIProg] at h
       cases hw : w.splitAtChecked a id id1 id2 k with
       | error e =>
         simp only [hw] at h
-        have hok := splitAtChecked_succeeds hfind hfids hfresh1 hfresh2
+        have hok := splitAtChecked_succeeds hfind halloc hfids hfresh1 hfresh2
           hissued1 hissued2 hact hs hΓ
         rw [hw] at hok
         cases hok
       | ok w1 =>
         simp only [hw] at h
         cases h
-    | splitFraction a id id1 id2 q1 q2 p1 p2 o hfind hfids hf1 hf2 hi1 hi2 hact hs =>
+    | splitFraction a id id1 id2 q1 q2 p1 p2 o hfind halloc hfids hf1 hf2 hi1 hi2 hact hs =>
       simp only [runIProg] at h
       cases hw : w.splitFractionChecked a id id1 id2 q1 q2 p1 p2 with
       | error e =>
         simp only [hw] at h
-        have hok := splitFractionChecked_succeeds hfind hfids hf1 hf2 hi1 hi2 hact hs hΓ
+        have hok := splitFractionChecked_succeeds hfind halloc hfids hf1 hf2 hi1 hi2 hact hs hΓ
         rw [hw] at hok
         cases hok
       | ok w1 =>
@@ -809,7 +818,7 @@ def iWrite1 : IProg ilCtx1 Unit (fun _ => ilCtx1) :=
 /-- The spatial split. -/
 def iSplit : IProg ilCtx1 Unit (fun _ => ilCtx3) :=
   .splitAt ⟨1⟩ ⟨3⟩ ⟨5⟩ ⟨6⟩ 2 (Owner.init ⟨1⟩ 4 64 (by decide) ⟨3⟩ ⟨4⟩)
-    (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide)
+    (by rfl) (by intro l hl; rw [show ilCtx1.loans.loans = [] from rfl] at hl; cases hl) (by decide) (by decide) (by decide) (by decide) (by decide)
     (by exact ⟨_, rfl, by decide⟩) (by decide)
 
 /-- The write through the left half. -/
@@ -848,7 +857,7 @@ def ilCtxJoin : Ctx :=
 /-- The fractional split of the allocated leaf. -/
 def iFracSplit : IProg ilCtx1 Unit (fun _ => ilCtxFrac) :=
   .splitFraction ⟨1⟩ ⟨3⟩ ⟨7⟩ ⟨8⟩ 32 32 (by decide) (by decide) ilOwner
-    (by rfl) (by decide) (by decide) (by decide) (by decide) (by decide)
+    (by rfl) (by intro l hl; rw [show ilCtx1.loans.loans = [] from rfl] at hl; cases hl) (by decide) (by decide) (by decide) (by decide) (by decide)
     (by exact ⟨_, rfl, by decide⟩) (by decide)
 
 /-- The fractional join of the two children. -/

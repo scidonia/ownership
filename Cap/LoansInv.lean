@@ -147,70 +147,73 @@ theorem World.loansOK_splitAtChecked {w w' : World} {a : AllocId}
   · simp at hw
   · rename_i o hfind
     split at hw
-    · rename_i hfr
+    · rename_i halloc
       split at hw
-      · rename_i C' hs
-        simp only [Except.ok.injEq] at hw
-        cases hw
-        unfold Ctx.splitAtOwner? at hs
-        cases ho : o.splitAt? id id1 id2 k with
-        | none => simp [ho] at hs
-        | some o' =>
-          simp only [ho, Option.map_some, Option.some.injEq] at hs
-          subst C'
-          unfold World.LoansOK World.LenderRetired at h ⊢
-          obtain ⟨hid, hlend, hlife, hiss, hret⟩ := h
-          refine ⟨hid, hlend, hlife, ?_, ?_⟩
-          · intro l hl
-            exact List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (hiss l hl))
-          · intro l hl
-            obtain ⟨own, hown, cl, hcl, hst⟩ := hret l hl
-            have hne1 : l.lender ≠ id1 := fun heq => hfr.2.2.2.1 (heq ▸ hiss l hl)
-            have hne2 : l.lender ≠ id2 := fun heq => hfr.2.2.2.2.1 (heq ▸ hiss l hl)
-            unfold Owner.splitAt? at ho
-            cases hfid : o.root.find? id with
-            | none => simp [hfid] at ho
-            | some csplit =>
-              cases hsp : csplit.splitSpatial? id1 id2 k with
-              | none => simp [hfid, hsp] at ho
-              | some t =>
-                simp only [hfid, hsp, Option.map_some, Option.some.injEq] at ho
-                subst ho
-                obtain ⟨_, _, ht⟩ := Leaf.splitSpatial?_some hsp
-                have htids : t.ids = [id1, id2] := by
-                  rw [ht]
-                  rfl
-                have htnone : t.find? l.lender = none := by
-                  apply Tree.find?_eq_none_of_not_mem_ids
-                  rw [htids]
-                  simp [hne1, hne2]
-                by_cases hownO : own = o
-                · rw [hownO] at hcl hown
-                  have hneid : l.lender ≠ id := by
-                    intro heq
-                    obtain ⟨ca, hca, hca_state⟩ := hfr.2.2.2.2.2
-                    rw [heq] at hcl
-                    have hca_eq : ca = cl := Option.some.inj (hca.symm.trans hcl)
-                    rw [hca_eq] at hca_state
-                    rw [hst] at hca_state
-                    exact absurd hca_state (by decide)
-                  have hrep : ∀ c', o.root.find? id = some c' → t.find? l.lender = none :=
-                    fun _ _ => htnone
-                  have hfind' : (Tree.replace id (fun _ => t) o.root).find? l.lender
-                      = some cl := by
-                    rw [Tree.find?_replace_ne o.root id l.lender (fun _ => t) hneid hrep]
-                    exact hcl
-                  exact ⟨{ o with root := Tree.replace id (fun _ => t) o.root },
-                    List.mem_map.mpr ⟨o, hown, by simp⟩, cl, hfind', hst⟩
-                · have hoalloc : own.alloc ≠ o.alloc := by
-                    intro heq
-                    have hmemO : o ∈ w.ctx.owners := List.mem_of_find?_eq_some hfind
-                    have hfindO : w.ctx.findOwner? own.alloc = some own :=
-                      Ctx.findOwner?_eq_some_of_mem_of_functional hwf.2.1 hown
-                    have := hwf.2.1 own.alloc own o hfindO hmemO heq.symm
-                    exact hownO this.symm
-                  exact ⟨own, List.mem_map.mpr ⟨own, hown, by simp [hoalloc]⟩,
-                    cl, hcl, hst⟩
+      · rename_i hfr
+        split at hw
+        · rename_i C' hs
+          simp only [Except.ok.injEq] at hw
+          cases hw
+          unfold Ctx.splitAtOwner? at hs
+          cases ho : o.splitAt? id id1 id2 k with
+          | none => simp [ho] at hs
+          | some o' =>
+            simp only [ho, Option.map_some, Option.some.injEq] at hs
+            subst C'
+            unfold World.LoansOK World.LenderRetired at h ⊢
+            obtain ⟨hid, hlend, hlife, hiss, hret⟩ := h
+            refine ⟨hid, hlend, hlife, ?_, ?_⟩
+            · intro l hl
+              exact List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (hiss l hl))
+            · intro l hl
+              obtain ⟨own, hown, cl, hcl, hst⟩ := hret l hl
+              have hne1 : l.lender ≠ id1 := fun heq => hfr.2.2.2.1 (heq ▸ hiss l hl)
+              have hne2 : l.lender ≠ id2 := fun heq => hfr.2.2.2.2.1 (heq ▸ hiss l hl)
+              unfold Owner.splitAt? at ho
+              cases hfid : o.root.find? id with
+              | none => simp [hfid] at ho
+              | some csplit =>
+                cases hsp : csplit.splitSpatial? id1 id2 k with
+                | none => simp [hfid, hsp] at ho
+                | some t =>
+                  simp only [hfid, hsp, Option.map_some, Option.some.injEq] at ho
+                  subst ho
+                  obtain ⟨_, _, ht⟩ := Leaf.splitSpatial?_some hsp
+                  have htids : t.ids = [id1, id2] := by
+                    rw [ht]
+                    rfl
+                  have htnone : t.find? l.lender = none := by
+                    apply Tree.find?_eq_none_of_not_mem_ids
+                    rw [htids]
+                    simp [hne1, hne2]
+                  by_cases hownO : own = o
+                  · rw [hownO] at hcl hown
+                    have hneid : l.lender ≠ id := by
+                      intro heq
+                      obtain ⟨ca, hca, hca_state⟩ := hfr.2.2.2.2.2
+                      rw [heq] at hcl
+                      have hca_eq : ca = cl := Option.some.inj (hca.symm.trans hcl)
+                      rw [hca_eq] at hca_state
+                      rw [hst] at hca_state
+                      exact absurd hca_state (by decide)
+                    have hrep : ∀ c', o.root.find? id = some c' → t.find? l.lender = none :=
+                      fun _ _ => htnone
+                    have hfind' : (Tree.replace id (fun _ => t) o.root).find? l.lender
+                        = some cl := by
+                      rw [Tree.find?_replace_ne o.root id l.lender (fun _ => t) hneid hrep]
+                      exact hcl
+                    exact ⟨{ o with root := Tree.replace id (fun _ => t) o.root },
+                      List.mem_map.mpr ⟨o, hown, by simp⟩, cl, hfind', hst⟩
+                  · have hoalloc : own.alloc ≠ o.alloc := by
+                      intro heq
+                      have hmemO : o ∈ w.ctx.owners := List.mem_of_find?_eq_some hfind
+                      have hfindO : w.ctx.findOwner? own.alloc = some own :=
+                        Ctx.findOwner?_eq_some_of_mem_of_functional hwf.2.1 hown
+                      have := hwf.2.1 own.alloc own o hfindO hmemO heq.symm
+                      exact hownO this.symm
+                    exact ⟨own, List.mem_map.mpr ⟨own, hown, by simp [hoalloc]⟩,
+                      cl, hcl, hst⟩
+        · simp at hw
       · simp at hw
     · simp at hw
 
@@ -226,75 +229,79 @@ theorem World.loansOK_splitFractionChecked {w w' : World} {a : AllocId}
   · simp at hw
   · rename_i o hfind
     split at hw
-    · rename_i hfr
+    · rename_i halloc
       split at hw
-      · rename_i C' hs
-        simp only [Except.ok.injEq] at hw
-        cases hw
-        unfold Ctx.splitFractionOwner? at hs
-        cases ho : o.splitFraction? id id1 id2 q1 q2 p1 p2 with
-        | none => simp [ho] at hs
-        | some o' =>
-          simp only [ho, Option.map_some, Option.some.injEq] at hs
-          subst C'
-          unfold World.LoansOK World.LenderRetired at h ⊢
-          obtain ⟨hid, hlend, hlife, hiss, hret⟩ := h
-          refine ⟨hid, hlend, hlife, ?_, ?_⟩
-          · intro l hl
-            exact List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (hiss l hl))
-          · intro l hl
-            obtain ⟨own, hown, cl, hcl, hst⟩ := hret l hl
-            have hne1 : l.lender ≠ id1 := fun heq => hfr.2.2.2.1 (heq ▸ hiss l hl)
-            have hne2 : l.lender ≠ id2 := fun heq => hfr.2.2.2.2.1 (heq ▸ hiss l hl)
-            unfold Owner.splitFraction? at ho
-            cases hfid : o.root.find? id with
-            | none => simp [hfid] at ho
-            | some csplit =>
-              cases hsp : csplit.splitFractionTree id1 id2 q1 q2 p1 p2 with
-              | none => simp [hfid, hsp] at ho
-              | some t =>
-                simp only [hfid, hsp, Option.map_some, Option.some.injEq] at ho
-                subst ho
-                have htids : t.ids = [id1, id2] := by
-                  unfold Leaf.splitFractionTree at hsp
-                  split at hsp
-                  · simp only [Option.some.injEq] at hsp
-                    subst hsp
-                    rfl
-                  · simp at hsp
-                have htnone : t.find? l.lender = none := by
-                  apply Tree.find?_eq_none_of_not_mem_ids
-                  rw [htids]
-                  simp [hne1, hne2]
-                by_cases hownO : own = o
-                · rw [hownO] at hcl hown
-                  have hneid : l.lender ≠ id := by
-                    intro heq
-                    obtain ⟨ca, hca, hca_state⟩ := hfr.2.2.2.2.2
-                    rw [heq] at hcl
-                    have hca_eq : ca = cl := Option.some.inj (hca.symm.trans hcl)
-                    rw [hca_eq] at hca_state
-                    rw [hst] at hca_state
-                    exact absurd hca_state (by decide)
-                  have hrep : ∀ c', o.root.find? id = some c' →
-                      t.find? l.lender = none := fun _ _ => htnone
-                  have hfind' : (Tree.replace id (fun _ => t) o.root).find? l.lender
-                      = some cl := by
-                    rw [Tree.find?_replace_ne o.root id l.lender (fun _ => t) hneid hrep]
-                    exact hcl
-                  exact ⟨{ o with root := Tree.replace id (fun _ => t) o.root },
-                    List.mem_map.mpr ⟨o, hown, by simp⟩, cl, hfind', hst⟩
-                · have hoalloc : own.alloc ≠ o.alloc := by
-                    intro heq
-                    have hmemO : o ∈ w.ctx.owners := List.mem_of_find?_eq_some hfind
-                    have hfindO : w.ctx.findOwner? own.alloc = some own :=
-                      Ctx.findOwner?_eq_some_of_mem_of_functional hwf.2.1 hown
-                    have := hwf.2.1 own.alloc own o hfindO hmemO heq.symm
-                    exact hownO this.symm
-                  exact ⟨own, List.mem_map.mpr ⟨own, hown, by simp [hoalloc]⟩,
-                    cl, hcl, hst⟩
+      · rename_i hfr
+        split at hw
+        · rename_i C' hs
+          simp only [Except.ok.injEq] at hw
+          cases hw
+          unfold Ctx.splitFractionOwner? at hs
+          cases ho : o.splitFraction? id id1 id2 q1 q2 p1 p2 with
+          | none => simp [ho] at hs
+          | some o' =>
+            simp only [ho, Option.map_some, Option.some.injEq] at hs
+            subst C'
+            unfold World.LoansOK World.LenderRetired at h ⊢
+            obtain ⟨hid, hlend, hlife, hiss, hret⟩ := h
+            refine ⟨hid, hlend, hlife, ?_, ?_⟩
+            · intro l hl
+              exact List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (hiss l hl))
+            · intro l hl
+              obtain ⟨own, hown, cl, hcl, hst⟩ := hret l hl
+              have hne1 : l.lender ≠ id1 := fun heq => hfr.2.2.2.1 (heq ▸ hiss l hl)
+              have hne2 : l.lender ≠ id2 := fun heq => hfr.2.2.2.2.1 (heq ▸ hiss l hl)
+              unfold Owner.splitFraction? at ho
+              cases hfid : o.root.find? id with
+              | none => simp [hfid] at ho
+              | some csplit =>
+                cases hsp : csplit.splitFractionTree id1 id2 q1 q2 p1 p2 with
+                | none => simp [hfid, hsp] at ho
+                | some t =>
+                  simp only [hfid, hsp, Option.map_some, Option.some.injEq] at ho
+                  subst ho
+                  have htids : t.ids = [id1, id2] := by
+                    unfold Leaf.splitFractionTree at hsp
+                    split at hsp
+                    · simp only [Option.some.injEq] at hsp
+                      subst hsp
+                      rfl
+                    · simp at hsp
+                  have htnone : t.find? l.lender = none := by
+                    apply Tree.find?_eq_none_of_not_mem_ids
+                    rw [htids]
+                    simp [hne1, hne2]
+                  by_cases hownO : own = o
+                  · rw [hownO] at hcl hown
+                    have hneid : l.lender ≠ id := by
+                      intro heq
+                      obtain ⟨ca, hca, hca_state⟩ := hfr.2.2.2.2.2
+                      rw [heq] at hcl
+                      have hca_eq : ca = cl := Option.some.inj (hca.symm.trans hcl)
+                      rw [hca_eq] at hca_state
+                      rw [hst] at hca_state
+                      exact absurd hca_state (by decide)
+                    have hrep : ∀ c', o.root.find? id = some c' →
+                        t.find? l.lender = none := fun _ _ => htnone
+                    have hfind' : (Tree.replace id (fun _ => t) o.root).find? l.lender
+                        = some cl := by
+                      rw [Tree.find?_replace_ne o.root id l.lender (fun _ => t) hneid hrep]
+                      exact hcl
+                    exact ⟨{ o with root := Tree.replace id (fun _ => t) o.root },
+                      List.mem_map.mpr ⟨o, hown, by simp⟩, cl, hfind', hst⟩
+                  · have hoalloc : own.alloc ≠ o.alloc := by
+                      intro heq
+                      have hmemO : o ∈ w.ctx.owners := List.mem_of_find?_eq_some hfind
+                      have hfindO : w.ctx.findOwner? own.alloc = some own :=
+                        Ctx.findOwner?_eq_some_of_mem_of_functional hwf.2.1 hown
+                      have := hwf.2.1 own.alloc own o hfindO hmemO heq.symm
+                      exact hownO this.symm
+                    exact ⟨own, List.mem_map.mpr ⟨own, hown, by simp [hoalloc]⟩,
+                      cl, hcl, hst⟩
+        · simp at hw
       · simp at hw
     · simp at hw
+
 /-- Replacing a fractional node by a subtree that does not contain `id'` leaves
 the lookup of `id'` unchanged, provided `id'` is not an identifier of the
 replaced fragment. -/

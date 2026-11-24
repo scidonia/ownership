@@ -56,13 +56,16 @@ theorem World.splitAtChecked_issued_sub {w w' : World} {a : AllocId}
   · simp at h
   · rename_i o hf
     split at h
-    · rename_i hfr
+    · rename_i halloc
       split at h
-      · rename_i C' hs
-        simp only [Except.ok.injEq] at h
-        cases h
-        intro c hc
-        exact List.mem_cons_of_mem _ (List.mem_cons_of_mem _ hc)
+      · rename_i hfr
+        split at h
+        · rename_i C' hs
+          simp only [Except.ok.injEq] at h
+          cases h
+          intro c hc
+          exact List.mem_cons_of_mem _ (List.mem_cons_of_mem _ hc)
+        · simp at h
       · simp at h
     · simp at h
 

@@ -38,20 +38,23 @@ theorem World.historyOK_splitAtChecked {w w' : World} {a : AllocId}
   · simp at hw
   · rename_i o hfind
     split at hw
-    · rename_i hfr
+    · rename_i halloc
       split at hw
-      · rename_i C' hs
-        simp only [Except.ok.injEq] at hw
-        cases hw
-        have hmem : o ∈ w.ctx.owners := List.mem_of_find?_eq_some hfind
-        have hoids : o.ids.Nodup := Ctx.owner_ids_nodup hwf.1.2.2 hmem
-        unfold Ctx.splitAtOwner? at hs
-        cases ho : o.splitAt? id id1 id2 k with
-        | none => simp [ho] at hs
-        | some o' =>
-          simp only [ho, Option.map_some, Option.some.injEq] at hs
-          rw [← hs]
-          exact Ctx.historyOK_split hh hoids hmem ho hfr.2.2.2.1 hfr.2.2.2.2.1 hfr.1.2.2
+      · rename_i hfr
+        split at hw
+        · rename_i C' hs
+          simp only [Except.ok.injEq] at hw
+          cases hw
+          have hmem : o ∈ w.ctx.owners := List.mem_of_find?_eq_some hfind
+          have hoids : o.ids.Nodup := Ctx.owner_ids_nodup hwf.1.2.2 hmem
+          unfold Ctx.splitAtOwner? at hs
+          cases ho : o.splitAt? id id1 id2 k with
+          | none => simp [ho] at hs
+          | some o' =>
+            simp only [ho, Option.map_some, Option.some.injEq] at hs
+            rw [← hs]
+            exact Ctx.historyOK_split hh hoids hmem ho hfr.2.2.2.1 hfr.2.2.2.2.1 hfr.1.2.2
+        · simp at hw
       · simp at hw
     · simp at hw
 
@@ -65,20 +68,23 @@ theorem World.historyOK_splitFractionChecked {w w' : World} {a : AllocId}
   · simp at hw
   · rename_i o hfind
     split at hw
-    · rename_i hfr
+    · rename_i halloc
       split at hw
-      · rename_i C' hs
-        simp only [Except.ok.injEq] at hw
-        cases hw
-        have hmem : o ∈ w.ctx.owners := List.mem_of_find?_eq_some hfind
-        have hoids : o.ids.Nodup := Ctx.owner_ids_nodup hwf.1.2.2 hmem
-        unfold Ctx.splitFractionOwner? at hs
-        cases ho : o.splitFraction? id id1 id2 q1 q2 p1 p2 with
-        | none => simp [ho] at hs
-        | some o' =>
-          simp only [ho, Option.map_some, Option.some.injEq] at hs
-          rw [← hs]
-          exact Ctx.historyOK_splitFraction hh hoids hmem ho hfr.2.2.2.1 hfr.2.2.2.2.1 hfr.1.2.2
+      · rename_i hfr
+        split at hw
+        · rename_i C' hs
+          simp only [Except.ok.injEq] at hw
+          cases hw
+          have hmem : o ∈ w.ctx.owners := List.mem_of_find?_eq_some hfind
+          have hoids : o.ids.Nodup := Ctx.owner_ids_nodup hwf.1.2.2 hmem
+          unfold Ctx.splitFractionOwner? at hs
+          cases ho : o.splitFraction? id id1 id2 q1 q2 p1 p2 with
+          | none => simp [ho] at hs
+          | some o' =>
+            simp only [ho, Option.map_some, Option.some.injEq] at hs
+            rw [← hs]
+            exact Ctx.historyOK_splitFraction hh hoids hmem ho hfr.2.2.2.1 hfr.2.2.2.2.1 hfr.1.2.2
+        · simp at hw
       · simp at hw
     · simp at hw
 
