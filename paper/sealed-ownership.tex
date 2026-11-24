@@ -155,8 +155,10 @@ machine. Two promised mechanisms remain incomplete and are not disguised by the
 formal development: the older executable loan command suspends the lender
 rather than transfer usable authority to a distinct borrower. A separate retag
 slice (\lean{beginBorrowChecked}, \lean{endBorrowChecked}) does give a distinct
-borrower the ordinary write guard and restores the lender on return, but it is not
-yet wired into \lean{UCmd}, \lean{LoansOK} or \lean{FullInv}. The sealed runner
+borrower the ordinary write guard and restores the lender on return; return also
+refuses while another loan for the allocation is live. It is not yet wired into
+\lean{UCmd}, \lean{LoansOK} or \lean{FullInv}, and splits during a borrow remain
+an open restoration obligation. The sealed runner
 still performs single-node rather than full-path compression. The certified full-path
 computation exists separately. The C refinement is future work.
 

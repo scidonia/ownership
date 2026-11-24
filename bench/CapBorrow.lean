@@ -51,3 +51,23 @@ private def returned : World :=
 #guard (match borrowed.endBorrowChecked ⟨0⟩ ⟨9⟩ with
   | .error _ => false
   | .ok w => (w.beginBorrowChecked ⟨0⟩ ⟨1⟩ ⟨3⟩ ⟨11⟩).isOk = false)
+
+private def innerBorrowed : World :=
+  match borrowed.beginBorrowChecked ⟨0⟩ ⟨3⟩ ⟨4⟩ ⟨10⟩ with
+  | .ok w => w
+  | .error _ => uWorld
+
+#guard (match borrowed.beginBorrowChecked ⟨0⟩ ⟨3⟩ ⟨4⟩ ⟨10⟩ with
+  | .error _ => false
+  | .ok w => (w.ctx.loans.loans.length == 2) && (w.writeChecked ⟨0⟩ ⟨4⟩ 0 9).isOk)
+
+#guard (match borrowed.beginBorrowChecked ⟨0⟩ ⟨3⟩ ⟨4⟩ ⟨10⟩ with
+  | .error _ => false
+  | .ok w => (w.endBorrowChecked ⟨0⟩ ⟨9⟩).isOk = false)
+
+#guard (match borrowed.beginBorrowChecked ⟨0⟩ ⟨3⟩ ⟨4⟩ ⟨10⟩ with
+  | .error _ => false
+  | .ok w =>
+      match w.endBorrowChecked ⟨0⟩ ⟨10⟩ with
+      | .error _ => false
+      | .ok w1 => (w1.endBorrowChecked ⟨0⟩ ⟨9⟩).isOk)
