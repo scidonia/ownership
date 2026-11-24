@@ -95,34 +95,37 @@ theorem World.loansOK_freeChecked {w w' : World} {a : AllocId} {d : CapId}
   · simp at hw
   · rename_i o0 hfind
     split at hw
-    · rename_i hloan
-      cases hf : w.freeWith? a d with
-      | none => simp [hf] at hw
-      | some w1 =>
-        simp [hf] at hw
-        cases hw
-        unfold World.freeWith? at hf
-        cases hc : w.ctx.freeWith? a d with
-        | none => simp [hc] at hf
-        | some ctx' =>
-          simp [hc] at hf
-          cases hf
-          have heq : ctx' = w.ctx.free a := Ctx.freeWith?_eq_free hc
-          rw [heq]
-          unfold World.LoansOK World.LenderRetired at h ⊢
-          refine ⟨h.1, h.2.1, h.2.2.1, h.2.2.2.1, ?_⟩
-          intro l hl
-          obtain ⟨o, ho, c, hc', hstate⟩ := h.2.2.2.2 l hl
-          have hlender : l.lender ∈ o.ids := by
-            have hroot : l.lender ∈ o.root.ids :=
-              Tree.mem_ids_of_exists_find? ⟨c, hc'⟩
-            exact List.mem_cons_of_mem _ hroot
-          have hoalloc : o.alloc ≠ a := by
-            intro hcontra
-            have hoo : o = o0 := hwf.2.1 a o0 o hfind ho hcontra
-            rw [hoo] at hlender
-            exact hloan l hl hlender
-          exact ⟨o, List.mem_filter.mpr ⟨ho, by simpa using hoalloc⟩, c, hc', hstate⟩
+    · rename_i halloc
+      split at hw
+      · rename_i hloan
+        cases hf : w.freeWith? a d with
+        | none => simp [hf] at hw
+        | some w1 =>
+          simp [hf] at hw
+          cases hw
+          unfold World.freeWith? at hf
+          cases hc : w.ctx.freeWith? a d with
+          | none => simp [hc] at hf
+          | some ctx' =>
+            simp [hc] at hf
+            cases hf
+            have heq : ctx' = w.ctx.free a := Ctx.freeWith?_eq_free hc
+            rw [heq]
+            unfold World.LoansOK World.LenderRetired at h ⊢
+            refine ⟨h.1, h.2.1, h.2.2.1, h.2.2.2.1, ?_⟩
+            intro l hl
+            obtain ⟨o, ho, c, hc', hstate⟩ := h.2.2.2.2 l hl
+            have hlender : l.lender ∈ o.ids := by
+              have hroot : l.lender ∈ o.root.ids :=
+                Tree.mem_ids_of_exists_find? ⟨c, hc'⟩
+              exact List.mem_cons_of_mem _ hroot
+            have hoalloc : o.alloc ≠ a := by
+              intro hcontra
+              have hoo : o = o0 := hwf.2.1 a o0 o hfind ho hcontra
+              rw [hoo] at hlender
+              exact hloan l hl hlender
+            exact ⟨o, List.mem_filter.mpr ⟨ho, by simpa using hoalloc⟩, c, hc', hstate⟩
+      · simp at hw
     · simp at hw
 
 /-- An identifier that occurs in no leaf is found by no lookup. -/

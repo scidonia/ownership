@@ -36,6 +36,7 @@ deriving Repr
 
 structure Loan where
   id : LoanId
+  alloc : AllocId
   lender : CapId
   borrower : CapId
   lifetime : LifetimeId

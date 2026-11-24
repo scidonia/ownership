@@ -210,7 +210,7 @@ them: the outermost loan first. -/
 def Chain.toLoans : List Link → List Loan
   | [] => []
   | l :: rest =>
-      { id := l.loanId, lender := l.lender, borrower := l.borrower,
+      { id := l.loanId, alloc := l.alloc, lender := l.lender, borrower := l.borrower,
         lifetime := l.lifetime } :: Chain.toLoans rest
 
 /-- The chain's records append, link by link. -/

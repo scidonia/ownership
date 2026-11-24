@@ -36,7 +36,7 @@ def World.beginBorrowChecked (w : World) (a : AllocId) (lender borrower : CapId)
                 issued := borrower :: w.ctx.issued,
                 loans := { w.ctx.loans with
                   loans := w.ctx.loans.loans ++
-                    [{ id := loanId, lender := lender, borrower := borrower,
+                    [{ id := loanId, alloc := a, lender := lender, borrower := borrower,
                        lifetime := ⟨0⟩ }] } } }
       else .error "beginBorrow: the root lifetime is not live"
 

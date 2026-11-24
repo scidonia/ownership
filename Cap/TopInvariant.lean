@@ -117,21 +117,24 @@ theorem World.historyOK_freeChecked {w w' : World} {a : AllocId} {d : CapId}
   · simp at hw
   · rename_i o hfind
     split at hw
-    · rename_i hloan
-      cases hf : w.freeWith? a d with
-      | none => simp [hf] at hw
-      | some w1 =>
-        simp [hf] at hw
-        cases hw
-        unfold World.freeWith? at hf
-        cases hc : w.ctx.freeWith? a d with
-        | none => simp [hc] at hf
-        | some ctx' =>
-          simp [hc] at hf
-          cases hf
-          have heq : ctx' = w.ctx.free a := Ctx.freeWith?_eq_free hc
-          rw [heq]
-          exact Ctx.historyOK_free hh
+    · rename_i halloc
+      split at hw
+      · rename_i hloan
+        cases hf : w.freeWith? a d with
+        | none => simp [hf] at hw
+        | some w1 =>
+          simp [hf] at hw
+          cases hw
+          unfold World.freeWith? at hf
+          cases hc : w.ctx.freeWith? a d with
+          | none => simp [hc] at hf
+          | some ctx' =>
+            simp [hc] at hf
+            cases hf
+            have heq : ctx' = w.ctx.free a := Ctx.freeWith?_eq_free hc
+            rw [heq]
+            exact Ctx.historyOK_free hh
+      · simp at hw
     · simp at hw
 
 /-- Allocation preserves the history. -/

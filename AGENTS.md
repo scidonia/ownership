@@ -444,8 +444,10 @@
   identifiers distinct, lenders distinct, every loan's lifetime live, every
   lender an issued identifier (so it can never equal a freshly minted child or
   join name), and every loan's lender still occurring as a `retired` leaf of a
-  live owner (`World.LenderRetired`). It holds for the empty and concrete
-  64-byte worlds and is preserved by every context-changing command: writes,
+  live owner (`World.LenderRetired`). The retag borrow is not yet part of this
+  invariant; independently, `World.freeChecked` rejects any loan bound to the
+  allocation (`freeChecked_refused_of_alloc`). It holds for the empty and
+  concrete 64-byte worlds and is preserved by every context-changing command: writes,
   allocation, disposal, both splits, the join, and loan begin/end. The tree
   ingredients are `Tree.find?_replace_ne`, `Tree.find?_eq_none_of_not_mem_ids`,
   `Tree.find?_replaceNode_outside`, the leaf-occurrence list `Tree.leaves` with

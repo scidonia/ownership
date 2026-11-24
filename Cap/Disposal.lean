@@ -342,7 +342,7 @@ example : state.free? alloc ⟨9⟩ = none :=
 
 /-- An outstanding loan refuses disposal. -/
 def loanState : DisposalState :=
-  { state with loans := ⟨[], [{ id := ⟨0⟩, lender := ⟨1⟩, borrower := ⟨3⟩, lifetime := ⟨0⟩ }]⟩ }
+  { state with loans := ⟨[], [{ id := ⟨0⟩, alloc := ⟨0⟩, lender := ⟨1⟩, borrower := ⟨3⟩, lifetime := ⟨0⟩ }]⟩ }
 
 theorem loanState_not_legal : ¬ loanState.Legal alloc ⟨2⟩ := by
   intro h

@@ -79,7 +79,7 @@ inductive IProg : (Γ : Ctx) → (α : Type) → (α → Ctx) → Type 1 where
       IProg Γ Unit (fun _ => { (Γ.update o.alloc o') with
         loans := { Γ.loans with
           loans := Γ.loans.loans ++
-            [{ id := loanId, lender := lender, borrower := lender,
+            [{ id := loanId, alloc := a, lender := lender, borrower := lender,
                lifetime := ⟨0⟩ }] } })
   | endLoan (a : AllocId) (loanId : LoanId)
       (loan : Loan) (hloan : Γ.loans.findLoan? loanId = some loan)
@@ -89,6 +89,8 @@ inductive IProg : (Γ : Ctx) → (α : Type) → (α → Ctx) → Type 1 where
         loans := { Γ.loans with
           loans := Γ.loans.loans.filter (fun l => l.id ≠ loanId) } })
   | free (a : AllocId) (d : CapId)
+      (halloc : ∀ o, Γ.findOwner? a = some o →
+        ∀ l ∈ Γ.loans.loans, l.alloc ≠ a)
       (hloan : ∀ o, Γ.findOwner? a = some o →
         ∀ l ∈ Γ.loans.loans, l.lender ∉ o.ids)
       (h : (Γ.freeWith? a d).isSome) :
@@ -158,7 +160,7 @@ def evalIProg (fuel : Nat) {Γ : Ctx} {α : Type} {Q : α → Ctx} (p : IProg Γ
     match w.endLoanChecked a loanId with
     | .ok w' => some ((), w')
     | .error _ => none
-  | fuel + 1, .free a d _ _ =>
+  | fuel + 1, .free a d _ _ _ =>
     match w.freeChecked a d with
     | .ok w' => some ((), w')
     | .error _ => none
@@ -216,7 +218,7 @@ def runIProg (fuel : Nat) {Γ : Ctx} {α : Type} {Q : α → Ctx} (p : IProg Γ 
     match w.endLoanChecked a loanId with
     | .ok w' => .done () w'
     | .error msg => .refused msg
-  | fuel + 1, .free a d _ _ =>
+  | fuel + 1, .free a d _ _ _ =>
     match w.freeChecked a d with
     | .ok w' => .done () w'
     | .error msg => .refused msg
@@ -441,7 +443,7 @@ theorem beginLoanChecked_post {w w' : World} {Γ : Ctx} {a : AllocId}
     w'.ctx = { (Γ.update o.alloc o') with
       loans := { Γ.loans with
         loans := Γ.loans.loans ++
-          [{ id := loanId, lender := lender, borrower := lender,
+          [{ id := loanId, alloc := a, lender := lender, borrower := lender,
              lifetime := ⟨0⟩ }] } } := by
   unfold World.beginLoanChecked at hw
   rw [hΓ] at hw
@@ -480,6 +482,8 @@ theorem endLoanChecked_post {w w' : World} {Γ : Ctx} {a : AllocId}
 
 /-- A checked disposal realises its typed post-context. -/
 theorem freeChecked_post {w w' : World} {Γ : Ctx} {a : AllocId} {d : CapId}
+    (halloc : ∀ o, Γ.findOwner? a = some o →
+      ∀ l ∈ Γ.loans.loans, l.alloc ≠ a)
     (hloan : ∀ o, Γ.findOwner? a = some o →
       ∀ l ∈ Γ.loans.loans, l.lender ∉ o.ids)
     (hs : (Γ.freeWith? a d).isSome) (hΓ : w.ctx = Γ)
@@ -491,20 +495,23 @@ theorem freeChecked_post {w w' : World} {Γ : Ctx} {a : AllocId} {d : CapId}
   · rename_i o hfind
     split at hw
     · rename_i hok
-      cases hf : w.freeWith? a d with
-      | none => simp [hf] at hw
-      | some w1 =>
-        simp [hf] at hw
-        cases hw
-        unfold World.freeWith? at hf
-        cases hc : w.ctx.freeWith? a d with
-        | none => simp [hc] at hf
-        | some ctx' =>
-          simp [hc] at hf
-          cases hf
-          rw [hΓ] at hc
-          rw [hc]
-          rfl
+      split at hw
+      · rename_i hok2
+        cases hf : w.freeWith? a d with
+        | none => simp [hf] at hw
+        | some w1 =>
+          simp [hf] at hw
+          cases hw
+          unfold World.freeWith? at hf
+          cases hc : w.ctx.freeWith? a d with
+          | none => simp [hc] at hf
+          | some ctx' =>
+            simp [hc] at hf
+            cases hf
+            rw [hΓ] at hc
+            rw [hc]
+            rfl
+      · simp at hw
     · simp at hw
 
 /-- Soundness: execution from a world matching the typing context ends in a
@@ -608,7 +615,7 @@ theorem evalIProg_post (w : World) (fuel : Nat) :
         obtain ⟨-, rfl⟩ := Option.some.inj h
         exact ⟨endLoanChecked_post hloan hfind hresume hΓ hw,
           World.endLoanChecked_wf hw hwf⟩
-    | free a0 d hloan hs =>
+    | free a0 d halloc hloan hs =>
       cases hw : w.freeChecked a0 d with
       | error e =>
         simp only [evalIProg, hw] at h
@@ -616,7 +623,7 @@ theorem evalIProg_post (w : World) (fuel : Nat) :
       | ok w1 =>
         simp only [evalIProg, hw] at h
         obtain ⟨-, rfl⟩ := Option.some.inj h
-        exact ⟨freeChecked_post hloan hs hΓ hw, World.freeChecked_wf hw hwf⟩
+        exact ⟨freeChecked_post halloc hloan hs hΓ hw, World.freeChecked_wf hw hwf⟩
 
 /-- A typed program is never refused. From a matching world satisfying the
 invariant, the explicit evaluator either completes or exhausts its fuel; every
@@ -732,7 +739,7 @@ theorem runIProg_no_refusal (w : World) (fuel : Nat) :
       | ok w1 =>
         simp only [hw] at h
         cases h
-    | free a d hloan hs =>
+    | free a d halloc hloan hs =>
       simp only [runIProg] at h
       cases hw : w.freeChecked a d with
       | error e =>
@@ -740,6 +747,11 @@ theorem runIProg_no_refusal (w : World) (fuel : Nat) :
         have hs' : (w.ctx.freeWith? a d).isSome = true := by
           rw [hΓ]
           exact hs
+        have halloc' : ∀ o, w.ctx.findOwner? a = some o →
+            ∀ l ∈ w.ctx.loans.loans, l.alloc ≠ a := by
+          intro o ho l hl
+          rw [hΓ] at ho hl
+          exact halloc o ho l hl
         have hloan' : ∀ o, w.ctx.findOwner? a = some o →
             ∀ l ∈ w.ctx.loans.loans, l.lender ∉ o.ids := by
           intro o ho l hl
@@ -751,7 +763,7 @@ theorem runIProg_no_refusal (w : World) (fuel : Nat) :
             rw [hc] at hs'
             cases hs'
           | some ctx' => simp [World.freeWith?, hc]
-        have hok := World.freeChecked_succeeds (w := w) (a := a) (d := d) hsW hloan'
+        have hok := World.freeChecked_succeeds (w := w) (a := a) (d := d) hsW halloc' hloan'
         rw [hw] at hok
         cases hok
       | ok w1 =>
@@ -806,7 +818,10 @@ def iWrite2 : IProg ilCtx3 Unit (fun _ => ilCtx3) :=
 
 /-- The disposal step. -/
 def iFree : IProg ilCtx3 Unit (fun _ => ilCtx5) :=
-  @IProg.free ilCtx3 ⟨1⟩ ⟨4⟩ (by intro o _ l hl; rw [ilCtx3_loans] at hl; exact absurd hl (by simp)) (by decide)
+  @IProg.free ilCtx3 ⟨1⟩ ⟨4⟩
+    (by intro o _ l hl; rw [ilCtx3_loans] at hl; exact absurd hl (by simp))
+    (by intro o _ l hl; rw [ilCtx3_loans] at hl; exact absurd hl (by simp))
+    (by decide)
 
 /-- The owner allocated at the start of the concrete context. -/
 def ilOwner : Owner := Owner.init ⟨1⟩ 4 64 (by decide) ⟨3⟩ ⟨4⟩
@@ -858,7 +873,7 @@ def ilSuspended : Owner :=
 
 /-- The loan record of the concrete begin. -/
 def ilLoan : Loan :=
-  { id := ⟨10⟩, lender := ⟨3⟩, borrower := ⟨3⟩, lifetime := ⟨0⟩ }
+  { id := ⟨10⟩, alloc := ⟨1⟩, lender := ⟨3⟩, borrower := ⟨3⟩, lifetime := ⟨0⟩ }
 
 /-- The context after beginning the loan. -/
 def ilCtxLoan : Ctx :=
@@ -874,14 +889,14 @@ def ilCtxEnd : Ctx :=
 
 /-- The begin command with its context-level evidence. -/
 def iBegin : IProg ilCtx1 Unit (fun _ => ilCtxLoan) :=
-  .beginLoan ⟨1⟩ ⟨3⟩ ⟨10⟩ ilOwner (by rfl)
+  @IProg.beginLoan ilCtx1 ⟨1⟩ ⟨3⟩ ⟨10⟩ ilOwner (by rfl)
     { id := ⟨3⟩, alloc := ⟨1⟩, lo := 0, hi := 4, ordered := by decide, q := 64,
       pos := by decide, ceiling := .readWrite, state := .active }
     (by rfl) (by decide) (by decide) (by decide) ilSuspended (by rfl)
 
 /-- The end command with its context-level evidence. -/
 def iEnd : IProg ilCtxLoan Unit (fun _ => ilCtxEnd) :=
-  .endLoan ⟨1⟩ ⟨10⟩ ilLoan (by rfl) ilSuspended (by rfl) ilOwner (by rfl)
+  @IProg.endLoan ilCtxLoan ⟨1⟩ ⟨10⟩ ilLoan (by rfl) ilSuspended (by rfl) ilOwner (by rfl)
 
 /-- Allocation, loan beginning and loan ending. -/
 def iLoanLifecycle : IProg uWorld.ctx Unit (fun _ => ilCtxEnd) :=
@@ -946,7 +961,10 @@ post-context has no owners. -/
 def iClosed : IProg World.emptyWorld.ctx Unit (fun _ => icCtx3) :=
   .bind (.alloc 4 ⟨1⟩ ⟨2⟩ (by decide) (by decide) (by decide)) fun _ =>
   .bind (.write ⟨0⟩ ⟨1⟩ 0 7 (by exact ⟨_, rfl, by decide⟩)) fun _ =>
-  .bind (@IProg.free icCtx1 ⟨0⟩ ⟨2⟩ (by intro o _ l hl; rw [icCtx1_loans] at hl; exact absurd hl (by simp)) (by decide)) fun _ =>
+  .bind (@IProg.free icCtx1 ⟨0⟩ ⟨2⟩
+    (by intro o _ l hl; rw [icCtx1_loans] at hl; exact absurd hl (by simp))
+    (by intro o _ l hl; rw [icCtx1_loans] at hl; exact absurd hl (by simp))
+    (by decide)) fun _ =>
   .pure ()
 
 /-- The closed program is accepted. -/

@@ -142,7 +142,7 @@ def beginLoanChecked (w : World) (a : AllocId) (lender : CapId) (loanId : LoanId
                     ctx := { (w.ctx.update o.alloc o') with
                       loans := { w.ctx.loans with
                         loans := w.ctx.loans.loans ++
-                          [{ id := loanId, lender := lender, borrower := lender,
+                          [{ id := loanId, alloc := a, lender := lender, borrower := lender,
                              lifetime := ⟨0⟩ }] } } }
           else .error "beginLoan: the root lifetime is not live"
         else .error "beginLoan: loan identifier is not fresh"

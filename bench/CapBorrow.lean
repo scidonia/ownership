@@ -35,3 +35,19 @@ private def returned : World :=
 #guard (match borrowed.endBorrowChecked ⟨0⟩ ⟨9⟩ with
   | .ok w => (w.writeChecked ⟨0⟩ ⟨3⟩ 0 7).isOk
   | .error _ => false) = false
+
+#guard (match uWorld.beginBorrowChecked ⟨0⟩ ⟨1⟩ ⟨3⟩ ⟨9⟩ with
+  | .error _ => false
+  | .ok w => (w.freeChecked ⟨0⟩ ⟨2⟩).isOk = false)
+
+#guard (match borrowed.endBorrowChecked ⟨0⟩ ⟨9⟩ with
+  | .error _ => false
+  | .ok w => (w.ctx.loans.findLoan? ⟨9⟩).isNone)
+
+#guard (match borrowed.endBorrowChecked ⟨0⟩ ⟨9⟩ with
+  | .error _ => false
+  | .ok w => (w.freeChecked ⟨0⟩ ⟨2⟩).isOk)
+
+#guard (match borrowed.endBorrowChecked ⟨0⟩ ⟨9⟩ with
+  | .error _ => false
+  | .ok w => (w.beginBorrowChecked ⟨0⟩ ⟨1⟩ ⟨3⟩ ⟨11⟩).isOk = false)
