@@ -49,8 +49,8 @@ def World.endBorrowChecked (w : World) (a : AllocId) (loanId : LoanId) :
     match w.ctx.findOwner? a with
     | none => .error "endBorrow: no owner for the allocation"
     | some o =>
-      if ∃ l ∈ w.ctx.loans.loans, l.alloc = a ∧ l.id ≠ loanId then
-        .error "endBorrow: another loan for this allocation is still live"
+      if ∃ l ∈ w.ctx.loans.loans, l.id ≠ loanId ∧ l.lender = loan.borrower then
+        .error "endBorrow: a loan borrowed from this borrower is still live"
       else if w.ctx.loans.hasDescendant loan.lifetime then
         .error "endBorrow: a nested loan is still live"
       else

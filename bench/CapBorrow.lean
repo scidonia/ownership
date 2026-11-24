@@ -68,6 +68,6 @@ private def innerBorrowed : World :=
 #guard (match borrowed.beginBorrowChecked ⟨0⟩ ⟨3⟩ ⟨4⟩ ⟨10⟩ with
   | .error _ => false
   | .ok w =>
-      match w.endBorrowChecked ⟨0⟩ ⟨10⟩ with
-      | .error _ => false
-      | .ok w1 => (w1.endBorrowChecked ⟨0⟩ ⟨9⟩).isOk)
+      (match w.endBorrowChecked ⟨0⟩ ⟨10⟩ with
+       | .error _ => false
+       | .ok w1 => (w1.endBorrowChecked ⟨0⟩ ⟨9⟩).isOk))
