@@ -98,19 +98,22 @@ theorem World.historyOK_joinChecked {w w' : World} {a : AllocId}
   · simp at hw
   · rename_i o hfind
     split at hw
-    · rename_i hfresh
+    · rename_i halloc
       split at hw
-      · rename_i C' hs
-        simp only [Except.ok.injEq] at hw
-        cases hw
-        have hmem : o ∈ w.ctx.owners := List.mem_of_find?_eq_some hfind
-        unfold Ctx.joinFractionOwner? at hs
-        cases ho : o.joinFraction? node newId with
-        | none => simp [ho] at hs
-        | some o' =>
-          simp only [ho, Option.map_some, Option.some.injEq] at hs
-          rw [← hs]
-          exact Ctx.historyOK_join hh hmem ho hfresh.2
+      · rename_i hfresh
+        split at hw
+        · rename_i C' hs
+          simp only [Except.ok.injEq] at hw
+          cases hw
+          have hmem : o ∈ w.ctx.owners := List.mem_of_find?_eq_some hfind
+          unfold Ctx.joinFractionOwner? at hs
+          cases ho : o.joinFraction? node newId with
+          | none => simp [ho] at hs
+          | some o' =>
+            simp only [ho, Option.map_some, Option.some.injEq] at hs
+            rw [← hs]
+            exact Ctx.historyOK_join hh hmem ho hfresh.2
+        · simp at hw
       · simp at hw
     · simp at hw
 

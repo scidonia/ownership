@@ -79,3 +79,20 @@ private def innerBorrowed : World :=
 #guard (match borrowed.endBorrowChecked ⟨0⟩ ⟨9⟩ with
   | .error _ => false
   | .ok w => (w.splitAtChecked ⟨0⟩ ⟨1⟩ ⟨5⟩ ⟨6⟩ 32).isOk)
+
+#guard (match uWorld.splitFractionChecked ⟨0⟩ ⟨1⟩ ⟨3⟩ ⟨4⟩ 32 32 (by decide) (by decide) with
+  | .error _ => false
+  | .ok w1 =>
+    match w1.beginBorrowChecked ⟨0⟩ ⟨3⟩ ⟨5⟩ ⟨9⟩ with
+    | .error _ => false
+    | .ok w2 => (w2.joinChecked ⟨0⟩ ⟨3⟩ ⟨6⟩).isOk = false)
+
+#guard (match uWorld.splitFractionChecked ⟨0⟩ ⟨1⟩ ⟨3⟩ ⟨4⟩ 32 32 (by decide) (by decide) with
+  | .error _ => false
+  | .ok w1 =>
+    match w1.beginBorrowChecked ⟨0⟩ ⟨3⟩ ⟨5⟩ ⟨9⟩ with
+    | .error _ => false
+    | .ok w2 =>
+      match w2.endBorrowChecked ⟨0⟩ ⟨9⟩ with
+      | .error _ => false
+      | .ok w3 => (w3.joinChecked ⟨0⟩ ⟨3⟩ ⟨6⟩).isOk)

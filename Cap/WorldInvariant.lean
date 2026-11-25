@@ -504,11 +504,13 @@ def World.joinChecked (w : World) (a : AllocId) (node newId : CapId) :
   match w.ctx.findOwner? a with
   | none => .error "join: no owner for the allocation"
   | some o =>
-    if newId ∉ w.ctx.ids ∧ newId ∉ w.ctx.issued then
-      match w.ctx.joinFractionOwner? o node newId with
-      | some C' => .ok { w with ctx := { C' with issued := newId :: w.ctx.issued } }
-      | none => .error "join: refused"
-    else .error "join: capability identifier is not fresh"
+    if ∀ l ∈ w.ctx.loans.loans, l.alloc ≠ a then
+      if newId ∉ w.ctx.ids ∧ newId ∉ w.ctx.issued then
+        match w.ctx.joinFractionOwner? o node newId with
+        | some C' => .ok { w with ctx := { C' with issued := newId :: w.ctx.issued } }
+        | none => .error "join: refused"
+      else .error "join: capability identifier is not fresh"
+    else .error "join: outstanding loan"
 
 /-- A successful fractional join preserves the world invariant. -/
 theorem World.joinChecked_wf {w w' : World} {a : AllocId} {node newId : CapId}
@@ -519,36 +521,39 @@ theorem World.joinChecked_wf {w w' : World} {a : AllocId} {node newId : CapId}
   · simp at h
   · rename_i o hf'
     split at h
-    · rename_i hfresh
+    · rename_i halloc
       split at h
-      · rename_i C' hs
-        simp only [Except.ok.injEq] at h
-        cases h
-        have hmem : o ∈ w.ctx.owners := List.mem_of_find?_eq_some hf'
-        have hs' := hs
-        unfold Ctx.joinFractionOwner? at hs
-        cases ho : o.joinFraction? node newId with
-        | none => simp [ho] at hs
-        | some o' =>
-          simp only [ho, Option.map_some, Option.some.injEq] at hs
-          subst C'
-          have hwfC : (w.ctx.update o.alloc o').WellFormed :=
-            Ctx.joinFractionOwner_wellFormed hwf.1 hmem hfresh.1 hs'
-          have ho'alloc : o'.alloc = o.alloc := Owner.joinFraction_alloc ho
-          have ho'len : o'.len = o.len := Owner.joinFraction?_len ho
-          have hfun : (w.ctx.update o.alloc o').Functional :=
-            Ctx.update_functional ho'alloc hwf.1.1.2
-          have hoalloc : o.alloc = a := by
-            have := List.find?_some (p := fun x : Owner => decide (x.alloc = a))
-              (by simpa [Ctx.findOwner?] using hf')
-            simpa using this
-          have hfa : w.ctx.findOwner? o.alloc = some o := by
-            simpa [hoalloc] using hf'
-          exact ⟨hwfC, hfun, World.update_storage hwf hfa ho'alloc ho'len⟩
+      · rename_i hfresh
+        split at h
+        · rename_i C' hs
+          simp only [Except.ok.injEq] at h
+          cases h
+          have hmem : o ∈ w.ctx.owners := List.mem_of_find?_eq_some hf'
+          have hs' := hs
+          unfold Ctx.joinFractionOwner? at hs
+          cases ho : o.joinFraction? node newId with
+          | none => simp [ho] at hs
+          | some o' =>
+            simp only [ho, Option.map_some, Option.some.injEq] at hs
+            subst C'
+            have hwfC : (w.ctx.update o.alloc o').WellFormed :=
+              Ctx.joinFractionOwner_wellFormed hwf.1 hmem hfresh.1 hs'
+            have ho'alloc : o'.alloc = o.alloc := Owner.joinFraction_alloc ho
+            have ho'len : o'.len = o.len := Owner.joinFraction?_len ho
+            have hfun : (w.ctx.update o.alloc o').Functional :=
+              Ctx.update_functional ho'alloc hwf.1.1.2
+            have hoalloc : o.alloc = a := by
+              have := List.find?_some (p := fun x : Owner => decide (x.alloc = a))
+                (by simpa [Ctx.findOwner?] using hf')
+              simpa using this
+            have hfa : w.ctx.findOwner? o.alloc = some o := by
+              simpa [hoalloc] using hf'
+            exact ⟨hwfC, hfun, World.update_storage hwf hfa ho'alloc ho'len⟩
+        · simp at h
       · simp at h
     · simp at h
 
-/-! ### Suspension and resumption -/
+  /-! ### Suspension and resumption -/
 
 /-- Suspension keeps the owner's coverage: the budget is unchanged at every
 byte. -/

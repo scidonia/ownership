@@ -68,6 +68,7 @@ inductive IProg : (Γ : Ctx) → (α : Type) → (α → Ctx) → Type 1 where
                                issued := id1 :: id2 :: Γ.issued })
   | join (a : AllocId) (node newId : CapId) (o : Owner)
       (hfind : Γ.findOwner? a = some o)
+      (halloc : ∀ l ∈ Γ.loans.loans, l.alloc ≠ a)
       (hfresh : newId ∉ Γ.ids ∧ newId ∉ Γ.issued)
       (hs : (Γ.joinFractionOwner? o node newId).isSome) :
       IProg Γ Unit (fun _ => { (Γ.joinFractionOwner? o node newId).getD Γ with
@@ -151,7 +152,7 @@ def evalIProg (fuel : Nat) {Γ : Ctx} {α : Type} {Q : α → Ctx} (p : IProg Γ
     match w.splitFractionChecked a id id1 id2 q1 q2 p1 p2 with
     | .ok w' => some ((), w')
     | .error _ => none
-  | fuel + 1, .join a node newId _ _ _ _ =>
+  | fuel + 1, .join a node newId _ _ _ _ _ =>
     match w.joinChecked a node newId with
     | .ok w' => some ((), w')
     | .error _ => none
@@ -209,7 +210,7 @@ def runIProg (fuel : Nat) {Γ : Ctx} {α : Type} {Q : α → Ctx} (p : IProg Γ 
     match w.splitFractionChecked a id id1 id2 q1 q2 p1 p2 with
     | .ok w' => .done () w'
     | .error msg => .refused msg
-  | fuel + 1, .join a node newId _ _ _ _ =>
+  | fuel + 1, .join a node newId _ _ _ _ _ =>
     match w.joinChecked a node newId with
     | .ok w' => .done () w'
     | .error msg => .refused msg
@@ -389,6 +390,7 @@ theorem splitFractionChecked_post {w w' : World} {Γ : Ctx} {a : AllocId}
 theorem joinChecked_succeeds {w : World} {Γ : Ctx} {a : AllocId}
     {node newId : CapId} {o : Owner}
     (hfind : Γ.findOwner? a = some o)
+    (halloc : ∀ l ∈ Γ.loans.loans, l.alloc ≠ a)
     (hfresh : newId ∉ Γ.ids ∧ newId ∉ Γ.issued)
     (hs : (Γ.joinFractionOwner? o node newId).isSome)
     (hΓ : w.ctx = Γ) :
@@ -396,6 +398,7 @@ theorem joinChecked_succeeds {w : World} {Γ : Ctx} {a : AllocId}
   unfold World.joinChecked
   rw [hΓ]
   simp only [hfind]
+  rw [if_pos halloc]
   rw [if_pos hfresh]
   split
   · rfl
@@ -407,13 +410,15 @@ theorem joinChecked_succeeds {w : World} {Γ : Ctx} {a : AllocId}
 /-- A checked fractional join realises its typed post-context. -/
 theorem joinChecked_post {w w' : World} {Γ : Ctx} {a : AllocId}
     {node newId : CapId} {o : Owner}
-    (hfind : Γ.findOwner? a = some o) (hΓ : w.ctx = Γ)
+    (hfind : Γ.findOwner? a = some o)
+    (halloc : ∀ l ∈ Γ.loans.loans, l.alloc ≠ a) (hΓ : w.ctx = Γ)
     (hw : w.joinChecked a node newId = .ok w') :
     w'.ctx = { (Γ.joinFractionOwner? o node newId).getD Γ with
                 issued := newId :: Γ.issued } := by
   unfold World.joinChecked at hw
   rw [hΓ] at hw
   simp only [hfind] at hw
+  rw [if_pos halloc] at hw
   by_cases hfresh : newId ∉ Γ.ids ∧ newId ∉ Γ.issued
   · rw [if_pos hfresh] at hw
     split at hw
@@ -595,7 +600,7 @@ theorem evalIProg_post (w : World) (fuel : Nat) :
         obtain ⟨-, rfl⟩ := Option.some.inj h
         exact ⟨splitFractionChecked_post hfind halloc hΓ hw,
           World.splitFractionChecked_wf hw hwf⟩
-    | join a0 node newId o hfind hfresh hs =>
+    | join a0 node newId o hfind halloc hfresh hs =>
       cases hw : w.joinChecked a0 node newId with
       | error e =>
         simp only [evalIProg, hw] at h
@@ -603,7 +608,7 @@ theorem evalIProg_post (w : World) (fuel : Nat) :
       | ok w1 =>
         simp only [evalIProg, hw] at h
         obtain ⟨-, rfl⟩ := Option.some.inj h
-        exact ⟨joinChecked_post hfind hΓ hw, World.joinChecked_wf hw hwf⟩
+        exact ⟨joinChecked_post hfind halloc hΓ hw, World.joinChecked_wf hw hwf⟩
     | beginLoan a0 lender loanId o hfind c hleaf hact hfresh hlive o' hsus =>
       cases hw : w.beginLoanChecked a0 lender loanId with
       | error e =>
@@ -715,12 +720,12 @@ theorem runIProg_no_refusal (w : World) (fuel : Nat) :
       | ok w1 =>
         simp only [hw] at h
         cases h
-    | join a node newId o hfind hfresh hs =>
+    | join a node newId o hfind halloc hfresh hs =>
       simp only [runIProg] at h
       cases hw : w.joinChecked a node newId with
       | error e =>
         simp only [hw] at h
-        have hok := joinChecked_succeeds hfind hfresh hs hΓ
+        have hok := joinChecked_succeeds hfind halloc hfresh hs hΓ
         rw [hw] at hok
         cases hok
       | ok w1 =>
@@ -862,7 +867,9 @@ def iFracSplit : IProg ilCtx1 Unit (fun _ => ilCtxFrac) :=
 
 /-- The fractional join of the two children. -/
 def iJoin : IProg ilCtxFrac Unit (fun _ => ilCtxJoin) :=
-  .join ⟨1⟩ ⟨7⟩ ⟨9⟩ ilFracOwner (by rfl) (by decide) (by decide)
+  .join ⟨1⟩ ⟨7⟩ ⟨9⟩ ilFracOwner (by rfl)
+    (by intro l hl; rw [show ilCtxFrac.loans.loans = [] from rfl] at hl; cases hl)
+    (by decide) (by decide)
 
 /-- Allocation, fractional split and join, all with evidence. -/
 def iFracLifecycle : IProg uWorld.ctx Unit (fun _ => ilCtxJoin) :=

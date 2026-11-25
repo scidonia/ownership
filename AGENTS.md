@@ -563,8 +563,9 @@ shows the certificate it would have to emit, not proof-producing elaboration.
   lender and a fresh name (`retagLeaf?_budget`, `_covered`, `_len`), and
   `World.beginBorrowChecked`/`endBorrowChecked` retag the active leaf to a
   distinct borrower and back; return refuses while another loan borrowed from
-  the same borrower is live. Splits refuse while any loan is outstanding for the
-  allocation, and the typed split constructors carry that evidence.
+  the same borrower is live. Splits and fractional joins refuse while any loan is
+  outstanding for the allocation, and the typed split/join constructors carry
+  that evidence.
   `bench/CapBorrow.lean` exercises borrower write, lender refusal, loan removal,
   restoration, free-during-borrow refusal, split-during-borrow refusal and
   nested return order. The transitions are not yet in `UCmd`, `LoansOK`/`FullInv`,

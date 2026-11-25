@@ -156,10 +156,10 @@ formal development: the older executable loan command suspends the lender
 rather than transfer usable authority to a distinct borrower. A separate retag
 slice (\lean{beginBorrowChecked}, \lean{endBorrowChecked}) does give a distinct
 borrower the ordinary write guard and restores the lender on return; return also
-refuses while another loan borrowed from the same borrower is live. Splits also
-refuse while any loan is outstanding for the allocation, with the evidence
-carried by the typed split constructors, so borrowed authority cannot be
-fragmented before return. It is not yet wired into \lean{UCmd}, \lean{LoansOK}
+refuses while another loan borrowed from the same borrower is live. Splits and
+fractional joins also refuse while any loan is outstanding for the allocation,
+with the evidence carried by the typed constructors, so borrowed authority
+cannot be fragmented or merged away before return. It is not yet wired into \lean{UCmd}, \lean{LoansOK}
 or \lean{FullInv}. The sealed runner
 still performs single-node rather than full-path compression. The certified full-path
 computation exists separately. The C refinement is future work.
