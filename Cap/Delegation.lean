@@ -59,6 +59,9 @@ def Chain.OK (c : Chain) : Prop :=
       e₂.lender = e₁.borrower)
   ∧ (∀ e ∈ c.edges, e.lender = c.base ∨
       ∃ e' ∈ c.edges, e'.borrower = e.lender)
+  ∧ (match c.edges.getLast? with
+      | none => c.holder = c.base
+      | some e => c.holder = e.borrower)
 
 /-- Beginning appends an edge whose lender is the current holder. The edge's
 resource fields must match the chain and its identities must be fresh. -/

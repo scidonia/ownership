@@ -50,11 +50,12 @@ theorem initialState_OK : State.OK initialState := by
   refine ⟨World.uWorld_borrowOK, ?_, rfl, ?_⟩
   · unfold Delegation.Chain.OK
     refine ⟨by simp [initialState], by simp [initialState], by simp [initialState],
-      ?_, ?_, ?_, ?_⟩
+      ?_, ?_, ?_, ?_, ?_⟩
     · intro e he; simp [initialState] at he
     · intro e he; simp [initialState] at he
     · intro i e1 e2 h1 h2; simp [initialState] at h1
     · intro e he; simp [initialState] at he
+    · simp [initialState]
   · refine ⟨Cap.uOwner, initialLeaf, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
     · change uWorld.ctx.findOwner? ⟨0⟩ = some Cap.uOwner
       simp [uWorld, uOwner, Ctx.findOwner?, Owner.init]

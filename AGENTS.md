@@ -564,8 +564,9 @@ shows the certificate it would have to emit, not proof-producing elaboration.
   it (`State.write_OK`). Borrow/return correspondence is not yet implemented.
 - `Cap/Delegation.lean` is the first standalone delegation-chain subsystem:
   `Edge` records lender, borrower, allocation and resource description;
-  `Chain.OK` requires distinct identities, resource agreement, non-alias edges
-  and previous-holder linkage; `begin` appends and sets the new holder, `end`
+  `Chain.OK` requires distinct identities, resource agreement, non-alias edges,
+  previous-holder linkage, and an explicit holder equal to the base on an empty
+  chain or to the last edge's borrower; `begin` appends and sets the new holder, `end`
   pops the innermost edge and restores the removed edge's lender. It is not yet
   connected to `World`/`FullInv` or the command language.
 - `Cap/Retag.lean` and `Cap/Borrow.lean` are the first executable slice of live
