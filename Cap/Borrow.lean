@@ -66,9 +66,25 @@ end Cap
 
 namespace Cap
 
+/-- Positive-length reachability along loan edges: a loan's lender delegates to
+its borrower. The step bound is supplied by the caller and prevents unbounded
+search. -/
+def BorrowReaches (loans : List Loan) : Nat → CapId → CapId → Bool
+  | 0, _, _ => false
+  | n + 1, a, b =>
+      loans.any (fun l => l.lender = a && (l.borrower = b || BorrowReaches loans n l.borrower b))
+
+/-- No loan's lender is reachable from itself by a positive-length delegation
+path. The bound is the number of outstanding loans, which exceeds the length of
+any simple cycle. -/
+def World.BorrowAcyclic (w : World) : Prop :=
+  ∀ l ∈ w.ctx.loans.loans,
+    BorrowReaches w.ctx.loans.loans (w.ctx.loans.loans.length + 1)
+      l.lender l.lender = false
+
 /-- The retag-aware delegation invariant: loans are distinct, allocation-bound,
-borrower-active, historically issued, and live. The lender identity is dormant
-metadata, so it is not required to occur as a leaf. -/
+historically issued and live. A borrower is either the active terminal holder or
+has delegated onward to another recorded loan; the delegation edges are acyclic. -/
 def World.BorrowOK (w : World) : Prop :=
   (w.ctx.loans.loans.map (·.id)).Nodup
   ∧ (w.ctx.loans.loans.map (·.lender)).Nodup
@@ -78,11 +94,13 @@ def World.BorrowOK (w : World) : Prop :=
   ∧ (∀ l ∈ w.ctx.loans.loans, l.borrower ∈ w.ctx.issued)
   ∧ (∀ l ∈ w.ctx.loans.loans, w.ctx.loans.live l.lifetime = true)
   ∧ (∀ l ∈ w.ctx.loans.loans, ∃ o, w.ctx.findOwner? l.alloc = some o ∧
-      ∃ c, o.root.find? l.borrower = some c ∧ c.state = .active)
+      ((∃ c, o.root.find? l.borrower = some c ∧ c.state = .active) ∨
+       (∃ m ∈ w.ctx.loans.loans, m.lender = l.borrower)))
+  ∧ w.BorrowAcyclic
 
 /-- The concrete 64-byte world has no loans. -/
 theorem World.uWorld_borrowOK : World.BorrowOK uWorld := by
-  refine ⟨by decide, by decide, by decide, ?_, ?_, ?_, ?_, ?_⟩ <;>
+  refine ⟨by decide, by decide, by decide, ?_, ?_, ?_, ?_, ?_, ?_⟩ <;>
     intro l hl <;> simp [uWorld, LoanCtx.rootOnly] at hl
 
 end Cap

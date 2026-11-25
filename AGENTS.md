@@ -561,7 +561,9 @@ shows the certificate it would have to emit, not proof-producing elaboration.
   borrowing on the retag accounting model: `Tree.retag` renames a leaf without
   changing its budget (`Tree.retag_budget`), `Owner.retagLeaf?` requires an active
   lender and a fresh name (`retagLeaf?_budget`, `_covered`, `_len`), and
-  `World.beginBorrowChecked`/`endBorrowChecked` retag the active leaf to a
+  `World.BorrowOK` records distinct, allocation-bound loans, issued identities,
+  live lifetimes, an active terminal borrower or a delegated child, and an
+  acyclic lender-to-borrower edge relation. `World.beginBorrowChecked`/`endBorrowChecked` retag the active leaf to a
   distinct borrower and back; return refuses while another loan borrowed from
   the same borrower is live. Splits and fractional joins refuse while any loan is
   outstanding for the allocation, and the typed split/join constructors carry
