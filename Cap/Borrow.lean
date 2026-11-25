@@ -63,3 +63,26 @@ def World.endBorrowChecked (w : World) (a : AllocId) (loanId : LoanId) :
                     loans := w.ctx.loans.loans.filter (fun l => l.id ≠ loanId) } } }
 
 end Cap
+
+namespace Cap
+
+/-- The retag-aware delegation invariant: loans are distinct, allocation-bound,
+borrower-active, historically issued, and live. The lender identity is dormant
+metadata, so it is not required to occur as a leaf. -/
+def World.BorrowOK (w : World) : Prop :=
+  (w.ctx.loans.loans.map (·.id)).Nodup
+  ∧ (w.ctx.loans.loans.map (·.lender)).Nodup
+  ∧ (w.ctx.loans.loans.map (·.borrower)).Nodup
+  ∧ (∀ l ∈ w.ctx.loans.loans, l.lender ≠ l.borrower)
+  ∧ (∀ l ∈ w.ctx.loans.loans, l.lender ∈ w.ctx.issued)
+  ∧ (∀ l ∈ w.ctx.loans.loans, l.borrower ∈ w.ctx.issued)
+  ∧ (∀ l ∈ w.ctx.loans.loans, w.ctx.loans.live l.lifetime = true)
+  ∧ (∀ l ∈ w.ctx.loans.loans, ∃ o, w.ctx.findOwner? l.alloc = some o ∧
+      ∃ c, o.root.find? l.borrower = some c ∧ c.state = .active)
+
+/-- The concrete 64-byte world has no loans. -/
+theorem World.uWorld_borrowOK : World.BorrowOK uWorld := by
+  refine ⟨by decide, by decide, by decide, ?_, ?_, ?_, ?_, ?_⟩ <;>
+    intro l hl <;> simp [uWorld, LoanCtx.rootOnly] at hl
+
+end Cap
