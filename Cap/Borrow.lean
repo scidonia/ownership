@@ -155,6 +155,70 @@ theorem World.borrowOK_allocChecked {w w' : World} {n : Nat}
     · simp at hw
   · simp at hw
 
+/-- A successful spatial split has no outstanding loan for the allocation. -/
+theorem World.splitAtChecked_no_loan {w w' : World} {a : AllocId}
+    {id id1 id2 : CapId} {k : Nat}
+    (hw : w.splitAtChecked a id id1 id2 k = .ok w') :
+    ∀ l ∈ w.ctx.loans.loans, l.alloc ≠ a := by
+  unfold World.splitAtChecked at hw
+  split at hw
+  · simp at hw
+  · rename_i o hf
+    split at hw
+    · rename_i halloc
+      split at hw
+      · exact halloc
+      · simp at hw
+    · simp at hw
+
+/-- A successful fractional split has no outstanding loan for the allocation. -/
+theorem World.splitFractionChecked_no_loan {w w' : World} {a : AllocId}
+    {id id1 id2 : CapId} {q1 q2 : Nat} {p1 : 0 < q1} {p2 : 0 < q2}
+    (hw : w.splitFractionChecked a id id1 id2 q1 q2 p1 p2 = .ok w') :
+    ∀ l ∈ w.ctx.loans.loans, l.alloc ≠ a := by
+  unfold World.splitFractionChecked at hw
+  split at hw
+  · simp at hw
+  · rename_i o hf
+    split at hw
+    · rename_i halloc
+      split at hw
+      · exact halloc
+      · simp at hw
+    · simp at hw
+
+/-- A successful join has no outstanding loan for the allocation. -/
+theorem World.joinChecked_no_loan {w w' : World} {a : AllocId}
+    {node newId : CapId} (hw : w.joinChecked a node newId = .ok w') :
+    ∀ l ∈ w.ctx.loans.loans, l.alloc ≠ a := by
+  unfold World.joinChecked at hw
+  split at hw
+  · simp at hw
+  · rename_i o hf
+    split at hw
+    · rename_i halloc
+      split at hw
+      · exact halloc
+      · simp at hw
+    · simp at hw
+
+/-- Replacing one owner leaves lookup of a different allocation unchanged. -/
+theorem Ctx.findOwner?_update_of_ne (C : Ctx) (a : AllocId) (o' : Owner)
+    {b : AllocId} (h : b ≠ a) (ho' : o'.alloc = a) :
+    (C.update a o').findOwner? b = C.findOwner? b := by
+  unfold Ctx.update Ctx.findOwner?
+  induction C.owners with
+  | nil => rfl
+  | cons o os ih =>
+    by_cases hb : o.alloc = b
+    · have hba : o.alloc ≠ a := by intro ha; exact h (hb.symm.trans ha)
+      simp [List.map, List.find?, hb, h]
+    · by_cases ha : o.alloc = a
+      · have hb' : o'.alloc ≠ b := by rw [ho']; exact h.symm
+        have hba : ¬ a = b := fun h' => h h'.symm
+        simp [List.map, List.find?, hb, ha, hb', hba, ih]
+      · simp [List.map, List.find?, hb, ha, ih]
+
 /-- A lookup for a different allocation survives freeing. -/
 theorem Ctx.findOwner?_free_of_ne (C : Ctx) {a b : AllocId} (h : b ≠ a) :
     (C.free a).findOwner? b = C.findOwner? b := by
@@ -210,6 +274,43 @@ theorem World.borrowOK_freeChecked {w w' : World} {a : AllocId} {d : CapId}
             · simpa [World.BorrowAcyclic, Ctx.free] using h.2.2.2.2.2.2.2.2
       · simp at hw
     · simp at hw
+
+/-- A spatial split preserves the delegation invariant: the guard excludes every
+loan on the target allocation, and the owner update frames all other lookups. -/
+theorem World.borrowOK_splitAtChecked {w w' : World} {a : AllocId}
+    {id id1 id2 : CapId} {k : Nat}
+    (hw : w.splitAtChecked a id id1 id2 k = .ok w') (h : w.BorrowOK) :
+    w'.BorrowOK := by
+  obtain ⟨o, C', hfind, _hfids, _hfresh1, _hfresh2, hs, hw'⟩ :=
+    World.splitAtChecked_sound hw
+  have hno := World.splitAtChecked_no_loan hw
+  have hoalloc : o.alloc = a := borrow_findOwner_alloc hfind
+  unfold Ctx.splitAtOwner? at hs
+  cases ho : o.splitAt? id id1 id2 k with
+  | none => simp [ho] at hs
+  | some o' =>
+    simp only [ho, Option.map_some, Option.some.injEq] at hs
+    subst C'
+    have ho'alloc : o'.alloc = o.alloc := Owner.splitAt?_alloc ho
+    rw [hw']
+    unfold World.BorrowOK at h ⊢
+    refine ⟨h.1, h.2.1, h.2.2.1, h.2.2.2.1, ?_, ?_, ?_, ?_, ?_⟩
+    · intro l hl
+      exact List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (h.2.2.2.2.1 l hl))
+    · intro l hl
+      exact List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (h.2.2.2.2.2.1 l hl))
+    · intro l hl
+      simpa [Ctx.update] using h.2.2.2.2.2.2.1 l hl
+    · intro l hl
+      obtain ⟨own, hown, hcond⟩ := h.2.2.2.2.2.2.2.1 l hl
+      have hne : l.alloc ≠ o.alloc := by
+        rw [hoalloc]
+        exact hno l hl
+      refine ⟨own, ?_, hcond⟩
+      change (Ctx.update w.ctx o.alloc o').findOwner? l.alloc = _
+      rw [Ctx.findOwner?_update_of_ne w.ctx o.alloc o' hne ho'alloc]
+      exact hown
+    · simpa [World.BorrowAcyclic, Ctx.update] using h.2.2.2.2.2.2.2.2
 
 /-- A checked write changes only the backend, so delegation bookkeeping is unchanged. -/
 theorem World.borrowOK_write {w w' : World} {a : AllocId} {id : CapId} {i : Nat}
