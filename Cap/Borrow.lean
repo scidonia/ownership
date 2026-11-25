@@ -98,6 +98,63 @@ def World.BorrowOK (w : World) : Prop :=
        (∃ m ∈ w.ctx.loans.loans, m.lender = l.borrower)))
   ∧ w.BorrowAcyclic
 
+private theorem borrow_findOwner_alloc {C : Ctx} {a : AllocId} {o : Owner}
+    (h : C.findOwner? a = some o) : o.alloc = a := by
+  unfold Ctx.findOwner? at h
+  have hp : (fun x : Owner => decide (x.alloc = a)) o = true :=
+    List.find?_some (p := fun x : Owner => decide (x.alloc = a)) h
+  exact of_decide_eq_true hp
+
+/-- A fresh allocation does not change lookup of a different allocation. -/
+theorem Ctx.findOwner?_alloc_of_ne {C : Ctx} {a b : AllocId} {n : Nat}
+    {pos : 0 < C.D} {rootId disposal : CapId}
+    (hf : a ∉ C.owners.map (·.alloc)) (hne : b ≠ a) :
+    (C.alloc a n pos rootId disposal hf).findOwner? b = C.findOwner? b := by
+  unfold Ctx.alloc Ctx.findOwner?
+  simp [Owner.init, hne.symm]
+
+/-- Allocation preserves the delegation invariant: loans and borrower leaves are
+unchanged, issuance only grows, and the fresh owner cannot be the target of an
+existing loan. -/
+theorem World.borrowOK_allocChecked {w w' : World} {n : Nat}
+    {rootId disposal : CapId} {po : 0 < w.ctx.D}
+    (hw : w.allocChecked n rootId disposal po = .ok w') (h : w.BorrowOK) :
+    w'.BorrowOK := by
+  unfold World.allocChecked at hw
+  split at hw
+  · rename_i hf
+    split at hw
+    · rename_i hfr
+      simp only [Except.ok.injEq] at hw
+      subst hw
+      unfold World.BorrowOK at h ⊢
+      refine ⟨h.1, h.2.1, h.2.2.1, h.2.2.2.1, ?_, ?_, ?_, ?_, ?_⟩
+      · intro l hl
+        exact List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (h.2.2.2.2.1 l hl))
+      · intro l hl
+        exact List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (h.2.2.2.2.2.1 l hl))
+      · intro l hl
+        simpa [Ctx.alloc] using h.2.2.2.2.2.2.1 l hl
+      · intro l hl
+        obtain ⟨o, hfind, hcond⟩ := h.2.2.2.2.2.2.2.1 l hl
+        have hmemO : o ∈ w.ctx.owners :=
+          List.mem_of_find?_eq_some (by simpa [Ctx.findOwner?] using hfind)
+        have hoalloc : o.alloc = l.alloc := borrow_findOwner_alloc hfind
+        have hmem : l.alloc ∈ w.ctx.owners.map (·.alloc) := by
+          rw [← hoalloc]
+          exact List.mem_map_of_mem hmemO
+        have hne : l.alloc ≠ ⟨w.ctx.nextAlloc⟩ := by
+          intro heq
+          apply hf
+          rwa [heq] at hmem
+        refine ⟨o, ?_, hcond⟩
+        rw [Ctx.findOwner?_alloc_of_ne (C := w.ctx) (a := ⟨w.ctx.nextAlloc⟩)
+          (b := l.alloc) hf hne]
+        exact hfind
+      · simpa [World.BorrowAcyclic, Ctx.alloc] using h.2.2.2.2.2.2.2.2
+    · simp at hw
+  · simp at hw
+
 /-- A checked write changes only the backend, so delegation bookkeeping is unchanged. -/
 theorem World.borrowOK_write {w w' : World} {a : AllocId} {id : CapId} {i : Nat}
     {v : UInt8} (hw : w.writeChecked a id i v = .ok w') (h : w.BorrowOK) :
