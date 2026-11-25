@@ -98,6 +98,14 @@ def World.BorrowOK (w : World) : Prop :=
        (∃ m ∈ w.ctx.loans.loans, m.lender = l.borrower)))
   ∧ w.BorrowAcyclic
 
+/-- A checked write changes only the backend, so delegation bookkeeping is unchanged. -/
+theorem World.borrowOK_write {w w' : World} {a : AllocId} {id : CapId} {i : Nat}
+    {v : UInt8} (hw : w.writeChecked a id i v = .ok w') (h : w.BorrowOK) :
+    w'.BorrowOK := by
+  obtain ⟨_, _, _, _, _, _, _, hctx, _⟩ := World.writeChecked_sound hw
+  unfold World.BorrowOK at h ⊢
+  simpa [World.BorrowAcyclic, hctx] using h
+
 /-- The concrete 64-byte world has no loans. -/
 theorem World.uWorld_borrowOK : World.BorrowOK uWorld := by
   refine ⟨by decide, by decide, by decide, ?_, ?_, ?_, ?_, ?_, ?_⟩ <;>
