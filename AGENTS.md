@@ -557,6 +557,11 @@ shows the certificate it would have to emit, not proof-producing elaboration.
   in `bench/CapFreshness.lean`). It is a deep syntax and checker for the owner layer
   only, not surface elaboration, not a heap semantics, and acceptance is checker
   acceptance rather than execution safety.
+- `Cap/Discipline.lean` couples a `World` with a delegation chain: `State.OK`
+  requires the world loan list to equal the chain's edges, the holder to be the
+  active leaf, and the allocation/footprint/share/ceiling to agree. The initial
+  64-byte state satisfies it, and a checked write through the holder preserves
+  it (`State.write_OK`). Borrow/return correspondence is not yet implemented.
 - `Cap/Delegation.lean` is the first standalone delegation-chain subsystem:
   `Edge` records lender, borrower, allocation and resource description;
   `Chain.OK` requires distinct identities, resource agreement, non-alias edges

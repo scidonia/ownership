@@ -47,5 +47,6 @@ import Cap.Marshal
 import Cap.Retag
 import Cap.Delegation
 import Cap.Borrow
+import Cap.Discipline
 import Cap.Reborrow
 import Cap.Sealed
