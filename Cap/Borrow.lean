@@ -171,6 +171,30 @@ theorem World.splitAtChecked_no_loan {w w' : World} {a : AllocId}
       · simp at hw
     · simp at hw
 
+/-- Success facts for a fractional split. -/
+private theorem splitFractionChecked_sound {w w' : World} {a : AllocId}
+    {id id1 id2 : CapId} {q1 q2 : Nat} {p1 : 0 < q1} {p2 : 0 < q2}
+    (hw : w.splitFractionChecked a id id1 id2 q1 q2 p1 p2 = .ok w') :
+    ∃ o C', w.ctx.findOwner? a = some o ∧ o.FreshIds id1 id2 ∧
+      id1 ∉ w.ctx.ids ∧ id2 ∉ w.ctx.ids ∧
+      w.ctx.splitFractionOwner? o id id1 id2 q1 q2 p1 p2 = some C' ∧
+      w' = { w with ctx := { C' with issued := id1 :: id2 :: w.ctx.issued } } := by
+  unfold World.splitFractionChecked at hw
+  split at hw
+  · simp at hw
+  · rename_i o hf
+    split at hw
+    · rename_i halloc
+      split at hw
+      · rename_i hfr
+        split at hw
+        · rename_i C' hs
+          simp only [Except.ok.injEq] at hw
+          exact ⟨o, C', hf, hfr.1, hfr.2.1, hfr.2.2.1, hs, hw.symm⟩
+        · simp at hw
+      · simp at hw
+    · simp at hw
+
 /-- A successful fractional split has no outstanding loan for the allocation. -/
 theorem World.splitFractionChecked_no_loan {w w' : World} {a : AllocId}
     {id id1 id2 : CapId} {q1 q2 : Nat} {p1 : 0 < q1} {p2 : 0 < q2}
@@ -184,6 +208,29 @@ theorem World.splitFractionChecked_no_loan {w w' : World} {a : AllocId}
     · rename_i halloc
       split at hw
       · exact halloc
+      · simp at hw
+    · simp at hw
+
+/-- Success facts for a join. -/
+private theorem joinChecked_sound {w w' : World} {a : AllocId}
+    {node newId : CapId} (hw : w.joinChecked a node newId = .ok w') :
+    ∃ o C', w.ctx.findOwner? a = some o ∧
+      newId ∉ w.ctx.ids ∧ newId ∉ w.ctx.issued ∧
+      w.ctx.joinFractionOwner? o node newId = some C' ∧
+      w' = { w with ctx := { C' with issued := newId :: w.ctx.issued } } := by
+  unfold World.joinChecked at hw
+  split at hw
+  · simp at hw
+  · rename_i o hf
+    split at hw
+    · rename_i halloc
+      split at hw
+      · rename_i hfresh
+        split at hw
+        · rename_i C' hs
+          simp only [Except.ok.injEq] at hw
+          exact ⟨o, C', hf, hfresh.1, hfresh.2, hs, hw.symm⟩
+        · simp at hw
       · simp at hw
     · simp at hw
 
@@ -299,6 +346,78 @@ theorem World.borrowOK_splitAtChecked {w w' : World} {a : AllocId}
       exact List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (h.2.2.2.2.1 l hl))
     · intro l hl
       exact List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (h.2.2.2.2.2.1 l hl))
+    · intro l hl
+      simpa [Ctx.update] using h.2.2.2.2.2.2.1 l hl
+    · intro l hl
+      obtain ⟨own, hown, hcond⟩ := h.2.2.2.2.2.2.2.1 l hl
+      have hne : l.alloc ≠ o.alloc := by
+        rw [hoalloc]
+        exact hno l hl
+      refine ⟨own, ?_, hcond⟩
+      change (Ctx.update w.ctx o.alloc o').findOwner? l.alloc = _
+      rw [Ctx.findOwner?_update_of_ne w.ctx o.alloc o' hne ho'alloc]
+      exact hown
+    · simpa [World.BorrowAcyclic, Ctx.update] using h.2.2.2.2.2.2.2.2
+
+/-- A fractional split preserves the delegation invariant by the same framing
+argument as a spatial split. -/
+theorem World.borrowOK_splitFractionChecked {w w' : World} {a : AllocId}
+    {id id1 id2 : CapId} {q1 q2 : Nat} {p1 : 0 < q1} {p2 : 0 < q2}
+    (hw : w.splitFractionChecked a id id1 id2 q1 q2 p1 p2 = .ok w')
+    (h : w.BorrowOK) : w'.BorrowOK := by
+  obtain ⟨o, C', hfind, _hfids, _hfresh1, _hfresh2, hs, hw'⟩ :=
+    splitFractionChecked_sound hw
+  have hno := World.splitFractionChecked_no_loan hw
+  have hoalloc : o.alloc = a := borrow_findOwner_alloc hfind
+  unfold Ctx.splitFractionOwner? at hs
+  cases ho : o.splitFraction? id id1 id2 q1 q2 p1 p2 with
+  | none => simp [ho] at hs
+  | some o' =>
+    simp only [ho, Option.map_some, Option.some.injEq] at hs
+    subst C'
+    have ho'alloc : o'.alloc = o.alloc := Owner.splitFraction?_alloc ho
+    rw [hw']
+    unfold World.BorrowOK at h ⊢
+    refine ⟨h.1, h.2.1, h.2.2.1, h.2.2.2.1, ?_, ?_, ?_, ?_, ?_⟩
+    · intro l hl
+      exact List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (h.2.2.2.2.1 l hl))
+    · intro l hl
+      exact List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (h.2.2.2.2.2.1 l hl))
+    · intro l hl
+      simpa [Ctx.update] using h.2.2.2.2.2.2.1 l hl
+    · intro l hl
+      obtain ⟨own, hown, hcond⟩ := h.2.2.2.2.2.2.2.1 l hl
+      have hne : l.alloc ≠ o.alloc := by
+        rw [hoalloc]
+        exact hno l hl
+      refine ⟨own, ?_, hcond⟩
+      change (Ctx.update w.ctx o.alloc o').findOwner? l.alloc = _
+      rw [Ctx.findOwner?_update_of_ne w.ctx o.alloc o' hne ho'alloc]
+      exact hown
+    · simpa [World.BorrowAcyclic, Ctx.update] using h.2.2.2.2.2.2.2.2
+
+/-- A fractional join preserves the delegation invariant. -/
+theorem World.borrowOK_joinChecked {w w' : World} {a : AllocId}
+    {node newId : CapId}
+    (hw : w.joinChecked a node newId = .ok w') (h : w.BorrowOK) :
+    w'.BorrowOK := by
+  obtain ⟨o, C', hfind, _hfresh1, _hfresh2, hs, hw'⟩ := joinChecked_sound hw
+  have hno := World.joinChecked_no_loan hw
+  have hoalloc : o.alloc = a := borrow_findOwner_alloc hfind
+  unfold Ctx.joinFractionOwner? at hs
+  cases ho : o.joinFraction? node newId with
+  | none => simp [ho] at hs
+  | some o' =>
+    simp only [ho, Option.map_some, Option.some.injEq] at hs
+    subst C'
+    have ho'alloc : o'.alloc = o.alloc := Owner.joinFraction_alloc ho
+    rw [hw']
+    unfold World.BorrowOK at h ⊢
+    refine ⟨h.1, h.2.1, h.2.2.1, h.2.2.2.1, ?_, ?_, ?_, ?_, ?_⟩
+    · intro l hl
+      exact List.mem_cons_of_mem _ (h.2.2.2.2.1 l hl)
+    · intro l hl
+      exact List.mem_cons_of_mem _ (h.2.2.2.2.2.1 l hl)
     · intro l hl
       simpa [Ctx.update] using h.2.2.2.2.2.2.1 l hl
     · intro l hl

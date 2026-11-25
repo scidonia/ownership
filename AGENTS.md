@@ -565,8 +565,9 @@ shows the certificate it would have to emit, not proof-producing elaboration.
   live lifetimes, an active terminal borrower or a delegated child, and an
   acyclic lender-to-borrower edge relation; it is preserved by writes
   (`borrowOK_write`), fresh allocation (`borrowOK_allocChecked`), checked
-  disposal (`borrowOK_freeChecked`) and spatial split
-  (`borrowOK_splitAtChecked`). `bench/CapBorrow.lean` rejects the
+  disposal (`borrowOK_freeChecked`), spatial split
+  (`borrowOK_splitAtChecked`), fractional split
+  (`borrowOK_splitFractionChecked`) and join (`borrowOK_joinChecked`). `bench/CapBorrow.lean` rejects the
   cyclic `3 → 4 → 3` record; the positive nested-state inhabitance theorem is
   still outstanding. `World.beginBorrowChecked`/`endBorrowChecked` retag the active leaf to a
   distinct borrower and back; return refuses while another loan borrowed from
