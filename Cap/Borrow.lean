@@ -155,6 +155,62 @@ theorem World.borrowOK_allocChecked {w w' : World} {n : Nat}
     · simp at hw
   · simp at hw
 
+/-- A lookup for a different allocation survives freeing. -/
+theorem Ctx.findOwner?_free_of_ne (C : Ctx) {a b : AllocId} (h : b ≠ a) :
+    (C.free a).findOwner? b = C.findOwner? b := by
+  unfold Ctx.free Ctx.findOwner?
+  rw [List.find?_filter]
+  congr 1
+  funext o
+  by_cases hb : o.alloc = b
+  · have hba : ¬ b = a := h
+    simp [hb, hba]
+  · simp [hb]
+
+/-- Checked disposal preserves the delegation invariant: it is refused while any
+loan names the allocation, and every other loan's borrower witness survives the
+owner filter. -/
+theorem World.borrowOK_freeChecked {w w' : World} {a : AllocId} {d : CapId}
+    (hw : w.freeChecked a d = .ok w') (h : w.BorrowOK) : w'.BorrowOK := by
+  unfold World.freeChecked at hw
+  split at hw
+  · simp at hw
+  · rename_i o hfind
+    split at hw
+    · rename_i halloc
+      split at hw
+      · rename_i hloan
+        cases hf : w.freeWith? a d with
+        | none => simp [hf] at hw
+        | some w1 =>
+          simp [hf] at hw
+          cases hw
+          unfold World.freeWith? at hf
+          cases hc : w.ctx.freeWith? a d with
+          | none => simp [hc] at hf
+          | some ctx' =>
+            simp [hc] at hf
+            cases hf
+            have hctx : ctx' = w.ctx.free a := Ctx.freeWith?_eq_free hc
+            subst ctx'
+            unfold World.BorrowOK at h ⊢
+            refine ⟨h.1, h.2.1, h.2.2.1, h.2.2.2.1, ?_, ?_, ?_, ?_, ?_⟩
+            · intro l hl
+              exact h.2.2.2.2.1 l hl
+            · intro l hl
+              exact h.2.2.2.2.2.1 l hl
+            · intro l hl
+              simpa [Ctx.free] using h.2.2.2.2.2.2.1 l hl
+            · intro l hl
+              obtain ⟨own, hown, hcond⟩ := h.2.2.2.2.2.2.2.1 l hl
+              have hne : l.alloc ≠ a := halloc l hl
+              refine ⟨own, ?_, hcond⟩
+              rw [Ctx.findOwner?_free_of_ne (C := w.ctx) (a := a) (b := l.alloc) hne]
+              exact hown
+            · simpa [World.BorrowAcyclic, Ctx.free] using h.2.2.2.2.2.2.2.2
+      · simp at hw
+    · simp at hw
+
 /-- A checked write changes only the backend, so delegation bookkeeping is unchanged. -/
 theorem World.borrowOK_write {w w' : World} {a : AllocId} {id : CapId} {i : Nat}
     {v : UInt8} (hw : w.writeChecked a id i v = .ok w') (h : w.BorrowOK) :
