@@ -557,6 +557,12 @@ shows the certificate it would have to emit, not proof-producing elaboration.
   in `bench/CapFreshness.lean`). It is a deep syntax and checker for the owner layer
   only, not surface elaboration, not a heap semantics, and acceptance is checker
   acceptance rather than execution safety.
+- `Cap/Delegation.lean` is the first standalone delegation-chain subsystem:
+  `Edge` records lender, borrower, allocation and resource description;
+  `Chain.OK` requires distinct identities, resource agreement, non-alias edges
+  and previous-holder linkage; `begin` appends and sets the new holder, `end`
+  pops the innermost edge and restores the removed edge's lender. It is not yet
+  connected to `World`/`FullInv` or the command language.
 - `Cap/Retag.lean` and `Cap/Borrow.lean` are the first executable slice of live
   borrowing on the retag accounting model: `Tree.retag` renames a leaf without
   changing its budget (`Tree.retag_budget`), `Owner.retagLeaf?` requires an active

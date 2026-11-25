@@ -45,6 +45,7 @@ import Cap.LoansInv
 import Cap.FullInv
 import Cap.Marshal
 import Cap.Retag
+import Cap.Delegation
 import Cap.Borrow
 import Cap.Reborrow
 import Cap.Sealed
