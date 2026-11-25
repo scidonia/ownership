@@ -563,7 +563,9 @@ shows the certificate it would have to emit, not proof-producing elaboration.
   lender and a fresh name (`retagLeaf?_budget`, `_covered`, `_len`), and
   `World.BorrowOK` records distinct, allocation-bound loans, issued identities,
   live lifetimes, an active terminal borrower or a delegated child, and an
-  acyclic lender-to-borrower edge relation. `World.beginBorrowChecked`/`endBorrowChecked` retag the active leaf to a
+  acyclic lender-to-borrower edge relation. `bench/CapBorrow.lean` rejects the
+  cyclic `3 → 4 → 3` record; the positive nested-state inhabitance theorem is
+  still outstanding. `World.beginBorrowChecked`/`endBorrowChecked` retag the active leaf to a
   distinct borrower and back; return refuses while another loan borrowed from
   the same borrower is live. Splits and fractional joins refuse while any loan is
   outstanding for the allocation, and the typed split/join constructors carry

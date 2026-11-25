@@ -96,3 +96,23 @@ private def innerBorrowed : World :=
       match w2.endBorrowChecked ⟨0⟩ ⟨9⟩ with
       | .error _ => false
       | .ok w3 => (w3.joinChecked ⟨0⟩ ⟨3⟩ ⟨6⟩).isOk)
+
+private def cyclicWorld : World :=
+  { uWorld with
+    ctx := { uWorld.ctx with
+      issued := [⟨3⟩, ⟨4⟩],
+      loans := { uWorld.ctx.loans with
+        loans := [{ id := ⟨9⟩, alloc := ⟨0⟩, lender := ⟨3⟩, borrower := ⟨4⟩, lifetime := ⟨0⟩ },
+                  { id := ⟨10⟩, alloc := ⟨0⟩, lender := ⟨4⟩, borrower := ⟨3⟩, lifetime := ⟨0⟩ }] } } }
+
+/-- A cycle `3 → 4 → 3` is rejected by the acyclicity conjunct. -/
+example : ¬ World.BorrowOK cyclicWorld := by
+  intro h
+  have hcy := h.2.2.2.2.2.2.2.2
+  have htrue : BorrowReaches cyclicWorld.ctx.loans.loans
+      (cyclicWorld.ctx.loans.loans.length + 1) ⟨3⟩ ⟨3⟩ = true := by
+    native_decide
+  have hfalse := hcy { id := ⟨9⟩, alloc := ⟨0⟩, lender := ⟨3⟩, borrower := ⟨4⟩, lifetime := ⟨0⟩ }
+    (by simp [cyclicWorld])
+  rw [htrue] at hfalse
+  cases hfalse
