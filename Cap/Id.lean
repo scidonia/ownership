@@ -29,4 +29,13 @@ deriving DecidableEq, Repr
 theorem AllocId.ext {a b : AllocId} (h : a.val = b.val) : a = b := by
   cases a; cases b; simp_all
 
+theorem CapId.ext {a b : CapId} (h : a.val = b.val) : a = b := by
+  cases a; cases b; simp_all
+
+theorem LoanId.ext {a b : LoanId} (h : a.val = b.val) : a = b := by
+  cases a; cases b; simp_all
+
+theorem LifetimeId.ext {a b : LifetimeId} (h : a.val = b.val) : a = b := by
+  cases a; cases b; simp_all
+
 end Cap

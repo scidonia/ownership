@@ -631,7 +631,7 @@ Implement in proof dependency order. Do not postpone the invariant until after t
 | 2 | Context ledger, decomposition forest and primitive transitions | Every split and join preserves the full invariant |
 | 3 | Byte-array semantics and explicit ownership | Allocate, read, write, snapshot and free have sound transitions |
 | 4 | Fractional and spatial views | Positive scans and disjoint fills work; adversarial joins fail |
-| 5 | Explicit loans and nested reborrowing | Restoration and lifetime-dependency proofs completed |
+| 5 | Explicit loans and nested reborrowing | Borrow and return preserve the integrated authority invariant, including restoration and lifetime dependency |
 | 6 | Typed programs, closed runner and bounded control flow | Closed reference programs are safe and clean on normal termination |
 | 7 | Hidden-index elaborator and modular contracts | User examples elaborate to kernel-checked terms |
 | 8 | Optional retirement and scope recovery | Scope-closing and no-escape obligations proved |

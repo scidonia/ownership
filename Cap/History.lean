@@ -11,8 +11,7 @@ The module proves the invariant for the concrete empty world and for every
 world-level checked command, and lifts it through whole executions
 (`checkWorld_historyOK`).
 -/
-import Cap.WorldInvariant
-import Cap.Suspend
+import Cap.Invariant
 
 namespace Cap
 

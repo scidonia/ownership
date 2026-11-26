@@ -3,9 +3,12 @@
 % LIPIcs article, class lipics-v2021; build from this directory:
 %   latexmk -pdf -interaction=nonstopmode sealed-ownership.tex
 %
-% Status note: research draft reviewed against implementation a240557.
+% Status note: research draft reviewed against implementation a240557, extended
+% with the repaired delegation chain, the reconstruction model and its sealed
+% lifecycle, and the two-find reuse result.
 % Established declarations and target obligations are distinguished in the text.
-% Integrated delegation preservation and a verified C backend remain open.
+% Integration of the reconstruction forest into the world command guard, and a
+% verified C backend, remain open.
 
 \documentclass[a4paper,UKenglish,cleveref]{lipics-v2021}
 
@@ -101,11 +104,16 @@ preconditions. Representation predicates connect this discipline to full-path
 union-find compression and to byte marshalling; exact trace theorems identify
 certified updates with the worlds produced by checked execution. We also develop
 executable delegation by retagging a single authority-bearing leaf, avoiding
-duplicate accounting of lender and borrower shares. This delegation mechanism
-has nested execution controls but is not yet covered by the combined preservation
-theorem. The resulting development identifies the logical obligations for a
-sealed low-level implementation interface, including the remaining integration
-of delegation, resource reconstruction, and concrete C execution.
+duplicate accounting of lender and borrower shares. Delegation by retagging is
+part of the combined invariant: the checked command language begins and ends
+distinct-borrower loans, and every accepted run preserves allocation binding,
+active-terminal-or-delegated authority, acyclicity, and non-duplication of
+lender and borrower authority. A separate reconstruction state machine, with
+its own sealed lifecycle, proves borrowed subdivision, restoration and a second
+execution on the resulting state; its integration into the world command guard
+remains open. The development identifies the logical
+obligations for a sealed low-level implementation interface, including resource
+reconstruction and concrete C execution.
 \end{abstract}
 
 \section{Introduction}
@@ -160,21 +168,30 @@ uniformly, with mechanised preservation and uniqueness of writable authority
 \item An executable authority machine and indexed interfaces, with separate
 results for authorization, invariant preservation, and absence of permission
 refusal (Section~\ref{sec:execution}). The combined theorem covers the command
-language's suspension loans. Distinct-borrower delegation is an executable
-extension with its own developing invariant (Section~\ref{sec:delegation}).
+language's borrow and return commands; distinct-borrower delegation is the retag
+mechanism the combined invariant carries, and a rooted chain with a derived
+holder and checked begin/end operations states its admissible transitions
+(Section~\ref{sec:delegation}). A separate reconstruction state machine proves
+borrowed subdivision, reconstruction and restoration, with its own sealed
+lifecycle (Section~\ref{sec:delegation}).
 \item Representation-sensitive examples: computable full-path compression and
 byte marshalling, including exact correspondence between certified updates and
-checked write traces (Section~\ref{sec:clients}). These expose the additional
-obligations for composing algorithms and implementing the sealed boundary in C
+checked write traces (Section~\ref{sec:clients}). A two-find instance proves the
+compression output is a reusable input certificate for the next operation on the
+functional model. These expose the additional obligations for composing
+algorithms and implementing the sealed boundary in C
 (Section~\ref{sec:boundary}).
 \end{enumerate}
 
 The central research objective remains a single sealed discipline covering
 usable borrowing, reconstruction, and repeated algorithm execution. The present
-artifact has not completed that integration. We distinguish declarations in the
-artifact, concrete controls, and proposed interface obligations throughout;
-none of the proposed C boundary results is used as a premise of the existing
-Lean theorems.
+artifact has not completed that integration: the reconstruction forest and its
+sealed lifecycle are a second state machine, the world command path keeps its
+allocation-wide split/join guard, and the reusable two-find result is on the
+functional model rather than through the sealed runner. We distinguish
+declarations in the artifact, concrete controls, and proposed interface
+obligations throughout; none of the proposed C boundary results is used as a
+premise of the existing Lean theorems.
 
 \section{Authority as a conserved resource}
 \label{sec:ledger}
@@ -292,22 +309,22 @@ of the main world's free operation.
 \subsection{One checker computes the resulting world}
 
 The trace language \lean{UCmd} includes allocation, byte writes, spatial and
-fractional splits, fractional joins, suspension-loan begin/end, disposal, and
-no-op. \lean{checkWorld} interprets a list of commands and returns either an
-error or the resulting world. There is no separate permission script whose
-acceptance must subsequently be connected to a second execution of those
+fractional splits, fractional joins, distinct-borrower borrow and return,
+disposal, and no-op. \lean{checkWorld} interprets a list of commands and returns
+either an error or the resulting world. There is no separate permission script
+whose acceptance must subsequently be connected to a second execution of those
 commands.
 
-Suspension loans retire a lender leaf and restore it on return. Their record
-uses the lender's identifier as its borrower identifier. The combined invariant
-for this language is
+Borrow moves the whole authority to a distinct borrower by retagging the active
+leaf, and return moves it back. The combined invariant for this language is
 \begin{lstlisting}
-def World.FullInv (w : World) : Prop := w.TopInv ∧ w.LoansOK
+def World.FullInv (w : World) : Prop := w.TopInv ∧ w.BorrowOK
 \end{lstlisting}
-Here \lean{LoansOK} requires distinct loan identifiers and lenders, live loan
-lifetimes, issued lender names, and a retired lender leaf for every loan.
-That last clause is specific to suspension; the delegation mechanism of
-Section~\ref{sec:delegation} changes the representation of outstanding authority.
+Here \lean{BorrowOK} requires distinct loan, lender, and borrower names, issued
+and live lifetime names, a recorded chain base for every loan, global detachment
+of every lender from the live identifier lists, an active terminal borrower or a
+delegated successor, agreement of adjacent edges on the allocation and resource
+description, and issued-order monotonicity from which acyclicity is derived.
 
 \begin{theorem}[Preservation of checked execution]
 If \lean{checkWorld w cs = .ok w'} and \lean{w.FullInv}, then
@@ -468,30 +485,66 @@ both kinds of split and fractional joins while any loan is outstanding on the
 allocation. This protects the simple retag protocol but also blocks independent
 decomposition of a disjoint sibling range.
 
-\paragraph*{The delegation invariant under development.}
-\lean{BorrowOK} requires distinct loan, lender, and borrower names, distinct
-lender/borrower endpoints, issuance and liveness, and an owner at each loan's
-allocation. A borrower is either an active leaf or the lender of another
-recorded loan. \lean{BorrowAcyclic} excludes positive-length cycles using a
-bounded search over the finite loan list. The controls admit a nested execution
-and reject a cyclic record configuration.
+\paragraph*{The delegation invariant.}
+\lean{World.BorrowOK} requires distinct loan, lender, and borrower names, issuance
+and liveness for every loan and every lifetime, a recorded chain base for every
+loan, a base-or-chain membership for every lender, global detachment of every
+lender from the owners' identifier lists, an owner at each loan's allocation,
+agreement of adjacent edges on the chain base, allocation, footprint, share, and
+ceiling, an active terminal borrower or a delegated successor, and issued-order
+monotonicity, from which \lean{BorrowAcyclic} is derived.
+\lean{World.checkWorld\_fullInv} preserves this predicate together with the
+top-level invariant, so the delegation mechanism is covered by the combined
+preservation theorem.
 
-These facts are not yet a preservation theorem. In particular, the current
-predicate does not state that a lender with delegated authority is absent from
-the active frontier, or that a downstream edge preserves the allocation,
-footprint, share, and ceiling of the resource it receives. Those requirements
-must be added or derived from an explicit reachability invariant before the
-predicate can support the integrated authority theorem. The suspension-based
-\lean{LoansOK} is not interchangeable with this delegation predicate.
+The chain representation itself is repaired. A chain stores one resource
+descriptor that every edge must agree with; its capability path is the base
+followed by each edge's borrower, and validity requires that path to be
+duplicate-free, the first edge to be lent by the base, every later edge by the
+previous borrower, and the stored holder to equal the derived innermost
+borrower. Distinct lender and borrower lists are insufficient: the two-edge cycle
+$a\to b, b\to a$ has both and is rejected by the path condition. Raw append and
+pop are internal transformations; the executable operations check resource
+agreement, current-holder lending, fresh identities and a live lifetime, and
+their soundness theorem yields the admissibility the preservation lemmas
+consume. A coupled state pairs a world with its chain and requires the chain's
+projection to be exactly the world loan list and its holder to be the active
+leaf. Checked writes, borrows and returns preserve that correspondence; the
+controls show the borrower's write observed through the restored lender, the
+lender's write refused while borrowed and accepted after return, and the outer
+return refused while the inner loan is live.
+
+The correspondence between the world and its delegation chains is a separate
+theorem. \lean{World.delegationChains\_ok} groups the outstanding loans by
+allocation and base and proves that every chain is valid, that the chains cover
+every world loan, that each chain's projection is exactly that group's
+subsequence of the world loan list, and that the flattened projection is a
+permutation of it. The theorem assumes \lean{World.LoansChainOrderOK} in addition
+to \lean{BorrowOK}: each group's loan list must be in chain order from its base.
+That order hypothesis is separate from \lean{BorrowOK}, which does not constrain
+the order of the world loan list.
 
 \paragraph*{Reconstruction obligation.}
 Supporting a borrowed spatial split requires a return obligation over the
 resulting frontier. A return must recover the delegated resource and retire all
-its descendant access authority. Recovering one historical identifier is not
-enough. The intended discipline includes this operation; the allocation-wide
-restriction is an implementation stage, not a substitute for its proof. The
-combined language and typed interface must ultimately use the same delegation
-and reconstruction invariant.
+its descendant access authority; recovering one historical identifier is not
+enough. The artifact now proves this lifecycle in a separate reconstruction
+model. A forest records the checked spatial or fractional rule at every interior
+node, its budget is the frontier sum, and validity requires every recorded rule
+to be checked. The state pairs the forest with the issued and retired names and
+the outstanding restoration obligations; writes, borrows, both subdivisions,
+reconstruction and return each preserve the reconstruction invariant, and a
+return before reconstruction is refused. A private-constructor boundary over
+that state exposes only these operations and runs the 64-byte lifecycle,
+including a second full cycle on the first cycle's output.
+
+The model is not routed through the world command language. The checked world's
+split, fractional split and join still test the allocation-wide loan exclusion,
+so the world path refuses a borrowed allocation's independent sibling as well as
+its borrowed range, and it does not consult the forest. The completion
+criterion's single integrated world-and-restoration execution path is therefore
+not claimed; deleting the allocation-wide test, consulting the forest, and
+re-proving the integrated invariant remain the named next step.
 
 \section{Representation-sensitive clients}
 \label{sec:clients}
@@ -539,14 +592,21 @@ The private \lean{UFRunner} packages a world, its combined invariant, its
 representation, backend, and rank. Its current \lean{findRoot} and
 \lean{findRootSnapshot} call the single-node certificate on a concrete
 64-byte zero forest. They do not return a reusable updated runner, and they do
-not invoke the full-path certificate. Completing the case study requires
-preservation of a reusable forest invariant through that full-path operation
-and a second call on its actual post-state. A discriminating instance is
+not invoke the full-path certificate. The reusable invariant and the second call
+are proved on the functional model by \lean{Cap/UFReuse.lean}, on the
+discriminating instance
 \[
  [0,0,1,2,2]\ \xrightarrow{\mathrm{find}(3)}\ [0,0,0,0,2]
  \ \xrightarrow{\mathrm{find}(4)}\ [0,0,0,0,0].
 \]
-This sequence is an evaluation requirement, not a claimed artifact result.
+\lean{reuseFirst\_eq} and \lean{reuseSecond\_eq} prove the two exact arrays;
+\lean{reuseFirst\_ranked} proves the intermediate array is still a ranked forest,
+and \lean{reuseFirst\_accepts\_second} supplies the second operation's rank bound,
+root and in-range reachability, so the second input is the first output's
+certificate rather than a restated array. \lean{reuseTwoFinds\_same\_iff}
+composes the partition preservation back to the starting partition. Threading
+the sealed runner through the same sequence remains an evaluation requirement,
+not a claimed artifact result.
 
 \subsection{Marshalling values with an explicit footprint}
 
@@ -597,11 +657,13 @@ does not prove physical snapshot independence for a future C implementation.
 
 \subsection{Artifact evidence}
 
-Table~\ref{tab:evidence} states the evidence at the reviewed artifact revision
-\lean{a240557}. The repository contains Lean declarations and proof bodies for
-the listed results, together with executable controls. A fresh build and timing
-record for this editorial revision are not supplied; no performance result is
-inferred from proof checking or from the existence of a computable definition.
+Table~\ref{tab:evidence} states the evidence in the current repository, which
+extends the reviewed artifact revision \lean{a240557} with the repaired
+delegation chain, the reconstruction model and its sealed lifecycle, and the
+two-find reuse result. The repository contains Lean declarations and proof bodies
+for the listed results, together with executable controls. A fresh Lean build and
+timing record for this editorial revision are not supplied; no performance result
+is inferred from proof checking or from the existence of a computable definition.
 
 \begin{table}[t]
 \centering\small
@@ -611,11 +673,12 @@ inferred from proof checking or from the existence of a computable definition.
 \toprule
 Component & Evidence in the artifact & Remaining boundary \\
 \midrule
-Ledger & Budget preservation and writable-authority uniqueness & Delegated-resource reconstruction \\
-Checked language & Whole-run \lean{FullInv} preservation; per-write authority & Distinct-borrower transitions in that theorem \\
+Ledger & Budget preservation and writable-authority uniqueness & World guard integration for borrowed subdivision \\
+Checked language & Whole-run \lean{FullInv} preservation; per-write authority; borrow and return commands & A single invariant combining world execution and the reconstruction forest \\
 Indexed programs & Post-context and no-refusal theorems & Representation-sensitive operational client type \\
-Delegation & Retag budget lemma; nested and cycle controls & Integrated invariant and primitive preservation \\
-Union-find & Functional results, computable full-path certificates, exact write traces & Reusable full-path sealed runner and compiled demonstration \\
+Delegation & Retag budget lemma; rooted chain with derived holder and checked begin/end; world/chain correspondence; combined-invariant preservation & A single sealed world path carrying the reconstruction invariant \\
+Reconstruction & Checked spatial and fractional rules; reconstruction and restoration invariant; sealed 64-byte lifecycle with a second cycle & Consultation by the world split/join guard; concrete implementation \\
+Union-find & Functional results, exact two-find reuse on the functional model, computable full-path certificates, exact write traces & Reusable full-path sealed runner and compiled demonstration \\
 Marshalling & Round trips, range guards, representation and exact write trace & Concrete layout and ABI relation \\
 \bottomrule
 \end{tabular}
@@ -737,26 +800,49 @@ connection depends.
 \label{sec:limits}
 
 The intended result is a usable sealed borrowing discipline, not only a
-permission checker. Four obligations remain before the present components
-establish that result.
+permission checker. The artifact's evidence falls into three groups, and only
+the first two are executable paths in their own right.
 
-\emph{Integrated delegation.} The invariant must relate dormant lenders,
-terminal holders, resource footprints, and acyclic restoration dependencies.
-Every constructor of the client language must preserve it. Concrete nested
-controls and cycle rejection are necessary tests of this design, but do not
-replace preservation. Supporting borrowed splits additionally requires
-reconstruction of a descendant frontier.
+\emph{World borrowing and sealed delegation (proved).} The retag invariant
+relates dormant lenders, terminal holders, resource footprints, and acyclic
+restoration dependencies; every command of the checked language preserves it,
+and the sealed world boundary carries the combined invariant through accepted
+runs. The delegation chain is a rooted path with a derived holder, and checked
+begin/end transitions preserve its validity together with the world/chain
+correspondence. Borrow, write and return are proved against that coupled state.
+
+\emph{Reconstruction model and sealed reconstruction lifecycle (proved,
+separate).} A forest records a checked spatial or fractional rule at every
+interior node; its budget is the frontier sum and validity requires every rule to
+be checked. The state carries issued and retired names and restoration
+obligations, and write, borrow, both subdivisions, reconstruction and return
+preserve the reconstruction invariant. A private-constructor sealed boundary
+over that state runs the 64-byte borrow/split/write/reconstruct/return lifecycle
+and a second full cycle on the first's output. This is a second state machine,
+not the world command path.
+
+\emph{World-guard integration (open).} The checked world's split, fractional
+split and join still test the allocation-wide loan exclusion. They therefore
+refuse an independent sibling range of a borrowed allocation, and they do not
+consult the reconstruction forest. Removing that test, consulting the forest,
+and proving one integrated world-and-restoration invariant through the world
+checker and its sealed boundary is the completion criterion, and it is not
+achieved. No result here should be read as claiming that
+\lean{World.splitAtChecked} consults the reconstruction forest.
 
 \emph{Operational algorithms.} A supported computation type must connect
 representation-sensitive algorithms to authorized execution. Particular exact
 trace theorems already establish that connection for compression writes and
-marshalling. They do not justify arbitrary inhabitants of \lean{Cert}.
+marshalling. They do not justify arbitrary inhabitants of \lean{Cert}. The
+two-find reuse certificate is proved on the functional model; threading it
+through the sealed runner remains open.
 
-\emph{Reusable clients.} The full-path union-find operation must return a state
-that supports its next call, preserving the forest invariant as well as the
-permission invariant. The compiled example must run that same definition.
-Fuelled evaluators and rank-based completion should remain distinct from
-amortized complexity or performance claims.
+\emph{Reusable clients.} The full-path union-find result on the functional model
+returns a state that supports its next call, preserving the forest invariant as
+well as the permission invariant. The sealed runner does not yet return such a
+successor, and the compiled example must run the same definition. Fuelled
+evaluators and rank-based completion should remain distinct from amortized
+complexity or performance claims.
 
 \emph{Concrete implementation.} The C interface needs layout, allocation,
 observation, replay, and cleanup contracts and a simulation to the model.
@@ -778,8 +864,12 @@ trace correspondences connect selected representation-sensitive updates to
 this execution model.
 
 Retagging extends the design toward usable borrowing without counting a dormant
-lender and its borrower twice. Completing its preservation and reconstruction
-protocol is the next mathematical requirement. Combined with an operational
+lender and its borrower twice. Its preservation protocol is proved, and borrowed
+subdivision and restoration are proved in a separate reconstruction state
+machine with its own sealed lifecycle. Integrating that forest into the world
+command guard, so that one sealed execution path carries delegation and
+reconstruction together, is the remaining mathematical requirement. Combined
+with an operational
 algorithm interface and a concrete implementation simulation, that result would
 provide the ownership boundary needed to connect high-level Lean specifications
 to specialised low-level code without adding linear typing rules to Lean.

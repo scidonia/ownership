@@ -97,22 +97,33 @@ private def innerBorrowed : World :=
       | .error _ => false
       | .ok w3 => (w3.joinChecked ⟨0⟩ ⟨3⟩ ⟨6⟩).isOk)
 
+/-- The `3 → 4` edge of the cycle fixture. -/
+private def cycleOuter : Loan :=
+  { id := ⟨9⟩, alloc := ⟨0⟩, base := ⟨3⟩, lender := ⟨3⟩, borrower := ⟨4⟩,
+    lifetime := ⟨1⟩, lo := 0, hi := 64, q := 64, ceiling := .readWrite }
+
+/-- The `4 → 3` edge of the cycle fixture. -/
+private def cycleInner : Loan :=
+  { id := ⟨10⟩, alloc := ⟨0⟩, base := ⟨3⟩, lender := ⟨4⟩, borrower := ⟨3⟩,
+    lifetime := ⟨2⟩, lo := 0, hi := 64, q := 64, ceiling := .readWrite }
+
 private def cyclicWorld : World :=
   { uWorld with
     ctx := { uWorld.ctx with
       issued := [⟨3⟩, ⟨4⟩],
       loans := { uWorld.ctx.loans with
-        loans := [{ id := ⟨9⟩, alloc := ⟨0⟩, lender := ⟨3⟩, borrower := ⟨4⟩, lifetime := ⟨0⟩ },
-                  { id := ⟨10⟩, alloc := ⟨0⟩, lender := ⟨4⟩, borrower := ⟨3⟩, lifetime := ⟨0⟩ }] } } }
+        lifetimes := [{ id := ⟨1⟩, parent := none, state := .live },
+                      { id := ⟨2⟩, parent := some ⟨1⟩, state := .live }],
+        loans := [cycleOuter, cycleInner],
+        nextLifetime := 3 } } }
 
 /-- A cycle `3 → 4 → 3` is rejected by the acyclicity conjunct. -/
 example : ¬ World.BorrowOK cyclicWorld := by
   intro h
-  have hcy := h.2.2.2.2.2.2.2.2
+  have hcy := h.2.2.2.2.2.2.2.2.2.2
   have htrue : BorrowReaches cyclicWorld.ctx.loans.loans
-      (cyclicWorld.ctx.loans.loans.length + 1) ⟨3⟩ ⟨3⟩ = true := by
+      (cyclicWorld.ctx.loans.loans.length + 1) cycleOuter.lender cycleOuter.lender = true := by
     native_decide
-  have hfalse := hcy { id := ⟨9⟩, alloc := ⟨0⟩, lender := ⟨3⟩, borrower := ⟨4⟩, lifetime := ⟨0⟩ }
-    (by simp [cyclicWorld])
+  have hfalse := hcy cycleOuter (by simp [cyclicWorld, cycleOuter, cycleInner])
   rw [htrue] at hfalse
   cases hfalse

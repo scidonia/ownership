@@ -7,8 +7,9 @@ allocation identifiers to be distinct. Allocation appends a fully covered owner 
 a fresh identifier; disposal removes the owner for an allocation.
 
 Capability-identifier freshness across owners, disposal entitlements recorded per
-owner, loans and the dispatch of the owner-level transitions over the list are the
-next slice; the single-owner `Cap.Session` exercises the transitions meanwhile.
+owner, outstanding loans and the dispatch of the owner-level transitions over the
+list are carried by the context itself; `Cap/Unified.lean` runs the checked
+transitions over it.
 -/
 import Cap.Join
 import Cap.Loans

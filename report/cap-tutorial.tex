@@ -100,7 +100,11 @@ The stack, bottom to top, each layer trusting only the ones below it:
 algorithms as clients & \file{Cap/UFRun.lean} \\
 sealed certificates & \file{Cap/Runner.lean} \\
 unified checker/interpreter & \file{Cap/Unified.lean} \\
-suspension (loans) & \file{Cap/Suspend.lean} \\
+sealed reconstruction & \file{Cap/ReconstructionSealed.lean} \\
+reconstruction forest & \file{Cap/Reconstruction.lean} \\
+coupled chain state & \file{Cap/Discipline.lean} \\
+delegation chain & \file{Cap/Delegation.lean} \\
+delegation invariant & \file{Cap/Borrow.lean} \\
 the world & \file{Cap/World.lean}, \file{Cap/WorldInvariant.lean} \\
 context and invariants & \file{Cap/Context.lean}, \file{Cap/Invariant.lean} \\
 joins & \file{Cap/Join.lean} \\
@@ -297,8 +301,8 @@ inductive UCmd where
   | join (a : AllocId) (node newId : CapId)
   | free (a : AllocId) (d : CapId)
   | alloc (n : Nat) (rootId disposal : CapId)
-  | beginLoan (a : AllocId) (lender : CapId) (loanId : LoanId)
-  | endLoan (a : AllocId) (loanId : LoanId)
+  | beginBorrow (a : AllocId) (lender borrower : CapId) (loanId : LoanId)
+  | endBorrow (a : AllocId) (loanId : LoanId)
   | nop
 \end{lstlisting}
 
@@ -319,13 +323,16 @@ def checkWorld : World → List UCmd → Except String World
 One theorem covers all of it:
 
 \begin{lstlisting}
+def CommandInv (w : World) : Prop :=
+  w.WellFormed ∧ Ctx.HistoryOK w.ctx ∧ Ctx.LoansReady w.ctx
+
 theorem checkWorld_wf :
-    checkWorld w cs = .ok w' → w.WellFormed → w'.WellFormed
+    checkWorld w cs = .ok w' → w.CommandInv → w'.WellFormed
 \end{lstlisting}
 
-Every accepted execution --- allocation, writes, both splits, joins, loans,
-disposal --- preserves the world invariant. \lean{checkWorld\_rel} derives the
-older \lean{World.Rel} from it, and \lean{checkWorld\_append}
+Every accepted execution --- allocation, writes, both splits, joins,
+borrow/return, disposal --- preserves the command carrier. \lean{checkWorld\_rel}
+derives the older \lean{World.Rel} from the carrier, and \lean{checkWorld\_append}
 (\file{Cap/Runner.lean}) is what makes sequential composition of certificates
 possible.
 
@@ -359,33 +366,101 @@ theorem uLifecycle_snapshot :   -- the untouched 64-byte backend reads back zero
     uLifecycleSnapshot = some (some (List.replicate 64 (0 : UInt8))) := by decide
 \end{lstlisting}
 
-\section{Loans: suspension, not tracking}
+\section{Borrowing: retagging the active leaf}
 
-Loans reuse the leaf state the write guard already consults
-(\file{Cap/Suspend.lean} plus the loan commands in \file{Cap/Unified.lean}).
-\lean{beginLoan} retires the lender's leaf; since \lean{writableB} requires
-\lean{.active}, a write through the lender is then refused \emph{by the same
-guard} --- no parallel machinery:
+Borrow moves the whole authority to a distinct borrower. \lean{beginBorrow}
+retags the lender's active leaf to the borrower's name and appends a loan
+record; \lean{endBorrow} retags the terminal borrower back to the lender and
+removes the record (\file{Cap/Retag.lean}, \file{Cap/Unified.lean}). A write
+through the lender is refused after the borrow and accepted again after the
+return, both by the same leaf-name guard:
 
 \begin{lstlisting}
-def Owner.suspendLeaf? (o : Owner) (id : CapId) : Option Owner
-  -- succeeds iff the leaf is .active; sets it to .retired
+theorem Tree.retag_budget :   -- renaming a leaf does not change its byte budget
 
-theorem Owner.suspendLeaf?_not_writable :
-    o.suspendLeaf? id = some o' → ∀ i, o'.writableB D id i = false
+def Owner.retagLeaf? (o : Owner) (old new : CapId) : Option Owner
+  -- succeeds iff `old` is active and `new` is fresh
 
-theorem Owner.resumeLeaf?_of_suspendLeaf? :
-    -- suspend then resume returns the original owner
+theorem uLoan_borrower_write_refused :
+    (checkWorld uWorld
+      (uLoanPre ++ [.beginBorrow ⟨1⟩ ⟨3⟩ ⟨5⟩ ⟨0⟩, .write ⟨1⟩ ⟨3⟩ 1 9])).isOk = false
 \end{lstlisting}
 
-The refusal is a theorem with a positive control: the same write is accepted
-before the loan (\lean{uLoan\_write\_before}), refused while it is outstanding
-(\lean{uLoan\_suspended\_write\_refused}), and accepted again after
-\lean{endLoan} (\lean{uLoanRun\_ok}).
+The refusal has a positive control: the same write is accepted before the
+borrow (\lean{uLoan\_write\_before}), and after \lean{endBorrow} the run is
+accepted again (\lean{uLoanRun\_ok}). The record carries the chain base, so a
+reborrow names the borrower as the next lender and returns unwind in nesting
+order. \lean{World.BorrowOK} is the integrated invariant: distinct
+loan/lender/borrower/lifetime names, issued and live names, a recorded base,
+global lender detachment, an active terminal or a delegated successor,
+adjacent-edge resource agreement, and issued-order monotonicity from which
+acyclicity is derived. \lean{World.checkWorld\_fullInv} preserves it with the
+top-level invariant, and \lean{World.delegationChains\_ok} additionally assumes
+\lean{World.LoansChainOrderOK}, because the world loan list's order is not
+determined by \lean{BorrowOK}.
 
-Stated limits, on purpose: the borrower is the lender's own id (exclusive
-suspension, not a reborrow capability), and the \file{Cap/Policy.lean} liveness
-conjunction is a predicate form the checker does not consult.
+Stated limits, on purpose: the world \lean{UCmd} path still refuses a split or
+fractional join while any loan is outstanding on the allocation. That guard is
+allocation-wide, so it also refuses a split of an independent sibling range. A
+separate reconstruction model (below) implements borrowed subdivision and
+restoration, but \lean{World.splitAtChecked} does not consult it; full world
+integration is not claimed.
+
+\section{Borrowed subdivision and reconstruction}
+
+The retag chain represents one unresolved path. Borrowed subdivision needs a
+forest of obligations instead (\file{Cap/Reconstruction.lean}). A
+\lean{Reconstruction.State} pairs the reference heap with a forest whose
+interior nodes record the checked spatial or fractional rule that produced them,
+the issued and retired names, and the outstanding \lean{Restore} obligations.
+\lean{State.Inv} is frontier coverage plus forest validity: the budget at every
+byte is still $D$, and every recorded rule is checked.
+
+\lean{State.borrow} retags a current fragment and records the dormant lender.
+\lean{State.splitSpatial} and \lean{State.splitFraction} subdivide a current
+fragment --- including a borrowed one --- while checking that the children
+partition the parent and that no child name was ever issued or retired.
+\lean{State.reconstruct} restores a suspended parent only when both children
+match its recorded rule and neither has been subdivided or lent further,
+retiring the two child names. \lean{State.return} restores the lender only after
+the borrowed resource is reconstructed and no loan descends from the borrower.
+
+\begin{lstlisting}
+def State.reconstruct (s : State) (parentId : CapId) : Option State
+  -- refuses while a child is subdivided or lent; retires both child names
+
+def State.return (s : State) (borrower : CapId) : Option State
+  -- requires a reconstructed whole fragment and no descendant loan
+
+theorem State.splitSpatial_inv  : s.splitSpatial ... = some s' → s.Inv → s'.Inv
+theorem State.reconstruct_inv   : s.reconstruct p = some s' → s.Inv → s'.Inv
+theorem State.return_none_of_no_leaf :
+    s.forest.findLeaf? borrower = none → s.return borrower = none
+\end{lstlisting}
+
+Each operation preserves \lean{State.Inv} (\lean{State.write\_inv},
+\lean{State.borrow\_inv}, \lean{State.splitSpatial\_inv},
+\lean{State.splitFraction\_inv}, \lean{State.reconstruct\_inv},
+\lean{State.return\_inv}); the split frames leave outstanding obligations
+untouched, and a return before reconstruction is refused.
+
+This is the reconstruction model, not the world command route. \file{Cap/World}
+still refuses any split or fractional join while a loan is outstanding on the
+allocation (\lean{World.splitAtChecked\_refuses\_with\_loan}), so a split of an
+independent sibling range is refused on the \lean{UCmd} path, and the world
+route does not consult the forest. Removing that allocation-wide test is the
+named next integration; nothing here claims it.
+
+The sealed counterpart (\file{Cap/ReconstructionSealed.lean}) has a private
+constructor and private invariant proof over \lean{Reconstruction.State}, with
+\lean{write}, \lean{borrow}, \lean{splitSpatial}, \lean{splitFraction},
+\lean{reconstruct} and \lean{return} as the only operations. Accepted calls
+return a sealed state carrying the rebuilt invariant; refused calls return an
+error and no state. Its observations are a heap snapshot, per-fragment
+authority, retired names and outstanding restoration obligations.
+\lean{Sealed.lifecycle} runs the 64-byte example and \lean{Sealed.reuseLifecycle}
+runs a second full cycle on the first's output. The two sealed boundaries are
+complementary rather than one routed through the other.
 
 \section{Certificates and the sealed boundary}
 
@@ -468,6 +543,21 @@ in \file{Cap/UFPartition.lean} and \file{Cap/UFCompress.lean}
 (\lean{compress\_same\_sound}: compression from a reachable root creates no new
 class pairs).
 
+\file{Cap/UFReuse.lean} closes the reuse requirement on the functional model.
+From \lean{[0,0,1,2,2]} the first full-path compression from node 3 is exactly
+\lean{[0,0,0,0,2]} (\lean{reuseFirst\_eq}); \lean{reuseFirst\_ranked} proves the
+output is still a ranked forest, and \lean{reuseFirst\_accepts\_second} supplies
+the second operation's rank bound and reachability certificate, so the second
+input is the first output's certificate rather than a restated array. The second
+compression from node 4 is exactly \lean{[0,0,0,0,0]}
+(\lean{reuseSecond\_eq}), and the partition preservation composes back to the
+starting partition (\lean{reuseTwoFinds\_same\_iff}). The sealed \lean{UFRunner}
+is not threaded through this example: it stores its state privately and exposes
+only one find's observation, so a second call would need a successor-runner
+operation and a new rank certificate. The reuse is therefore proved for the
+functional path compression that the certified writes refine, not yet for two
+calls through the sealed runner.
+
 \section{Two backends, one model}
 
 The pure \lean{Backend} (a byte list with a length proof) is the specification;
@@ -517,12 +607,20 @@ reference heap & 51{,}956 \\
 \begin{itemize}[leftmargin=1.4em]
 \item No concurrency, no FFI, no real runtime.
 \item No read discipline: reads are free observations.
-\item Loans are exclusive suspension; no reborrows, no nested lifetimes in the
-  executable language.
-\item The sealed boundary is not module-enforced.
+\item Borrowing moves whole authority by retagging. On the world \lean{UCmd}
+  path a split or fractional join is refused while any loan is outstanding on
+  the allocation; the allocation-wide guard does not consult the reconstruction
+  forest, so the reconstruction model's borrowed subdivision is not integrated
+  into the world path.
+\item The sealed boundary is not module-enforced. The sealed reconstruction path
+  is a second sealed surface beside the world path, not the world path routed
+  through the forest.
 \item No in-place-update or compiled-performance claim anywhere in \file{Cap/}.
-\item Union-find correctness is the concrete four-node instance, not the
-  general theorem.
+\item Union-find correctness is the concrete five-node reuse instance and the
+  four-node write-discipline instance, not the general theorem. The two-find
+  reuse is proved on the functional model, not through the sealed runner.
+\item No claim that \lean{World.splitAtChecked} consults the reconstruction
+  forest.
 \end{itemize}
 
 \section{The research-scale remainder}
@@ -543,13 +641,20 @@ reference heap & 51{,}956 \\
   methodology; only interesting once the previous item moves.
 \item \textbf{Full lifecycle bookkeeping} --- non-root lifetimes, distinct
   borrowers, disposal refused while any loan is outstanding at any owner.
+\item \textbf{World reconstruction integration} --- removing the
+  allocation-wide split/join loan test from the \lean{UCmd} path, consulting the
+  reconstruction forest instead, and carrying one integrated
+  world-and-restoration invariant through checked execution and the sealed world
+  boundary.
 \end{enumerate}
 
 \section{Reproduce everything}
 
 \begin{lstlisting}[language={},frame=none,backgroundcolor=\color{shade}]
 nix develop -c lake build Cap                -- the whole subsystem
-nix develop -c bash scripts/check_all.sh     -- builds + axioms + census + docs
+nix develop -c bash scripts/check_all.sh     -- builds + axioms + claims + paper + report
+nix develop -c lake env lean scripts/check_cap_axioms.lean -- borrowing/reconstruction/reuse axioms
+bash scripts/check_cap_docs.sh --rev WORKTREE -- live-documentation claim census
 lake env lean bench/CapBATiming.lean         -- the three-backend observation
 \end{lstlisting}
 

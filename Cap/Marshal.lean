@@ -1,5 +1,6 @@
 import Cap.Code
 import Cap.Unified
+import Cap.Borrow
 import Cap.UFCertified
 
 namespace Cap
@@ -254,11 +255,11 @@ theorem World.historyOK_allocWithChecked {w w' : World} {bytes : List UInt8}
     · simp at hw
   · simp at hw
 
-/-- Byte-initialised allocation preserves the loan invariant. -/
-theorem World.loansOK_allocWithChecked {w w' : World} {bytes : List UInt8}
+/-- Byte-initialised allocation preserves the delegation invariant. -/
+theorem World.borrowOK_allocWithChecked {w w' : World} {bytes : List UInt8}
     {rootId disposal : CapId} {po : 0 < w.ctx.D}
     (hw : w.allocWithChecked bytes rootId disposal po = .ok w')
-    (h : w.LoansOK) : w'.LoansOK := by
+    (h : w.BorrowOK) : w'.BorrowOK := by
   unfold World.allocWithChecked at hw
   split at hw
   · rename_i hf
@@ -266,13 +267,18 @@ theorem World.loansOK_allocWithChecked {w w' : World} {bytes : List UInt8}
     · rename_i hfresh
       simp only [Except.ok.injEq] at hw
       cases hw
-      unfold World.LoansOK World.LenderRetired at h ⊢
-      refine ⟨h.1, h.2.1, h.2.2.1, ?_, ?_⟩
-      · intro l hl
-        exact List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (h.2.2.2.1 l hl))
-      · intro l hl
-        obtain ⟨o, ho, c, hc, hstate⟩ := h.2.2.2.2 l hl
-        exact ⟨o, List.mem_cons_of_mem _ ho, c, hc, hstate⟩
+      have hwA : w.allocChecked bytes.length rootId disposal po = .ok
+          { w with
+            ctx := w.ctx.alloc ⟨w.ctx.nextAlloc⟩ bytes.length po rootId disposal hf,
+            heaps := fun x => if x = (⟨w.ctx.nextAlloc⟩ : AllocId) then
+              some (Backend.empty bytes.length) else w.heaps x } := by
+        unfold World.allocChecked
+        rw [dif_pos hf, dif_pos hfresh]
+      have hb := World.borrowOK_allocChecked hwA h
+      simpa [World.BorrowOK, World.LoansDistinctOK, World.LoansNonAliasOK,
+        World.LoansIssuedOK, World.LifetimesBoundedOK, World.LoansAllocOK,
+        World.LoansDetachedOK, World.LoansBaseOK, World.LoansTerminalOK,
+        World.LoansAgreeOK, World.LoansOrderOK, World.BorrowAcyclic] using hb
     · simp at hw
   · simp at hw
 
@@ -283,7 +289,7 @@ theorem World.allocWithChecked_fullInv {w w' : World} {bytes : List UInt8}
     (hinv : w.FullInv) : w'.FullInv :=
   ⟨⟨World.allocWithChecked_wf hw hinv.1.1,
     World.historyOK_allocWithChecked hw hinv.1.2⟩,
-    World.loansOK_allocWithChecked hw hinv.2⟩
+    World.borrowOK_allocWithChecked hw hinv.2⟩
 
 /-- A marshalled representation of a closed code. -/
 structure Marshal (c : Code) where
@@ -419,7 +425,7 @@ theorem writeC_fullInv {c : Code} (m : Marshal c) {w : World} {a : AllocId}
   refine ⟨⟨hwf, ?_⟩, ?_⟩
   · change Ctx.HistoryOK w.ctx
     exact hinv.1.2
-  · change w.LoansOK
+  · change w.BorrowOK
     exact hinv.2
 
 /-- Checked deallocation preserves the combined invariant. -/

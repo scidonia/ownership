@@ -40,7 +40,7 @@ theorem World.writeChecked_fullInv {w w' : World} {a : AllocId} {id : CapId}
     {i : Nat} {v : UInt8} (hw : w.writeChecked a id i v = .ok w')
     (h : w.FullInv) : w'.FullInv :=
   ⟨⟨World.writeChecked_wf hw h.1.1, World.historyOK_write hw h.1.2⟩,
-    World.loansOK_write hw h.2⟩
+    World.borrowOK_write hw h.2⟩
 
 /-- The compression write preserves the combined invariant. -/
 theorem compressC_fullInv {w w' : World} {a : AllocId} {id : CapId} {n x : Nat}
@@ -743,7 +743,7 @@ def UFRunner.findRootSnapshot {a : AllocId} {id : CapId} {n : Nat}
 
 /-- The concrete runner over the 64-byte zero forest. -/
 def ufRunner : UFRunner ⟨0⟩ ⟨1⟩ 64 zeroRank :=
-  UFRunner.mk uWorld ⟨uWorld_top, uWorld_loansOK⟩ uWorld_ufRep
+  UFRunner.mk uWorld ⟨uWorld_top, World.uWorld_borrowOK⟩ uWorld_ufRep
     (Backend.empty 64) rfl uWorld_ranked
 
 /-- A closed certified execution: the runner executes find-and-compress at node 3

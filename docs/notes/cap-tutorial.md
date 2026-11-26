@@ -33,7 +33,11 @@ sealed certificates          Cap/Runner.lean         Prog, ClosedProgram, compos
 unified checker/interpreter  Cap/Unified.lean        UCmd, checkWorld
 world (state)                Cap/World.lean          owners + backends + loans
 world invariant              Cap/WorldInvariant.lean the bundle every command preserves
-suspension                   Cap/Suspend.lean        loans = retired lender leaves
+delegation invariant         Cap/Borrow.lean         chain base, detachment, terminal-or-delegated
+delegation chain             Cap/Delegation.lean     rooted path, checked begin/end
+coupled chain state          Cap/Discipline.lean     world/chain correspondence
+sealed reconstruction        Cap/ReconstructionSealed.lean  borrow/split/reconstruct/return
+reconstruction forest        Cap/Reconstruction.lean subdivision rules, restoration obligations
 context                      Cap/Context.lean        many owners, allocation, disposal
 invariants                   Cap/Invariant.lean      leaves-within, well-formedness
 joins                        Cap/Join.lean           sibling-only fractional merge
@@ -144,8 +148,8 @@ Here the checker becomes the interpreter. `UCmd` is the command language:
 | `splitAt a id id1 id2 k` | spatial split of a leaf at byte `k` |
 | `splitFraction a id id1 id2 q1 q2` | fractional split, shares summing to the parent's |
 | `join a node newId` | merge a fractional node's children |
-| `beginLoan a lender loanId` | retire the lender's leaf; record the loan |
-| `endLoan a loanId` | remove the record; restore the leaf |
+| `beginBorrow a lender borrower loanId` | retag the active leaf to the borrower; record the loan |
+| `endBorrow a loanId` | retag the terminal borrower back to the lender; remove the record |
 | `free a d` | dispose, only through the recorded disposal capability |
 | `nop` | — |
 
@@ -153,12 +157,15 @@ Here the checker becomes the interpreter. `UCmd` is the command language:
 executed. One theorem covers all of it:
 
 ```
-checkWorld_wf : checkWorld w cs = .ok w' → w.WellFormed → w'.WellFormed
+checkWorld_wf : checkWorld w cs = .ok w' → w.CommandInv → w'.WellFormed
+
+def CommandInv (w : World) : Prop :=
+  w.WellFormed ∧ Ctx.HistoryOK w.ctx ∧ Ctx.LoansReady w.ctx
 ```
 
-Every accepted execution preserves the invariant — allocation, splits, joins,
-loans, disposal included. `checkWorld_rel` then derives the older `World.Rel`
-from it.
+Every accepted execution preserves the carrier — allocation, splits, joins,
+borrow/return, disposal included. `checkWorld_rel` then derives the older
+`World.Rel` from it.
 
 ### A walk through `uLifecycle`
 
@@ -181,18 +188,70 @@ owner's bytes are untouched zeros. Between the fractional split and the join a
 write through `⟨7⟩` would be *refused* — a half share cannot write — and the
 budget arithmetic is what makes that decision sound.
 
-## 10. Loans: suspension, not tracking (`Cap/Suspend.lean`, loans in `Cap/Unified.lean`)
+## 10. Borrowing: retagging the active leaf (`Cap/Retag.lean`, `Cap/Borrow.lean`)
 
-Loans reuse the leaf state the write guard already consults. `beginLoan`
-retires the lender's leaf; since `writableB` requires `.active`, a write through
-the lender is then refused *by the same guard* — no parallel machinery. The
-refusal is a theorem with a positive control: `uLoan_write_before` (accepted),
-`uLoan_suspended_write_refused` (the same write refused while the loan is
-outstanding), and after `endLoan` the write is accepted again (`uLoanRun_ok`).
+Borrow moves the whole authority to a distinct borrower. `beginBorrow` retags
+the lender's active leaf to the borrower's name and appends a loan record;
+`endBorrow` retags the terminal borrower back to the lender and removes the
+record. A write through the lender is therefore refused after the borrow and
+accepted again after the return, both by the same leaf-name guard.
 
-Stated limits, on purpose: the borrower is the lender's own id (exclusive
-suspension, not a reborrow capability), and the `Cap/Policy.lean` liveness
-conjunction is a predicate form the checker does not consult.
+The record carries the chain base, so a reborrow names the borrower as the next
+lender and the return order is the nesting order. `World.BorrowOK` states the
+integrated invariant --- distinct loan/lender/borrower/lifetime names, issued and
+live names, a recorded base, global lender detachment, an active terminal or a
+delegated successor, adjacent-edge resource agreement, and issued-order
+monotonicity from which acyclicity is derived --- and
+`World.checkWorld_fullInv` preserves it together with the top-level invariant.
+`World.delegationChains_ok` additionally assumes `World.LoansChainOrderOK`,
+because the world loan list's order is not determined by `BorrowOK`.
+
+Stated limits, on purpose: the world `UCmd` path still refuses a split or
+fractional join while any loan is outstanding on the allocation. That guard is
+allocation-wide, so it also refuses a split of an independent sibling range. A
+separate reconstruction model (below) implements borrowed subdivision and
+restoration, but `World.splitAtChecked` does not consult it; full world
+integration is not claimed.
+
+### Borrowed subdivision and reconstruction (`Cap/Reconstruction.lean`)
+
+The retag chain represents one unresolved path. Borrowed subdivision needs a
+forest of obligations instead. `Reconstruction.State` pairs the reference heap
+with a forest whose interior nodes record the checked spatial or fractional rule
+that produced them, the issued and retired names, and the outstanding `Restore`
+obligations. `State.Inv` is frontier coverage plus forest validity: the budget at
+every byte is still `D`, and every recorded rule is checked.
+
+`State.borrow` retags a current fragment and records the dormant lender.
+`State.splitSpatial` and `State.splitFraction` subdivide a current fragment ---
+including a borrowed one --- while checking that the children partition the
+parent and that no child name was ever issued or retired. `State.reconstruct`
+restores a suspended parent only when both children match its recorded rule and
+neither has been subdivided or lent further, retiring the two child names.
+`State.return` restores the lender only after the borrowed resource is
+reconstructed and no loan descends from the borrower. Each operation preserves
+`State.Inv` (`State.splitSpatial_inv`, `State.splitFraction_inv`,
+`State.reconstruct_inv`, `State.borrow_inv`, `State.return_inv`); the split
+frames leave outstanding obligations untouched, and
+`State.return_none_of_no_leaf` records the refusal of a return before
+reconstruction.
+
+This is the reconstruction model, not the world command route. `Cap.World` still
+refuses any split or fractional join while a loan is outstanding on the
+allocation (`World.splitAtChecked_refuses_with_loan`), so a split of an
+independent sibling range is refused on the `UCmd` path. Removing that
+allocation-wide test and consulting the forest is the named next integration;
+nothing here claims it.
+
+The sealed counterpart is `Cap/ReconstructionSealed.lean`: a private constructor
+and private invariant proof over `Reconstruction.State`, with `write`, `borrow`,
+`splitSpatial`, `splitFraction`, `reconstruct` and `return` as the only
+operations. Accepted calls return a sealed state carrying the rebuilt invariant;
+refused calls return an error and no state. Its observations are a heap snapshot,
+per-fragment authority, retired names and outstanding restoration obligations.
+`Sealed.lifecycle` runs the 64-byte example and `Sealed.reuseLifecycle` runs a
+second full cycle on the first's output. The two sealed boundaries are
+complementary rather than one routed through the other.
 
 ## 11. Certificates and the sealed boundary (`Cap/Runner.lean`)
 
@@ -220,6 +279,20 @@ functional partition relation (`ufTrace_partition`) — the link to
 `Cap/UFPartition.lean` and `Cap/UFCompress.lean`, where the reachability and
 one-step-compression facts live.
 
+`Cap/UFReuse.lean` closes the reuse requirement on the functional model. From
+`[0,0,1,2,2]` the first full-path compression from node 3 is exactly
+`[0,0,0,0,2]` (`reuseFirst_eq`); `reuseFirst_ranked` proves the output is still a
+ranked forest, and `reuseFirst_accepts_second` supplies the second operation's
+rank bound and reachability certificate, so the second input is the first
+output's certificate rather than a restated array. The second compression from
+node 4 is exactly `[0,0,0,0,0]` (`reuseSecond_eq`), and the partition
+preservation composes back to the starting partition (`reuseTwoFinds_same_iff`).
+The sealed `UFRunner` is not threaded through this example: it stores its world,
+representation and rank privately and exposes only one find's observation, so a
+second call would need a successor-runner operation and a new rank certificate.
+The reuse is therefore proved for the functional path compression that the
+certified writes refine, not yet for two calls through the sealed runner.
+
 ## 13. Backends: two implementations, one model (`Cap/Backend.lean`, `Cap/BackendArr.lean`)
 
 The pure `Backend` (a byte list with a length proof) is the specification.
@@ -242,12 +315,19 @@ same caveat.
 
 - No concurrency, no FFI, no real runtime.
 - No read discipline: reads are free observations.
-- Loans are exclusive suspension; no reborrows, no nested lifetimes in the
-  executable language.
-- The sealed boundary is not module-enforced.
+- Borrowing moves whole authority by retagging. On the world `UCmd` path a
+  split or fractional join is refused while any loan is outstanding on the
+  allocation; the allocation-wide guard does not consult the reconstruction
+  forest, so the reconstruction model's borrowed subdivision is not integrated
+  into the world path.
+- The sealed boundary is not module-enforced. The sealed reconstruction path is
+  a second sealed surface beside the world path, not the world path routed
+  through the forest.
 - No in-place-update or compiled-performance claim anywhere in `Cap/`.
-- Union-find correctness is the concrete four-node instance, not the general
-  theorem.
+- Union-find correctness is the concrete five-node reuse instance and the
+  four-node write-discipline instance, not the general theorem. The two-find
+  reuse is proved on the functional model, not through the sealed runner.
+- No claim that `World.splitAtChecked` consults the reconstruction forest.
 
 ## 15. The research-scale remainder
 
@@ -267,12 +347,20 @@ same caveat.
    only interesting once (3) moves.
 6. **Full lifecycle bookkeeping** — `BeginOK.lender_ne_borrower`, non-root
    lifetimes, disposal refused while any loan is outstanding at any owner.
+7. **World reconstruction integration** — removing the allocation-wide
+   split/join loan test from the `UCmd` path, consulting the reconstruction
+   forest instead, and carrying one integrated world-and-restoration invariant
+   through checked execution and the sealed world boundary. The reconstruction
+   model and its sealed boundary exist; the `World.splitAtChecked` route does
+   not yet use them.
 
 ## 16. Reproduce everything
 
 ```bash
 nix develop -c lake build Cap          # the whole subsystem
 nix develop -c bash scripts/check_all.sh   # builds + axiom audit + claim census + paper + report
+nix develop -c lake env lean scripts/check_cap_axioms.lean  # borrowing, reconstruction and reuse axioms
+bash scripts/check_cap_docs.sh --rev WORKTREE               # live-documentation claim census
 lake env lean bench/CapBATiming.lean   # the three-backend timing observation
 ```
 

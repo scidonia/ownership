@@ -19,7 +19,7 @@ parent function. Proved: the begun lifetime and loan are present, ending a loan
 removes it from the loan list, and ending is refused whenever a descendant loan is
 recorded.
 -/
-import Cap.Id
+import Cap.Ledger
 
 namespace Cap
 
@@ -34,20 +34,38 @@ structure Lifetime where
   state : LifeState
 deriving Repr
 
+/-- One outstanding loan. Besides the loan's identities it records the chain's
+base capability and the resource description carried by the authoritative leaf,
+so comparison with shell code needs no existential chain witness. -/
 structure Loan where
   id : LoanId
   alloc : AllocId
+  /-- The chain's base capability name: the allocation's root capability or a
+  split or join child name, never a borrower name. -/
+  base : CapId
   lender : CapId
   borrower : CapId
   lifetime : LifetimeId
+  lo : Nat
+  hi : Nat
+  q : Nat
+  ceiling : Ceiling
 deriving Repr
 
 structure LoanCtx where
   lifetimes : List Lifetime
   loans : List Loan
+  /-- Fresh lifetime identifier source. Each begun loan records this value and
+  advances the counter; `LifetimesBoundedOK` bounds every recorded lifetime by
+  it. -/
+  nextLifetime : Nat
 deriving Repr
 
 namespace LoanCtx
+
+/-- The lifetime of the initial borrow: shared by a hand-built world's loan
+records and never marked ended by the executable return bookkeeping. -/
+def rootLifetime : LifetimeId := ⟨0⟩
 
 def findLifetime? (Γ : LoanCtx) (id : LifetimeId) : Option Lifetime :=
   Γ.lifetimes.find? (fun l => l.id = id)
@@ -64,6 +82,16 @@ def live (Γ : LoanCtx) (id : LifetimeId) : Bool :=
   match Γ.findLifetime? id with
   | some l => l.state == .live
   | none => false
+
+/-- The pure bookkeeping of an accepted return: remove the loan record and mark
+its non-root lifetime ended. The root lifetime is never marked ended, so a
+hand-built world whose loan records the root lifetime keeps accepting a later
+begin. -/
+def endBorrowBookkeeping (Γ : LoanCtx) (l : Loan) : LoanCtx :=
+  { Γ with
+    lifetimes := Γ.lifetimes.map (fun x =>
+      if x.id = l.lifetime ∧ x.id ≠ rootLifetime then { x with state := .ended } else x),
+    loans := Γ.loans.filter (fun m => m.id ≠ l.id) }
 
 /-- Strict descent over the recorded parent function: `Descends Γ inner outer`
 holds when following parent pointers from `inner` reaches `outer` in one or more
@@ -86,7 +114,7 @@ structure BeginOK (Γ : LoanCtx) (loan : Loan) (life : Lifetime) : Prop where
 /-- Begin a loan: the conditions are supplied by `h`. -/
 def begin (Γ : LoanCtx) (loan : Loan) (life : Lifetime) (_h : BeginOK Γ loan life) :
     LoanCtx :=
-  { lifetimes := life :: Γ.lifetimes, loans := loan :: Γ.loans }
+  { lifetimes := life :: Γ.lifetimes, loans := loan :: Γ.loans, nextLifetime := Γ.nextLifetime }
 
 theorem begin_mem_lifetime {Γ : LoanCtx} {loan : Loan} {life : Lifetime}
     {h : BeginOK Γ loan life} : life ∈ (Γ.begin loan life h).lifetimes := by
@@ -149,11 +177,7 @@ def endLoan (Γ : LoanCtx) (id : LoanId) : Option LoanCtx :=
     | some life =>
       if life.state = .live then
         if Γ.hasDescendant loan.lifetime then none
-        else
-          some {
-            lifetimes := Γ.lifetimes.map (fun l =>
-              if l.id = loan.lifetime then { l with state := .ended } else l),
-            loans := Γ.loans.filter (fun l => l.id ≠ id) }
+        else some (Γ.endBorrowBookkeeping loan)
       else none
     | none => none
 
@@ -179,8 +203,13 @@ theorem endLoan_removes_loan {Γ Γ' : LoanCtx} {id : LoanId}
       · by_cases hd : Γ.hasDescendant loan.lifetime
         · simp [hl, hf, hstate, hd] at h
         · simp [hl, hf, hstate, hd] at h
+          have hloanid : loan.id = id := by
+            have := List.find?_some (p := fun x : Loan => x.id = id) hl
+            simpa using this
           cases h
-          simp [findLoan?, find?_filter_ne]
+          simp only [endBorrowBookkeeping, findLoan?]
+          rw [hloanid]
+          exact find?_filter_ne Γ.loans id
       · simp [hl, hf, hstate] at h
 
 /-- Ending is refused while a recorded loan descends from the lifetime being
@@ -203,6 +232,7 @@ end LoanCtx
 Every loan begun through `World.beginLoanChecked` is bound to this root
 lifetime. -/
 def LoanCtx.rootOnly : LoanCtx :=
-  { lifetimes := [{ id := ⟨0⟩, parent := none, state := .live }], loans := [] }
+  { lifetimes := [{ id := ⟨0⟩, parent := none, state := .live }], loans := [],
+    nextLifetime := 1 }
 
 end Cap

@@ -141,9 +141,12 @@
   (`endLoan_removes_loan`). `BeginOK` now binds the loan to the lifetime it inserts
   (`loan.lifetime = life.id`) and requires distinct lender and borrower
   capabilities; `endLoan` refuses while a recorded loan descends from the ended
-  loan's lifetime (`hasDescendant_sound`, `endLoan_none_of_descendant`). It has no
-  heap and no capability ledger, and the loans are not yet consulted by
-  `Cap.Ledger`'s guards; a live inner reborrow is still not integrated.
+  loan's lifetime (`hasDescendant_sound`, `endLoan_none_of_descendant`). `Loan`
+  records the chain base (`Loan.base`), and `endBorrowBookkeeping` performs the
+  return-side bookkeeping: it ends the returned loan's lifetime and removes its
+  record. It has no heap and no capability ledger; the outstanding loans are the
+  subject of `World.BorrowOK`, and the command level reads the three facts it
+  needs through `Ctx.LoansReady`.
 - `Cap/WorldInvariant.lean` bundles the world invariant: `Ctx.WellFormed`,
   `Ctx.Functional` (each allocation resolves to at most one owner) and
   `World.StorageMatches` (the found owner has a backend of its length).
@@ -187,8 +190,10 @@
   fresh root and disposal identifier keep the identifiers distinct. Internal split
   nodes record provenance identifiers that are not access capabilities and are
   excluded from `Tree.ids`. Owner-level dispatch (`splitAtOwner?`,
-  `splitFractionOwner?`) is not freshness-checked itself; the deep checker is. The loan
-  threading of the session and the freshness-preserving disposal proof are next.
+  `splitFractionOwner?`) is not freshness-checked itself; the deep checker is.
+  The loan state is part of the context (`Ctx.loans`), and the three loan facts
+  the command dispatcher needs are carried by `Ctx.LoansReady`, preserved by
+  every checked command.
 - `Cap/Join.lean` is the sibling-only fractional join: `Tree.findFrac?` and
   `Tree.replaceNode` locate and replace a fractional node, `budget_replaceNode`
   preserves the budget when the replacement matches, `joinChildren?` merges two
@@ -216,12 +221,13 @@
   identifier as a child is refused, with `reuseSplit_prefix_ok` and
   `reuseSplitControl_ok` as controls) and proves the history grows
   (`splitAtChecked_issued_sub`, `joinChecked_issued_sub`). Allocation's own
-  identifier check and a general history-preservation invariant across all
-  transitions remain open.
+  identifier check also tests the history (`World.historyOK_allocChecked`), and
+  the general history-preservation invariant is `World.CommandInv`'s second
+  conjunct, preserved by every checked command (`checkWorld_top`).
 - `Cap/IProg.lean` is the indexed program interface: `IProg Γ α Q` starts with
   permission context `Γ`, returns `a : α` and ends with `Q a`; context-changing
-  constructors (`alloc`, `splitAt`, `splitFraction`, `join`, `beginLoan`,
-  `endLoan`, `free`) carry their evidence, so stale or refused operations are
+  constructors (`alloc`, `splitAt`, `splitFraction`, `join`, `beginBorrow`,
+  `endBorrow`, `free`) carry their evidence, so stale or refused operations are
   not programs
   (`stale_child_refused` shows a reused parent id makes the freshness evidence
   uninhabited). `evalIProg` is a total
@@ -232,11 +238,12 @@
   never refused, each command's check discharged by its typing evidence
   (`World.write_succeeds`, `World.allocChecked_succeeds`,
   `splitAtChecked_succeeds`, `splitFractionChecked_succeeds`,
-  `joinChecked_succeeds`, `beginLoanChecked_succeeds`,
-  `endLoanChecked_succeeds`, `World.freeChecked_succeeds`).
+  `joinChecked_succeeds`, `beginBorrowChecked_succeeds`,
+  `endBorrowChecked_succeeds`, `World.freeChecked_succeeds`).
   `evalIProg_post` is the layer's soundness theorem:
   execution from a world matching the context ends in a world matching the
-  postcondition and preserves the world invariant. `iLifecycle` is the indexed
+  postcondition, `w'.ctx = Q a ∧ w'.CommandInv`: the run keeps well-formedness,
+  the issuance history and loan readiness. `iLifecycle` is the indexed
   lifecycle (alloc, write, split, write, free) with all evidence derived, and
   its run is accepted, well formed, on the typed post-context, and leaves the
   pre-existing backend untouched. `iClosed` is the closed-run lifecycle from
@@ -244,9 +251,10 @@
   formed (`iClosed_sound`), and the disposed allocation's backend is gone
   (`iClosed_freed`). The post-contexts use `getD` so the type function is
   computable; `iFracLifecycle` adds a fractional split and join to the lifecycle
-  and is accepted (`iFracLifecycle_ok`). `iLoanLifecycle` adds a loan beginning
-  and ending, with the context-level suspension/resumption evidence, and is
-  accepted (`iLoanLifecycle_ok`).
+  and is accepted (`iFracLifecycle_ok`). `iLoanLifecycle` adds a borrow and a
+  return, with the context-level loan-readiness evidence, and is accepted
+  (`iLoanLifecycle_ok`); `iDelegationLifecycle` runs a two-level delegation and
+  is accepted (`iDelegationLifecycle_ok`).
 - `Cap/Typed.lean` is the context-preserving program fragment, repaired:
   `Owned Γ α` gives reads, writes and monadic sequencing over a fixed permission
   context, and its read and write constructors take `Ctx.CanRead`/`Ctx.CanWrite`
@@ -355,7 +363,26 @@
   theorem to the executed writes; `compressAll_example`/`compressSingle_example`
   distinguish [0,0,1,2] full-path from single-node compression. These
   certificates are computable, but the sealed runner is not yet threaded through
-  the full path. The world-level borrower and C stages remain.
+  the full path, and the C stage remains.
+- `Cap/UFReuse.lean` is the reusable two-find client on the functional model.
+  From the five-node forest `[0,0,1,2,2]` the chase from node 3 reads the path
+  `[3,2,1]`, and `reuseFirst_eq` proves the full-path compression is exactly
+  `[0,0,0,0,2]`. That output is the second operation's input certificate, not a
+  restated array: `reuseFirst_ranked` proves it is still a ranked forest under
+  the identity rank, and `reuseFirst_accepts_second` supplies the rank bound,
+  the root the second chase stops at, and the in-range reachability of every
+  node on its path. The second chase from node 4 reads `[4,2]`, and
+  `reuseSecond_eq` proves its compression is exactly `[0,0,0,0,0]`. Both
+  operations preserve the partition via `compressAll_same_iff`
+  (`reuseFirst_same_iff`, `reuseSecond_same_iff`), and `reuseTwoFinds_same_iff`
+  composes them back to the starting partition. `decide` appears only on finite
+  list arithmetic: the exact arrays, paths and roots, and the per-index ranked
+  cases, with no `native_decide`; the proofs depend on no axiom beyond
+  `propext`, `Classical.choice` and `Quot.sound`. The sealed `UFRunner` is not
+  threaded through this example: its world, representation and rank are private
+  and it returns only one find's observation, so a second call would need a
+  successor-runner operation and a new rank certificate for the post-state.
+  `bench/CapUnionFindReuse.lean` repeats the exact arrays as executable guards.
 - `Cap/Marshal.lean` is the verified marshalling layer for the closed code
   universe. `Codec c` carries `encode : El c → List UInt8`, `decode`, and
   `decode_encode`; `codec` supplies one for every code (tagged products/sums,
@@ -429,35 +456,20 @@
   (`issued` duplicate-free and every live identifier in it), with
   `Ctx.historyOK_alloc` (fresh root and disposal identifiers, distinct),
   `Ctx.historyOK_free` (history unchanged, live set shrinks) and
-  `Ctx.historyOK_update_of_ids` (suspension/restoration, whose identifier set is
-  unchanged), plus the membership bounds `Owner.splitAt?_ids_sub`,
-  `splitFraction?_ids_sub` and `joinFraction?_ids_sub'`. Allocation's checker now
-  also tests the history, and the indexed allocation constructor carries the
-  corresponding premises. `Cap/TopInvariant.lean` completes it: the top-level
-  invariant `World.TopInv` (well-formedness together with `HistoryOK`) is
-  preserved by every checked command --- write, both splits, join, free,
-  allocation, suspension/restoration and both loan commands --- and by whole
-  executions (`checkWorld_top`), with concrete instances (`emptyWorld_top`,
-  `uWorld_top`). The loan invariant is `Cap/LoansInv.lean`'s `World.LoansOK`
-  (preserved by every command) and disposal legality is `Cap/Disposal.lean`.
-- `Cap/LoansInv.lean` states the loan-state invariant `World.LoansOK`: loan
-  identifiers distinct, lenders distinct, every loan's lifetime live, every
-  lender an issued identifier (so it can never equal a freshly minted child or
-  join name), and every loan's lender still occurring as a `retired` leaf of a
-  live owner (`World.LenderRetired`). The retag borrow is not yet part of this
-  invariant; independently, `World.freeChecked` rejects any loan bound to the
-  allocation (`freeChecked_refused_of_alloc`). It holds for the empty and
-  concrete 64-byte worlds and is preserved by every context-changing command: writes,
-  allocation, disposal, both splits, the join, and loan begin/end. The tree
-  ingredients are `Tree.find?_replace_ne`, `Tree.find?_eq_none_of_not_mem_ids`,
-  `Tree.find?_replaceNode_outside`, the leaf-occurrence list `Tree.leaves` with
-  `List.nodup_map_inj` (two leaves of a duplicate-free tree with equal
-  identifiers are equal), `Tree.joinChildren?_active` (a successful join has
-  both children active) and `Ctx.ids_disjoint_of_ne` (distinct owners of a
-  context with distinct identifiers share no capability id). Beginning a loan
-  retires the lender's leaf while the guard requires it active, so no earlier
-  loan shares the lender; ending filters the removed loan and resumes its leaf,
-  and the remaining lenders differ from the resumed one by lender distinctness.
+  `Ctx.historyOK_update_of_ids` (an owner replacement, including a retag, whose
+  identifier set is unchanged), plus the membership bounds
+  `Owner.splitAt?_ids_sub`, `splitFraction?_ids_sub` and
+  `joinFraction?_ids_sub'`. Allocation's checker tests the history, and the
+  indexed allocation constructor carries the corresponding premises. Each
+  command's history preservation now lives beside its transition
+  (`World.historyOK_write`, `historyOK_splitAtChecked`,
+  `historyOK_splitFractionChecked`, `historyOK_joinChecked`,
+  `historyOK_freeChecked`, `historyOK_allocChecked`, `historyOK_beginBorrow` and
+  `historyOK_endBorrow`), and `Cap/TopInvariant.lean` proves the command carrier:
+  `World.TopInv` (well-formedness together with `HistoryOK`) is what
+  `World.CommandInv` extends with `Ctx.LoansReady`, and whole executions preserve
+  `CommandInv` (`checkWorld_top`), with concrete instances (`emptyWorld_top`,
+  `uWorld_top`). Disposal legality is `Cap/Disposal.lean`.
 - `Cap/Access.lean` gives the access evidence the certified instructions carry:
   `Ctx.CanWrite` (the owner is found and the write guard accepts) and
   `Ctx.CanRead` (the owner is found and the capability is readable at the
@@ -478,12 +490,6 @@
   well-formed owner, two writable capabilities have the same identifier. So the
   discipline's central "nothing bad" property — at most one writer per byte — is
   a theorem, not an assumption.
-- `Cap/Suspend.lean` is leaf suspension and restoration: `Owner.suspendLeaf?`
-  retires an active leaf and `Owner.resumeLeaf?` reactivates a retired one, with
-  the find/replace/ids/budget characterisations, the budget preservation (only
-  `.consumed` zeroes), the round trip (`resumeLeaf?_of_suspendLeaf?`), and the
-  guard facts: a suspended leaf is not writable (`suspendLeaf?_not_writable`) and
-  restoration returns the original writability (`resumeLeaf?_writable`).
 - `Cap/Runner.lean` is the sealed certificate form the runner handoff accepts:
   `Prog pre` packages a command list with `checkWorld pre cmds = .ok post`, so it
   cannot exist without the checker's derivation; `Prog.snapshot` observes only an
@@ -496,9 +502,10 @@
   `snapshot` the only observation; `closed64` is the concrete allocate/fill
   example with `closed64_snapshot` proving the 32 ones then 32 twos. `p64` is the
   concrete 64-byte
-  certificate and `p64_snapshot` is its result. `World` is still public pure model data; the
-  sealed runtime boundary, the complete invariant and the full command set remain
-  the runner handoff's P0 work.
+  certificate and `p64_snapshot` is its result. `World` is still public pure
+  model data; the sealed construction path, the combined invariant and the full
+  command set are in place, while the C runtime boundary, physical storage
+  independence and concurrency remain outside the model.
 - `Cap/Indexed.lean` is the world-indexed computation type: `Ix pre α post` runs
   from `pre` and ends in `post a`; `ret` and `bind` thread the worlds, with the
   continuation's precondition forced to be the first computation's post-world;
@@ -507,25 +514,28 @@
   elaboration` and `prog_sound` shows `checkWorld` reaches the same post-world.
   Indices are ordinary `World` values; there is no hidden-index elaborator, so
   symbolic programs are not inferred.
-- `Cap/Unified.lean` is the first slice of the review's R1: a value-carrying
+- `Cap/Unified.lean` is the command language: a value-carrying
   `UCmd` (`write`, `splitAt`, `splitFraction`, `join`, `free`, `alloc`,
-  `beginLoan`, `endLoan`, `nop`), `World.writeChecked`
+  `beginBorrow`, `endBorrow`, `nop`), `World.writeChecked`
   which checks the ledger's `writableB` and performs the backend write,
   `World.splitAtChecked` for spatial splits, `World.freeChecked` for disposal
   through the recorded capability, `World.allocChecked` for allocation with
   fresh identifiers, and `checkWorld` as checker and interpreter at once.
   `writeChecked_sound` names the owner, guard, backend and replacement;
-  `writeChecked_wf`, `World.splitAtChecked_wf`, `World.freeChecked_wf`,
-  `World.allocChecked_wf` and `checkWorld_wf` preserve the world invariant
-  (`World.WellFormed`) through every command, and `checkWorld_rel` derives
-  `World.Rel` from it; the concrete 64-byte world is well formed (`uWorld_wf`),
+  `writeChecked_wf`, `World.splitAtChecked_wf`, `World.freeChecked_wf` and
+  `World.allocChecked_wf` preserve the world invariant, `checkWorld_wf` takes the
+  command carrier `World.CommandInv` (`WellFormed` together with `HistoryOK` and
+  `Ctx.LoansReady`) and concludes `World.WellFormed` for every command, and
+  `checkWorld_rel` derives `World.Rel` from it; the concrete 64-byte world is
+  well formed (`uWorld_wf`),
   the run through this route snapshots 32 ones then 32 twos (`uRun_snapshot`),
   and its world remains related (`uProgram_rel`). `uLifecycle` runs
-  alloc/write/split/write/free through this route: it is accepted
+  alloc/write/spatial split/write/fractional split/join/write/free through this
+  route: it is accepted
   (`uLifecycle_ok`), its final world is well formed (`uLifecycle_wf`), and the
   untouched pre-existing backend reads back its initial zeros
-  (`uLifecycle_snapshot`). Joins, loans and a snapshot command are not yet in
-  this language; they remain in the owner layer.
+  (`uLifecycle_snapshot`). Snapshot observation and the sealed boundary's
+  full-path state threading are not yet commands of this language.
 - `Cap/Certify.lean` records the kernel-checked certificate for a closed program:
 `certifiedProgram_checked : Checked certifiedOwner 12 certifiedProgram` by
 `unfold Checked; decide` (no axioms), and `certifiedProgram_covered` carrying
@@ -557,64 +567,79 @@ shows the certificate it would have to emit, not proof-producing elaboration.
   in `bench/CapFreshness.lean`). It is a deep syntax and checker for the owner layer
   only, not surface elaboration, not a heap semantics, and acceptance is checker
   acceptance rather than execution safety.
-- `Cap/Discipline.lean` couples a `World` with a delegation chain: `State.OK`
-  requires the world loan list to equal the chain's edges, the holder to be the
-  active leaf, and the allocation/footprint/share/ceiling to agree. The initial
-  64-byte state satisfies it, and a checked write through the holder preserves
-  it (`State.write_OK`). Borrow/return correspondence is not yet implemented.
-- `Cap/Delegation.lean` is the first standalone delegation-chain subsystem:
-  `Edge` records lender, borrower, allocation and resource description;
-  `Chain.OK` requires distinct identities, resource agreement, non-alias edges,
-  previous-holder linkage, and an explicit holder equal to the base on an empty
-  chain or to the last edge's borrower; `begin` appends and sets the new holder, `end`
-  pops the innermost edge and restores the removed edge's lender. It is not yet
-  connected to `World`/`FullInv` or the command language.
-- `Cap/Retag.lean` and `Cap/Borrow.lean` are the first executable slice of live
-  borrowing on the retag accounting model: `Tree.retag` renames a leaf without
-  changing its budget (`Tree.retag_budget`), `Owner.retagLeaf?` requires an active
-  lender and a fresh name (`retagLeaf?_budget`, `_covered`, `_len`), and
-  `World.BorrowOK` records distinct, allocation-bound loans, issued identities,
-  live lifetimes, an active terminal borrower or a delegated child, and an
-  acyclic lender-to-borrower edge relation; it is preserved by writes
-  (`borrowOK_write`), fresh allocation (`borrowOK_allocChecked`), checked
-  disposal (`borrowOK_freeChecked`), spatial split
+- `Cap/Discipline.lean` couples a `World` with a delegation chain.
+  `World.delegationChains` groups the outstanding loans by `(allocation, base)`
+  and builds a chain per group; `World.delegationChains_ok` proves that every
+  chain is valid, that the chains cover every world loan, that each chain's
+  `toLoans` is exactly that group's subsequence of the world loan list, and that
+  the flattened projection is a permutation of it. The theorem assumes
+  `World.LoansChainOrderOK` in addition to `BorrowOK`, because `BorrowOK` does
+  not order the loan list. `State.OK` is the single-chain pairing: the world
+  satisfies `FullInv`, the chain is valid, the loan list is exactly the chain's
+  edges, and the holder is the active leaf with the chain's resource
+  description; the initial 64-byte state satisfies it (`initialState_OK`) and a
+  checked write through the holder preserves it (`State.write_OK`).
+  `State.beginBorrow` drives `World.beginBorrowChecked` and appends the loan to
+  the chain through the checked `begin?`; `State.endBorrow` drives
+  `World.endBorrowChecked` and pops through `end?`. `State.beginBorrow_OK` and
+  `State.endBorrow_OK` preserve the correspondence. `bench/CapRealization.lean`
+  carries the G2 control — the borrower's write is still observed through the
+  restored lender after the return, with the lender's write refused while
+  borrowed — and the G3 control, where the outer return is refused while the
+  inner loan is live and the inner-first order succeeds.
+- `Cap/Delegation.lean` is the delegation-chain vocabulary:
+  `Edge` records lender, borrower, allocation and resource description; the
+  chain stores one resource descriptor that every edge must agree with, so
+  delegation never changes the allocation, footprint, share or ceiling.
+  `Chain.path` is `base :: edges.map (·.borrower)`; `Chain.OK` requires that
+  path to be nodup, distinct loan identifiers, non-alias edges, the first edge
+  to be lent by the base, every later edge by the previous borrower, and the
+  stored holder to equal the derived holder
+  (`Chain.derivedHolder`: the innermost borrower, or the base when empty).
+  Distinct lender and borrower lists are not enough — the two-edge cycle
+  `a → b, b → a` has both and is rejected by the path condition — and a chain
+  cannot name an unrelated holder. Raw `begin`/`end` are unchecked structural
+  transformations; `begin?`/`end?` are the checked operations, and `beginCheck`
+  decides resource agreement, current-holder lending, fresh identities against
+  the path and a live lifetime, with `beginCheck_sound` turning the executable
+  check into the admissibility the preservation theorems consume.
+  `Chain.ofPath` assembles a chain from loans by following borrower-to-lender
+  links back to the base, and `Chain.toLoans` fills the loan record from the
+  chain's resource description. It is the chain vocabulary of the world
+  correspondence in `Cap/Discipline.lean`;
+  `bench/CapChainRepair.lean` holds the cycle, holder, wrong-lender, reused
+  borrower, duplicate-loan and changed-resource controls, each paired with the
+  affirmative case on the same fixture.
+- `Cap/Retag.lean` and `Cap/Borrow.lean` are the retag accounting model:
+  `Tree.retag` renames a leaf without changing its budget (`Tree.retag_budget`),
+  `Owner.retagLeaf?` requires an active lender and a fresh name
+  (`retagLeaf?_budget`, `_covered`, `_len`), and `World.BorrowOK` is the
+  integrated delegation invariant: distinct loan, lender, borrower and lifetime
+  names (`LoansDistinctOK`), no self-alias (`LoansNonAliasOK`), issuance of every
+  name a loan mentions (`LoansIssuedOK`), live and bounded lifetimes
+  (`LifetimesBoundedOK`), an owner at each allocation (`LoansAllocOK`), global
+  detachment of every lender from the live identifier lists (`LoansDetachedOK`),
+  a recorded chain base and base-or-chain lender (`LoansBaseOK`), an active
+  terminal borrower or a delegated successor with the leaf's resource
+  description (`LoansTerminalOK`), agreement of adjacent edges on base,
+  allocation, footprint, share and ceiling (`LoansAgreeOK`), issued-order
+  monotonicity (`LoansOrderOK`), and the derived `BorrowAcyclic`. It is preserved
+  by writes (`borrowOK_write`), fresh allocation (`borrowOK_allocChecked`),
+  checked disposal (`borrowOK_freeChecked`), spatial split
   (`borrowOK_splitAtChecked`), fractional split
-  (`borrowOK_splitFractionChecked`) and join (`borrowOK_joinChecked`). `bench/CapBorrow.lean` rejects the
-  cyclic `3 → 4 → 3` record; the positive nested-state inhabitance theorem is
-  still outstanding. `World.beginBorrowChecked`/`endBorrowChecked` retag the active leaf to a
+  (`borrowOK_splitFractionChecked`), join (`borrowOK_joinChecked`), borrow
+  (`borrowOK_beginBorrow`) and return (`borrowOK_endBorrow`), and
+  `borrowOK_loansReady` derives the command-level `Ctx.LoansReady`.
+  `World.beginBorrowChecked`/`endBorrowChecked` retag the active leaf to a
   distinct borrower and back; return refuses while another loan borrowed from
-  the same borrower is live. Splits and fractional joins refuse while any loan is
-  outstanding for the allocation, and the typed split/join constructors carry
-  that evidence.
-  `bench/CapBorrow.lean` exercises borrower write, lender refusal, loan removal,
-  restoration, free-during-borrow refusal, split-during-borrow refusal and
-  nested return order. The transitions are not yet in `UCmd`, `LoansOK`/`FullInv`,
-  or the typed interface.
-- `Cap/Reborrow.lean` is the delegation-chain bookkeeping: a `Link` records one
-  outstanding loan (loan identifier, allocation, lender, distinct borrower,
-  lifetime), `Chain base ls` requires each link's lender to be the chain's current
-  holder, and `holder` names the innermost borrower (or the base). `delegate`
-  appends a link and `retract` ends the innermost one; the holder moves to the
-  new borrower and back, and `weight D base chain c` gives the holder the whole
-  share `D` and every other name zero (`delegate_moves_share`,
-  `retract_restores`). Freshness counts each introduced identity once: a chain is
-  fresh when it is connected and `base :: borrowers chain` is duplicate-free
-  (`Chain.Fresh`), and the earlier predicate that counted each link's lender *and*
-  borrower is recorded as `LegacyFresh` with `legacy_fresh_uninhabited` — it was
-  inconsistent with every nonempty chain because it repeated the base. The full
-  chain invariant `Chain.WF` adds one allocation, distinct loan identifiers,
-  world-level borrower freshness and nested lifetimes; the concrete one-loan and
-  two-level instances satisfy it, and the controls reject a base borrower, an
-  already-issued borrower, a reused loan id, a wrong allocation and an invalid
-  lifetime parent. `Chain.Fresh_delegate` preserves freshness under extension,
-  `Chain.Fresh_retract_delegate` under retraction, and
-  `Chain.Fresh.lenders_nodup` gives the loan invariant's lender distinctness.
-  `endLink` closes only the innermost scope (`endLink_inner`) and refuses an outer
-  loan while an inner one is outstanding (`endLink_outer_none`). Links map to
-  loan-context records (`Chain.toLoans`), and ending the innermost link is the
-  identifier filter `endLoanChecked` performs (`toLoans_filter_retract`). It is a
-  name model: no ledger leaves, footprints or heaps are threaded, and what the
-  borrower does inside its scope is not claimed.
+  the same borrower or a descendant loan is live. Splits and fractional joins
+  refuse while any loan is outstanding for the allocation, and the typed
+  split/join constructors carry that evidence. `bench/CapBorrow.lean` exercises
+  borrower write, lender refusal, loan removal, restoration, free-during-borrow
+  refusal, split-during-borrow refusal and nested return order;
+  `bench/CapDelegation.lean` adds the distinct-borrower controls on the checked
+  world route (borrow, reborrow, return order, disposal, and the same borrow
+  through a fractional split), each refusal paired with its affirmative case.
 - `Cap/Sealed.lean` is the sealed execution boundary: `Sealed` has a private
   constructor, a private representation field and a private invariant proof, so
   outside the module a sealed world can be held and observed but not manufactured,
@@ -638,6 +663,45 @@ shows the certificate it would have to emit, not proof-producing elaboration.
   claim is marked proved. Lean has no module opacity, so this seals the
   *construction* path, not physical storage: the pure model's backends are
   shared by copied programs, which is the C runner's contract, not a theorem.
+- `Cap/Reconstruction.lean` is the borrowed-subdivision model. A `Forest` records
+  the checked spatial or fractional rule at every interior node, and its
+  `budget` is the frontier sum (`budget_eq_toTree`); `Valid` requires every
+  recorded rule to be checked. `RuleValid` gives the two rules: a spatial rule
+  needs equal allocation and ceiling, active disjoint children whose intervals
+  partition the parent, and the inherited share; a fractional rule needs equal
+  footprint and ceiling, positive child shares summing to the parent's.
+  `Forest.splitSpatialAt`/`splitFractionAt` preserve the budget and validity,
+  and `reconstructAt` restores a suspended parent from two children matched to
+  its recorded rule. `State` pairs the forest with the reference heap, the
+  issued and retired names and the outstanding `Restore` obligations; `State.Inv`
+  is frontier coverage plus forest validity. `State.write`, `borrow`,
+  `splitSpatial`, `splitFraction`, `reconstruct` and `return` are checked, each
+  preserving `State.Inv` (`State.*_inv`), with the obligation frames
+  `splitSpatial_frames_restores`/`splitFraction_frames_restores` and the
+  refusals `return_none_of_no_leaf` (return before reconstruction),
+  `splitSpatial_none_of_issued` and `splitFraction_none_of_retired`. This is a
+  separate model, not the world command path: `World.splitAtChecked` still tests
+  the allocation-wide loan exclusion, recorded by
+  `World.splitAtChecked_refuses_with_loan`, so the world `UCmd` split/join guard
+  does not consult this forest.
+  `bench/CapReconstruction.lean` drives the 64-byte borrow/split/write/
+  reconstruct/return lifecycle with each refusal paired to its affirmative case.
+- `Cap/ReconstructionSealed.lean` is the second sealed boundary, over
+  `Reconstruction.State`: a private constructor and private invariant proof, so
+  a client can hold a state but obtain one only from an operation the checker
+  accepted. The operations are `write`, `borrow`, `splitSpatial`,
+  `splitFraction`, `reconstruct` and `return`; each accepted call returns a
+  sealed state with `State.Inv` rebuilt from its preservation theorem, and a
+  refused call returns an error and no state. The observations are a heap
+  snapshot, per-fragment authority descriptions, the retired access names and
+  the outstanding restoration obligations (`Sealed.snapshot`, `Sealed.authority?`,
+  `Sealed.retired`, `Sealed.restores`). `Sealed.lifecycle` drives the 64-byte
+  cycle (`lifecycle_ok`, `lifecycle_snapshot`), and `Sealed.reuseLifecycle` runs
+  a second full cycle on the first cycle's output (`reuse_ok`). The two
+  boundaries are complementary rather than one routed through the other: the
+  `Cap.Sealed` `UCmd` path keeps its allocation-wide split/join guard, and
+  routing `World.splitAtChecked` through this forest is not claimed.
+  `bench/CapReconstructionSealed.lean` exercises both cycles and the refusals.
 - `Cap/Trace.lean` states trace properties of the checker language:
   `checkWorld_cons_ok` splits an accepted command list at its first command, and
   `checkWorld_write_guard` proves that a write at any position of an accepted
@@ -646,26 +710,11 @@ shows the certificate it would have to emit, not proof-producing elaboration.
   design; this is the property its run-time check has, while `IProg`, `Owned`
   and `Cert` are the evidence-bearing client surfaces.
 - `Cap/FullInv.lean` is the combined invariant this stage carries:
-  `World.FullInv w := w.TopInv ∧ w.LoansOK` (world well-formedness, issuance
-  history and the loan state). `World.checkWorld_fullInv` proves it preserved by
-  whole executions, command by command, and `World.emptyWorld_fullInv` is the
-  canonical initial state. The delegation invariant is not yet part of the bundle
-  because reborrowing is not yet an executable operation.
-- `Cap/Nested.lean` is the two-level borrow model: `Lender` with active/suspended
-  states, `beginBorrow` suspending the lender and issuing a borrower, `endBorrow`
-  restoring the suspended lender without returning the borrower, and
-  `Lender.canWrite` combining activity with `Policy.Writable`. Proved:
-  `begin_suspends`, `end_restores`, `suspended_not_writable` and `nested_begin`
-  (a nested borrow restores to the parent state). Footprints and ledger capability
-  states are not threaded, and the full frame rule with suspended obligations is not
-  proved.
-- `Cap/Policy.lean` combines the owner write guard with loan liveness:
-  `Policy.Writable` is the owner guard and `LoanCtx.live` of the named lifetime;
-  `writable_owner`/`writable_live` project, `not_writable_of_dead` refuses a dead
-  lifetime, `live_of_find` and `live_false_of_endLoan` connect liveness to lookups
-  and to ending a loan, and `not_writable_after_endLoan` is the policy corollary.
-  It is a predicate combination, not an executable checker, and the session does
-  not thread a loan context yet.
+  `World.FullInv w := w.TopInv ∧ w.BorrowOK` (world well-formedness, issuance
+  history and the integrated delegation invariant). `World.checkWorld_fullInv`
+  proves it preserved by whole executions, command by command;
+  `World.fullInv_commandInv` derives the command carrier, and
+  `World.emptyWorld_fullInv` is the canonical initial state.
 - `Cap/Exec.lean` is the instruction interpreter over the backend: `fill` and
   `snapshot` instructions, `exec` returning the final backend and observation, the
   64-byte example (`exec_example`), a single-fill refinement to `Heap.fill?`
@@ -704,22 +753,20 @@ shows the certificate it would have to emit, not proof-producing elaboration.
   diagnostics: the admission, prototype and freshness positives must elaborate, and
   the alias/axiom/wrong-domain/surface/reflective negatives must fail with the
   named message. `scripts/check_all.sh` includes it.
+- `scripts/check_cap_axioms.lean` is the axiom audit for the borrowing,
+  reconstruction and reuse results: it prints the axioms of the combined-invariant
+  preservation theorems, the chain and discipline preservation lemmas, the
+  reconstruction and sealed-reconstruction invariants, and the two-find reuse
+  example, so an unproved assumption appears as `sorryAx` or as an axiom outside
+  Lean's standard three. `scripts/check_cap_docs.sh` is the documentation census:
+  each row names a tracked path, a literal needle and a side of the change
+  (`drop` claims absent after the discipline update, `add` claims present), and
+  `--control <rev>` asserts the base column while `--rev WORKTREE` asserts the
+  working tree. It flattens each file before the literal search, so line wrapping
+  and TeX indentation do not affect a match.
 - `bench/CapNegative.lean` holds the checked negative controls: a read-only, a
   consumed and a half-share leaf cannot authorise a write, and one identifier is
   not a join pair.
-- `Cap/Session.lean` is the single-owner end-to-end state: an owner, the reference
-  heap and the denominator. `Session.Realizes` is the owner's coverage;
-  `create_realizes`, `splitAt_realizes` and `fill_realizes` preserve it. `fill?`
-  takes the ledger's `Writable` guard for every byte it writes. The 64-byte
-  acceptance run is concrete: a spatial split tree over `[0,32)` and `[32,64)`,
-  fills of 1 and 2 through the guards, and `exampleRun_snapshot` proves the
-  snapshot is 32 ones followed by 32 twos. The run builds the split tree by hand;
-  the dynamic split transitions are covered by the `Cap.Ledger` theorems. The
-  session now carries a `LoanCtx`; `fillGuarded?` requires `Policy.Writable` for
-  every byte (owner guard plus a live lifetime) and preserves `Realizes`.
-  `Session.free?` removes the allocation only when no loan is outstanding
-  (`free_refused_of_loan`), and succeeds when the buffer is present
-  (`free_succeeds_of_no_loan`); `Heap.free?` removes the buffer.
 - `Cap/Bytes.lean` is the reference byte heap: buffers as `List UInt8` keyed by
   `AllocId`, with `read?`, `write?`, `fill?`, `snapshot?` and `alloc`. Proved:
   `write_get`, `write_preserves_length`, `write_ne`, the 64-byte example

@@ -58,7 +58,7 @@ this file only imports them.
 -/
 import Cap.World
 import Cap.Invariant
-import Cap.Suspend
+import Cap.History
 
 namespace Cap
 
@@ -553,294 +553,6 @@ theorem World.joinChecked_wf {w w' : World} {a : AllocId} {node newId : CapId}
       · simp at h
     · simp at h
 
-  /-! ### Suspension and resumption -/
-
-/-- Suspension keeps the owner's coverage: the budget is unchanged at every
-byte. -/
-theorem Owner.suspendLeaf?_covered {o o' : Owner} {D : Nat} {id : CapId}
-    (h : o.suspendLeaf? id = some o') (hcov : o.Covered D) : o'.Covered D := by
-  obtain ⟨_, _, _, rfl⟩ := Owner.suspendLeaf?_eq h
-  intro x hx
-  rw [Owner.suspendLeaf?_budget h x]
-  exact hcov x hx
-
-/-- Resumption keeps the owner's coverage. -/
-theorem Owner.resumeLeaf?_covered {o o' : Owner} {D : Nat} {id : CapId}
-    (h : o.resumeLeaf? id = some o') (hcov : o.Covered D) : o'.Covered D := by
-  obtain ⟨_, _, _, rfl⟩ := Owner.resumeLeaf?_eq h
-  intro x hx
-  rw [Owner.resumeLeaf?_budget h x]
-  exact hcov x hx
-
-/-- Suspension keeps every leaf inside the owner's allocation and extent: the
-updated leaf keeps its allocation and footprint. -/
-theorem Owner.suspendLeaf?_leavesWithin {o o' : Owner} {id : CapId}
-    (h : o.suspendLeaf? id = some o') (hlw : o.LeavesWithin) : o'.LeavesWithin := by
-  obtain ⟨c, hf, _, rfl⟩ := Owner.suspendLeaf?_eq h
-  intro id' c' hfind
-  replace hfind : (o.root.replace id (fun c => .leaf { c with state := .retired })).find? id'
-      = some c' := hfind
-  by_cases h'id : id' = id
-  · rw [h'id] at hfind
-    rw [Tree.find?_replace_leaf_eq _ _ (fun c => { c with state := .retired }) (fun _ => rfl),
-      hf] at hfind
-    have hc' : c' = { c with state := .retired } := (Option.some.inj hfind).symm
-    subst hc'
-    exact hlw id c hf
-  · rw [Tree.find?_replace_leaf_ne _ _ _ (fun c => { c with state := .retired }) (fun _ => rfl)
-      h'id] at hfind
-    exact hlw id' c' hfind
-
-/-- Resumption keeps every leaf inside the owner's allocation and extent. -/
-theorem Owner.resumeLeaf?_leavesWithin {o o' : Owner} {id : CapId}
-    (h : o.resumeLeaf? id = some o') (hlw : o.LeavesWithin) : o'.LeavesWithin := by
-  obtain ⟨c, hf, _, rfl⟩ := Owner.resumeLeaf?_eq h
-  intro id' c' hfind
-  replace hfind : (o.root.replace id (fun c => .leaf { c with state := .active })).find? id'
-      = some c' := hfind
-  by_cases h'id : id' = id
-  · rw [h'id] at hfind
-    rw [Tree.find?_replace_leaf_eq _ _ (fun c => { c with state := .active }) (fun _ => rfl),
-      hf] at hfind
-    have hc' : c' = { c with state := .active } := (Option.some.inj hfind).symm
-    subst hc'
-    exact hlw id c hf
-  · rw [Tree.find?_replace_leaf_ne _ _ _ (fun c => { c with state := .active }) (fun _ => rfl)
-      h'id] at hfind
-    exact hlw id' c' hfind
-
-/-- Suspension keeps the disposal entitlement present: the disposal capability
-and the identifier list are unchanged. -/
-theorem Owner.suspendLeaf?_disposalPresent {o o' : Owner} {id : CapId}
-    (h : o.suspendLeaf? id = some o') (hd : o.DisposalPresent) : o'.DisposalPresent := by
-  obtain ⟨c, hf, _, rfl⟩ := Owner.suspendLeaf?_eq h
-  rcases hd with ⟨cd, hcd⟩ | hd
-  · left
-    by_cases hdid : o.disposal = id
-    · rw [hdid] at hcd
-      exact ⟨{ cd with state := .retired }, by
-        show (o.root.replace id (fun c => .leaf { c with state := .retired })).find? o.disposal
-            = some _
-        rw [hdid, Tree.find?_replace_leaf_eq _ _ (fun c => { c with state := .retired })
-          (fun _ => rfl), hcd]
-        rfl⟩
-    · exact ⟨cd, by
-        show (o.root.replace id (fun c => .leaf { c with state := .retired })).find? o.disposal
-            = some _
-        rw [Tree.find?_replace_leaf_ne _ _ _ (fun c => { c with state := .retired }) (fun _ => rfl)
-          hdid]
-        exact hcd⟩
-  · right
-    show o.disposal ∉ (o.root.replace id (fun c => .leaf { c with state := .retired })).ids
-    rw [Tree.ids_replace_leaf _ _ (fun c => { c with state := .retired }) (fun _ => rfl)]
-    exact hd
-
-/-- Resumption keeps the disposal entitlement present. -/
-theorem Owner.resumeLeaf?_disposalPresent {o o' : Owner} {id : CapId}
-    (h : o.resumeLeaf? id = some o') (hd : o.DisposalPresent) : o'.DisposalPresent := by
-  obtain ⟨c, hf, _, rfl⟩ := Owner.resumeLeaf?_eq h
-  rcases hd with ⟨cd, hcd⟩ | hd
-  · left
-    by_cases hdid : o.disposal = id
-    · rw [hdid] at hcd
-      exact ⟨{ cd with state := .active }, by
-        show (o.root.replace id (fun c => .leaf { c with state := .active })).find? o.disposal
-            = some _
-        rw [hdid, Tree.find?_replace_leaf_eq _ _ (fun c => { c with state := .active })
-          (fun _ => rfl), hcd]
-        rfl⟩
-    · exact ⟨cd, by
-        show (o.root.replace id (fun c => .leaf { c with state := .active })).find? o.disposal
-            = some _
-        rw [Tree.find?_replace_leaf_ne _ _ _ (fun c => { c with state := .active }) (fun _ => rfl)
-          hdid]
-        exact hcd⟩
-  · right
-    show o.disposal ∉ (o.root.replace id (fun c => .leaf { c with state := .active })).ids
-    rw [Tree.ids_replace_leaf _ _ (fun c => { c with state := .active }) (fun _ => rfl)]
-    exact hd
-
-/-- Suspension preserves the owner invariant. -/
-theorem Owner.suspendLeaf?_wellFormed {o o' : Owner} {D : Nat} {id : CapId}
-    (h : o.suspendLeaf? id = some o') (hwf : o.WellFormed D) : o'.WellFormed D :=
-  ⟨Owner.suspendLeaf?_covered h hwf.1, Owner.suspendLeaf?_leavesWithin h hwf.2.1,
-    Owner.suspendLeaf?_disposalPresent h hwf.2.2⟩
-
-/-- Resumption preserves the owner invariant. -/
-theorem Owner.resumeLeaf?_wellFormed {o o' : Owner} {D : Nat} {id : CapId}
-    (h : o.resumeLeaf? id = some o') (hwf : o.WellFormed D) : o'.WellFormed D :=
-  ⟨Owner.resumeLeaf?_covered h hwf.1, Owner.resumeLeaf?_leavesWithin h hwf.2.1,
-    Owner.resumeLeaf?_disposalPresent h hwf.2.2⟩
-
-/-- Mapping a conditional replacement that never fires over a list is the
-identity. -/
-theorem map_alloc_ite_self (l : List Owner) (a : AllocId) (o' : Owner)
-    (hne : ∀ y ∈ l, y.alloc ≠ a) :
-    l.map (fun y => if y.alloc = a then o' else y) = l := by
-  induction l with
-  | nil => rfl
-  | cons y ys ih =>
-    rw [List.map_cons, if_neg (hne y List.mem_cons_self),
-      ih (fun z hz => hne z (List.mem_cons_of_mem y hz))]
-
-/-- Updating the owner of an allocation whose allocation identifiers are
-distinct by a replacement with the same identifier list keeps the flattened
-identifier list. -/
-theorem flatMap_update_ids_of_same (l : List Owner) (a : AllocId) (o o' : Owner)
-    (hnd : (l.map (·.alloc)).Nodup) (hmem : o ∈ l) (hoa : o.alloc = a)
-    (hids : o'.ids = o.ids) :
-    (l.map (fun x => if x.alloc = a then o' else x)).flatMap Owner.ids
-      = l.flatMap Owner.ids := by
-  induction l with
-  | nil => rfl
-  | cons x xs ih =>
-    have hnd' : (xs.map (·.alloc)).Nodup := (List.nodup_cons.mp hnd).2
-    have hnx : x.alloc ∉ xs.map (·.alloc) := (List.nodup_cons.mp hnd).1
-    by_cases hxa : x.alloc = a
-    · have hxo : x = o := by
-        rcases List.mem_cons.mp hmem with rfl | hmem'
-        · rfl
-        · exact absurd ((hoa.trans hxa.symm) ▸ List.mem_map_of_mem hmem') hnx
-      subst hxo
-      have htail : xs.map (fun y => if y.alloc = a then o' else y) = xs := by
-        apply map_alloc_ite_self
-        intro y hy hya
-        exact hnx ((hya.trans hxa.symm) ▸ List.mem_map_of_mem hy)
-      simp only [List.map_cons, hxa, if_true, List.flatMap_cons]
-      rw [htail, hids]
-    · have hmem' : o ∈ xs := by
-        rcases List.mem_cons.mp hmem with h | hmem'
-        · subst h
-          exact absurd hoa hxa
-        · exact hmem'
-      simp only [List.map_cons, hxa, if_false, List.flatMap_cons]
-      rw [ih hnd' hmem']
-
-/-- A context update whose replacement has the replaced owner's identifier list
-keeps the context's identifier list. -/
-theorem Ctx.update_ids_of_same_ids {C : Ctx} {a : AllocId} {o o' : Owner}
-    (hnd : (C.owners.map (·.alloc)).Nodup) (hmem : o ∈ C.owners) (hoa : o.alloc = a)
-    (hids : o'.ids = o.ids) :
-    (C.update a o').ids = C.ids := by
-  simp only [Ctx.update, Ctx.ids]
-  exact flatMap_update_ids_of_same C.owners a o o' hnd hmem hoa hids
-
-/-- A context update whose replacement has the replaced owner's identifier list
-keeps the context's identifiers distinct. -/
-theorem Ctx.update_ids_nodup_of_same_ids {C : Ctx} {a : AllocId} {o o' : Owner}
-    (hnd : (C.owners.map (·.alloc)).Nodup) (hmem : o ∈ C.owners) (hoa : o.alloc = a)
-    (hids : o'.ids = o.ids) (hidsnodup : C.ids.Nodup) :
-    (C.update a o').ids.Nodup := by
-  rw [Ctx.update_ids_of_same_ids hnd hmem hoa hids]
-  exact hidsnodup
-
-/-- Replacing an owner by its suspension preserves the world invariant. -/
-theorem World.suspend_update_wf {w : World} {a : AllocId} {o o' : Owner} {id : CapId}
-    (hwf : w.WellFormed) (hf : w.ctx.findOwner? a = some o)
-    (hs : o.suspendLeaf? id = some o') :
-    ({ w with ctx := w.ctx.update o.alloc o' } : World).WellFormed := by
-  have hmem : o ∈ w.ctx.owners := List.mem_of_find?_eq_some hf
-  have hoalloc : o.alloc = a := by
-    have h := List.find?_some (p := fun x : Owner => decide (x.alloc = a))
-      (by simpa [Ctx.findOwner?] using hf)
-    simpa using h
-  have ho'alloc : o'.alloc = o.alloc := Owner.suspendLeaf?_alloc hs
-  have ho'len : o'.len = o.len := Owner.suspendLeaf?_len hs
-  have hwfC : (w.ctx.update o.alloc o').WellFormed := by
-    refine ⟨⟨?_, ?_⟩, ?_, ?_⟩
-    · apply Ctx.update_covered
-      · exact Owner.suspendLeaf?_covered hs (hwf.1.1.1 o hmem)
-      · intro x hx _
-        exact hwf.1.1.1 x hx
-    · exact Ctx.update_nodup ho'alloc hwf.1.1.2
-    · exact Ctx.update_wellFormed_owners (Owner.suspendLeaf?_wellFormed hs (hwf.1.2.1 o hmem))
-        (fun x hx _ => hwf.1.2.1 x hx)
-    · exact Ctx.update_ids_nodup_of_same_ids hwf.1.1.2 hmem rfl
-        (Owner.suspendLeaf?_ids hs) hwf.1.2.2
-  have hfun : (w.ctx.update o.alloc o').Functional :=
-    Ctx.update_functional ho'alloc hwf.1.1.2
-  have hfa : w.ctx.findOwner? o.alloc = some o := by
-    simpa [hoalloc] using hf
-  exact ⟨hwfC, hfun, World.update_storage hwf hfa ho'alloc ho'len⟩
-
-/-- Replacing an owner by its resumption preserves the world invariant. -/
-theorem World.resume_update_wf {w : World} {a : AllocId} {o o' : Owner} {id : CapId}
-    (hwf : w.WellFormed) (hf : w.ctx.findOwner? a = some o)
-    (hr : o.resumeLeaf? id = some o') :
-    ({ w with ctx := w.ctx.update o.alloc o' } : World).WellFormed := by
-  have hmem : o ∈ w.ctx.owners := List.mem_of_find?_eq_some hf
-  have hoalloc : o.alloc = a := by
-    have h := List.find?_some (p := fun x : Owner => decide (x.alloc = a))
-      (by simpa [Ctx.findOwner?] using hf)
-    simpa using h
-  have ho'alloc : o'.alloc = o.alloc := Owner.resumeLeaf?_alloc hr
-  have ho'len : o'.len = o.len := Owner.resumeLeaf?_len hr
-  have hwfC : (w.ctx.update o.alloc o').WellFormed := by
-    refine ⟨⟨?_, ?_⟩, ?_, ?_⟩
-    · apply Ctx.update_covered
-      · exact Owner.resumeLeaf?_covered hr (hwf.1.1.1 o hmem)
-      · intro x hx _
-        exact hwf.1.1.1 x hx
-    · exact Ctx.update_nodup ho'alloc hwf.1.1.2
-    · exact Ctx.update_wellFormed_owners (Owner.resumeLeaf?_wellFormed hr (hwf.1.2.1 o hmem))
-        (fun x hx _ => hwf.1.2.1 x hx)
-    · exact Ctx.update_ids_nodup_of_same_ids hwf.1.1.2 hmem rfl
-        (Owner.resumeLeaf?_ids hr) hwf.1.2.2
-  have hfun : (w.ctx.update o.alloc o').Functional :=
-    Ctx.update_functional ho'alloc hwf.1.1.2
-  have hfa : w.ctx.findOwner? o.alloc = some o := by
-    simpa [hoalloc] using hf
-  exact ⟨hwfC, hfun, World.update_storage hwf hfa ho'alloc ho'len⟩
-
-/-- A checked suspension: retire the leaf `id` of the owner of `a`, so the
-write guard refuses through it while the suspension is outstanding. -/
-def World.suspendChecked (w : World) (a : AllocId) (id : CapId) : Except String World :=
-  match w.ctx.findOwner? a with
-  | none => .error "suspend: no owner for the allocation"
-  | some o =>
-    match o.suspendLeaf? id with
-    | some o' => .ok { w with ctx := w.ctx.update o.alloc o' }
-    | none => .error "suspend: leaf is missing or not active"
-
-/-- A successful suspension preserves the world invariant. -/
-theorem World.suspendChecked_wf {w w' : World} {a : AllocId} {id : CapId}
-    (h : w.suspendChecked a id = .ok w') (hwf : w.WellFormed) : w'.WellFormed := by
-  unfold World.suspendChecked at h
-  cases hf : w.ctx.findOwner? a with
-  | none => simp [hf] at h
-  | some o =>
-    cases hs : o.suspendLeaf? id with
-    | none => simp [hf, hs] at h
-    | some o' =>
-      simp only [hf, hs, Except.ok.injEq] at h
-      subst h
-      exact World.suspend_update_wf hwf hf hs
-
-/-- A checked resumption: restore the leaf `id` of the owner of `a` to
-active. -/
-def World.resumeChecked (w : World) (a : AllocId) (id : CapId) : Except String World :=
-  match w.ctx.findOwner? a with
-  | none => .error "resume: no owner for the allocation"
-  | some o =>
-    match o.resumeLeaf? id with
-    | some o' => .ok { w with ctx := w.ctx.update o.alloc o' }
-    | none => .error "resume: leaf is missing or not retired"
-
-/-- A successful resumption preserves the world invariant. -/
-theorem World.resumeChecked_wf {w w' : World} {a : AllocId} {id : CapId}
-    (h : w.resumeChecked a id = .ok w') (hwf : w.WellFormed) : w'.WellFormed := by
-  unfold World.resumeChecked at h
-  cases hf : w.ctx.findOwner? a with
-  | none => simp [hf] at h
-  | some o =>
-    cases hr : o.resumeLeaf? id with
-    | none => simp [hf, hr] at h
-    | some o' =>
-      simp only [hf, hr, Except.ok.injEq] at h
-      subst h
-      exact World.resume_update_wf hwf hf hr
-
-
 /-- A contextual allocation check accepts whenever its conditions hold. -/
 theorem World.allocChecked_succeeds {w : World} {n : Nat} {rootId disposal : CapId}
     {po : 0 < w.ctx.D}
@@ -898,5 +610,342 @@ theorem World.freeChecked_refused_of_alloc {w : World} {a : AllocId} {d : CapId}
   rw [hfind]
   dsimp only
   rw [if_neg (fun h => h l hl ha)]
+
+/-! ### History preservation beside the transitions -/
+
+/-- A checked spatial split preserves the issuance history. -/
+theorem World.historyOK_splitAtChecked {w w' : World} {a : AllocId}
+    {id id1 id2 : CapId} {k : Nat}
+    (hw : w.splitAtChecked a id id1 id2 k = .ok w')
+    (hwf : w.WellFormed) (hh : Ctx.HistoryOK w.ctx) : Ctx.HistoryOK w'.ctx := by
+  unfold World.splitAtChecked at hw
+  split at hw
+  · simp at hw
+  · rename_i o hfind
+    split at hw
+    · rename_i halloc
+      split at hw
+      · rename_i hfr
+        split at hw
+        · rename_i C' hs
+          simp only [Except.ok.injEq] at hw
+          cases hw
+          have hmem : o ∈ w.ctx.owners := List.mem_of_find?_eq_some hfind
+          have hoids : o.ids.Nodup := Ctx.owner_ids_nodup hwf.1.2.2 hmem
+          unfold Ctx.splitAtOwner? at hs
+          cases ho : o.splitAt? id id1 id2 k with
+          | none => simp [ho] at hs
+          | some o' =>
+            simp only [ho, Option.map_some, Option.some.injEq] at hs
+            rw [← hs]
+            exact Ctx.historyOK_split hh hoids hmem ho hfr.2.2.2.1 hfr.2.2.2.2.1 hfr.1.2.2
+        · simp at hw
+      · simp at hw
+    · simp at hw
+
+/-- A checked fractional split preserves the issuance history. -/
+theorem World.historyOK_splitFractionChecked {w w' : World} {a : AllocId}
+    {id id1 id2 : CapId} {q1 q2 : Nat} {p1 : 0 < q1} {p2 : 0 < q2}
+    (hw : w.splitFractionChecked a id id1 id2 q1 q2 p1 p2 = .ok w')
+    (hwf : w.WellFormed) (hh : Ctx.HistoryOK w.ctx) : Ctx.HistoryOK w'.ctx := by
+  unfold World.splitFractionChecked at hw
+  split at hw
+  · simp at hw
+  · rename_i o hfind
+    split at hw
+    · rename_i halloc
+      split at hw
+      · rename_i hfr
+        split at hw
+        · rename_i C' hs
+          simp only [Except.ok.injEq] at hw
+          cases hw
+          have hmem : o ∈ w.ctx.owners := List.mem_of_find?_eq_some hfind
+          have hoids : o.ids.Nodup := Ctx.owner_ids_nodup hwf.1.2.2 hmem
+          unfold Ctx.splitFractionOwner? at hs
+          cases ho : o.splitFraction? id id1 id2 q1 q2 p1 p2 with
+          | none => simp [ho] at hs
+          | some o' =>
+            simp only [ho, Option.map_some, Option.some.injEq] at hs
+            rw [← hs]
+            exact Ctx.historyOK_splitFraction hh hoids hmem ho hfr.2.2.2.1 hfr.2.2.2.2.1 hfr.1.2.2
+        · simp at hw
+      · simp at hw
+    · simp at hw
+
+/-- A checked fractional join preserves the issuance history. -/
+theorem World.historyOK_joinChecked {w w' : World} {a : AllocId}
+    {node newId : CapId}
+    (hw : w.joinChecked a node newId = .ok w') (hh : Ctx.HistoryOK w.ctx) :
+    Ctx.HistoryOK w'.ctx := by
+  unfold World.joinChecked at hw
+  split at hw
+  · simp at hw
+  · rename_i o hfind
+    split at hw
+    · rename_i halloc
+      split at hw
+      · rename_i hfresh
+        split at hw
+        · rename_i C' hs
+          simp only [Except.ok.injEq] at hw
+          cases hw
+          have hmem : o ∈ w.ctx.owners := List.mem_of_find?_eq_some hfind
+          unfold Ctx.joinFractionOwner? at hs
+          cases ho : o.joinFraction? node newId with
+          | none => simp [ho] at hs
+          | some o' =>
+            simp only [ho, Option.map_some, Option.some.injEq] at hs
+            rw [← hs]
+            exact Ctx.historyOK_join hh hmem ho hfresh.2
+        · simp at hw
+      · simp at hw
+    · simp at hw
+
+/-- Disposal preserves the issuance history. -/
+theorem World.historyOK_freeChecked {w w' : World} {a : AllocId} {d : CapId}
+    (hw : w.freeChecked a d = .ok w') (hh : Ctx.HistoryOK w.ctx) :
+    Ctx.HistoryOK w'.ctx := by
+  unfold World.freeChecked at hw
+  split at hw
+  · simp at hw
+  · rename_i o hfind
+    split at hw
+    · rename_i halloc
+      split at hw
+      · rename_i hloan
+        cases hf : w.freeWith? a d with
+        | none => simp [hf] at hw
+        | some w1 =>
+          simp [hf] at hw
+          cases hw
+          unfold World.freeWith? at hf
+          cases hc : w.ctx.freeWith? a d with
+          | none => simp [hc] at hf
+          | some ctx' =>
+            simp [hc] at hf
+            cases hf
+            have heq : ctx' = w.ctx.free a := Ctx.freeWith?_eq_free hc
+            rw [heq]
+            exact Ctx.historyOK_free hh
+      · simp at hw
+    · simp at hw
+
+/-- Allocation preserves the issuance history. -/
+theorem World.historyOK_allocChecked {w w' : World} {n : Nat}
+    {rootId disposal : CapId} {po : 0 < w.ctx.D}
+    (hw : w.allocChecked n rootId disposal po = .ok w')
+    (hh : Ctx.HistoryOK w.ctx) : Ctx.HistoryOK w'.ctx := by
+  unfold World.allocChecked at hw
+  split at hw
+  · rename_i hf
+    split at hw
+    · rename_i hfresh
+      simp only [Except.ok.injEq] at hw
+      cases hw
+      exact Ctx.historyOK_alloc (hf := hf) hh hfresh.2.2.2.1 hfresh.2.2.2.2 hfresh.2.2.1
+    · simp at hw
+  · simp at hw
+
+/-! ### Loan readiness beside the transitions -/
+
+/-- A context whose loans are unchanged, whose issued history only grows, and
+whose lenders remain detached from the live identifiers is loan-ready. -/
+theorem Ctx.loansReady_of_shape {C C' : Ctx}
+    (hloans : C'.loans = C.loans)
+    (hissued : ∀ c ∈ C.issued, c ∈ C'.issued)
+    (hids : ∀ l ∈ C.loans.loans, l.lender ∉ C'.ids)
+    (h : C.LoansReady) : C'.LoansReady := by
+  unfold Ctx.LoansReady at h ⊢
+  rw [hloans]
+  exact ⟨h.1, hids, fun l hl => hissued l.lender (h.2.2 l hl)⟩
+
+/-- A checked spatial split preserves loan readiness. -/
+theorem World.loansReady_splitAtChecked {w w' : World} {a : AllocId}
+    {id id1 id2 : CapId} {k : Nat}
+    (hw : w.splitAtChecked a id id1 id2 k = .ok w')
+    (hwf : w.WellFormed) (hlr : Ctx.LoansReady w.ctx) : Ctx.LoansReady w'.ctx := by
+  unfold World.splitAtChecked at hw
+  split at hw
+  · simp at hw
+  · rename_i o hfind
+    split at hw
+    · rename_i halloc
+      split at hw
+      · rename_i hfr
+        split at hw
+        · rename_i C' hs
+          simp only [Except.ok.injEq] at hw
+          cases hw
+          unfold Ctx.splitAtOwner? at hs
+          cases ho : o.splitAt? id id1 id2 k with
+          | none => simp [ho] at hs
+          | some o' =>
+            simp only [ho, Option.map_some, Option.some.injEq] at hs
+            subst hs
+            have hmem : o ∈ w.ctx.owners := List.mem_of_find?_eq_some hfind
+            have hoids : o.ids.Nodup := Ctx.owner_ids_nodup hwf.1.2.2 hmem
+            refine Ctx.loansReady_of_shape (C := w.ctx)
+              (C' := { w.ctx.update o.alloc o' with
+                issued := id1 :: id2 :: w.ctx.issued }) rfl ?_ ?_ hlr
+            · intro c hc
+              exact List.mem_cons_of_mem _ (List.mem_cons_of_mem _ hc)
+            · intro l hl hmeml
+              rcases Ctx.ids_update_sub (C := w.ctx) (a := o.alloc) (o' := o') l.lender hmeml with
+                hold | hnew
+              · exact hlr.2.1 l hl hold
+              · rcases Owner.splitAt?_ids_sub hoids ho l.lender hnew with hsub | hid1 | hid2
+                · exact hlr.2.1 l hl (Ctx.owner_ids_sub_ids hmem l.lender hsub)
+                · exact hfr.2.2.2.1 (hid1 ▸ hlr.2.2 l hl)
+                · exact hfr.2.2.2.2.1 (hid2 ▸ hlr.2.2 l hl)
+        · simp at hw
+      · simp at hw
+    · simp at hw
+
+/-- A checked fractional split preserves loan readiness. -/
+theorem World.loansReady_splitFractionChecked {w w' : World} {a : AllocId}
+    {id id1 id2 : CapId} {q1 q2 : Nat} {p1 : 0 < q1} {p2 : 0 < q2}
+    (hw : w.splitFractionChecked a id id1 id2 q1 q2 p1 p2 = .ok w')
+    (hwf : w.WellFormed) (hlr : Ctx.LoansReady w.ctx) : Ctx.LoansReady w'.ctx := by
+  unfold World.splitFractionChecked at hw
+  split at hw
+  · simp at hw
+  · rename_i o hfind
+    split at hw
+    · rename_i halloc
+      split at hw
+      · rename_i hfr
+        split at hw
+        · rename_i C' hs
+          simp only [Except.ok.injEq] at hw
+          cases hw
+          unfold Ctx.splitFractionOwner? at hs
+          cases ho : o.splitFraction? id id1 id2 q1 q2 p1 p2 with
+          | none => simp [ho] at hs
+          | some o' =>
+            simp only [ho, Option.map_some, Option.some.injEq] at hs
+            subst hs
+            have hmem : o ∈ w.ctx.owners := List.mem_of_find?_eq_some hfind
+            have hoids : o.ids.Nodup := Ctx.owner_ids_nodup hwf.1.2.2 hmem
+            refine Ctx.loansReady_of_shape (C := w.ctx)
+              (C' := { w.ctx.update o.alloc o' with
+                issued := id1 :: id2 :: w.ctx.issued }) rfl ?_ ?_ hlr
+            · intro c hc
+              exact List.mem_cons_of_mem _ (List.mem_cons_of_mem _ hc)
+            · intro l hl hmeml
+              rcases Ctx.ids_update_sub (C := w.ctx) (a := o.alloc) (o' := o') l.lender hmeml with
+                hold | hnew
+              · exact hlr.2.1 l hl hold
+              · rcases Owner.splitFraction?_ids_sub hoids ho l.lender hnew with hsub | hid1 | hid2
+                · exact hlr.2.1 l hl (Ctx.owner_ids_sub_ids hmem l.lender hsub)
+                · exact hfr.2.2.2.1 (hid1 ▸ hlr.2.2 l hl)
+                · exact hfr.2.2.2.2.1 (hid2 ▸ hlr.2.2 l hl)
+        · simp at hw
+      · simp at hw
+    · simp at hw
+
+/-- A checked fractional join preserves loan readiness. -/
+theorem World.loansReady_joinChecked {w w' : World} {a : AllocId}
+    {node newId : CapId}
+    (hw : w.joinChecked a node newId = .ok w')
+    (hlr : Ctx.LoansReady w.ctx) : Ctx.LoansReady w'.ctx := by
+  unfold World.joinChecked at hw
+  split at hw
+  · simp at hw
+  · rename_i o hfind
+    split at hw
+    · rename_i halloc
+      split at hw
+      · rename_i hfresh
+        split at hw
+        · rename_i C' hs
+          simp only [Except.ok.injEq] at hw
+          cases hw
+          unfold Ctx.joinFractionOwner? at hs
+          cases ho : o.joinFraction? node newId with
+          | none => simp [ho] at hs
+          | some o' =>
+            simp only [ho, Option.map_some, Option.some.injEq] at hs
+            subst hs
+            have hmem : o ∈ w.ctx.owners := List.mem_of_find?_eq_some hfind
+            refine Ctx.loansReady_of_shape (C := w.ctx)
+              (C' := { w.ctx.update o.alloc o' with
+                issued := newId :: w.ctx.issued }) rfl ?_ ?_ hlr
+            · intro c hc
+              exact List.mem_cons_of_mem _ hc
+            · intro l hl hmeml
+              rcases Ctx.ids_update_sub (C := w.ctx) (a := o.alloc) (o' := o') l.lender hmeml with
+                hold | hnew
+              · exact hlr.2.1 l hl hold
+              · rcases Owner.joinFraction?_ids_sub' ho l.lender hnew with hsub | hid
+                · exact hlr.2.1 l hl (Ctx.owner_ids_sub_ids hmem l.lender hsub)
+                · exact hfresh.2 (hid ▸ hlr.2.2 l hl)
+        · simp at hw
+      · simp at hw
+    · simp at hw
+
+/-- A checked allocation preserves loan readiness. -/
+theorem World.loansReady_allocChecked {w w' : World} {n : Nat}
+    {rootId disposal : CapId} {po : 0 < w.ctx.D}
+    (hw : w.allocChecked n rootId disposal po = .ok w')
+    (hlr : Ctx.LoansReady w.ctx) : Ctx.LoansReady w'.ctx := by
+  unfold World.allocChecked at hw
+  split at hw
+  · rename_i hf
+    split at hw
+    · rename_i hfresh
+      simp only [Except.ok.injEq] at hw
+      cases hw
+      refine Ctx.loansReady_of_shape (C := w.ctx)
+        (C' := w.ctx.alloc ⟨w.ctx.nextAlloc⟩ n po rootId disposal hf) rfl ?_ ?_ hlr
+      · intro c hc
+        exact List.mem_cons_of_mem _ (List.mem_cons_of_mem _ hc)
+      · intro l hl hmem
+        have hshape : (w.ctx.alloc ⟨w.ctx.nextAlloc⟩ n po rootId disposal hf).ids
+            = [disposal, rootId] ++ w.ctx.ids := by
+          simp [Ctx.alloc, Ctx.ids, Owner.ids, Owner.init, Tree.ids]
+        rw [hshape, List.mem_append] at hmem
+        rcases hmem with hnew | hold
+        · simp only [List.mem_cons, List.mem_nil_iff] at hnew
+          rcases hnew with rfl | rfl | hnil
+          · exact hfresh.2.2.2.2 (hlr.2.2 l hl)
+          · exact hfresh.2.2.2.1 (hlr.2.2 l hl)
+          · exact absurd hnil (by simp)
+        · exact hlr.2.1 l hl hold
+    · simp at hw
+  · simp at hw
+
+/-- A checked disposal preserves loan readiness. -/
+theorem World.loansReady_freeChecked {w w' : World} {a : AllocId} {d : CapId}
+    (hw : w.freeChecked a d = .ok w') (hlr : Ctx.LoansReady w.ctx) :
+    Ctx.LoansReady w'.ctx := by
+  unfold World.freeChecked at hw
+  split at hw
+  · simp at hw
+  · rename_i o hfind
+    split at hw
+    · rename_i halloc
+      split at hw
+      · rename_i hloan
+        cases hf : w.freeWith? a d with
+        | none => simp [hf] at hw
+        | some w1 =>
+          simp [hf] at hw
+          cases hw
+          unfold World.freeWith? at hf
+          cases hc : w.ctx.freeWith? a d with
+          | none => simp [hc] at hf
+          | some ctx' =>
+            simp [hc] at hf
+            cases hf
+            have heq : ctx' = w.ctx.free a := Ctx.freeWith?_eq_free hc
+            subst heq
+            refine Ctx.loansReady_of_shape (C := w.ctx) (C' := w.ctx.free a)
+              rfl ?_ ?_ hlr
+            · intro c hc; exact hc
+            · intro l hl hmem
+              exact hlr.2.1 l hl (Ctx.ids_free_sub l.lender hmem)
+      · simp at hw
+    · simp at hw
 
 end Cap

@@ -110,14 +110,14 @@ theorem checkWorld_append : ∀ (cs ds : List UCmd) (w w' : World),
           simp only [List.cons_append, checkWorld, hpos, hw] at h ⊢
           exact ih ds w'' w' h
       · simp [checkWorld, hpos] at h
-    | beginLoan a lender loanId =>
-      cases hw : w.beginLoanChecked a lender loanId with
+    | beginBorrow a lender borrower loanId =>
+      cases hw : w.beginBorrowChecked a lender borrower loanId with
       | error e => simp [checkWorld, hw] at h
       | ok w'' =>
         simp only [List.cons_append, checkWorld, hw] at h ⊢
         exact ih ds w'' w' h
-    | endLoan a loanId =>
-      cases hw : w.endLoanChecked a loanId with
+    | endBorrow a loanId =>
+      cases hw : w.endBorrowChecked a loanId with
       | error e => simp [checkWorld, hw] at h
       | ok w'' =>
         simp only [List.cons_append, checkWorld, hw] at h ⊢
@@ -177,9 +177,16 @@ theorem ClosedProgram.post_ok (p : ClosedProgram) :
     checkWorld World.emptyWorld p.cmds = .ok p.post :=
   Classical.choose_spec p.post_exists
 
+/-- The empty world's issuance history is sound. -/
+theorem World.emptyWorld_historyOK : Ctx.HistoryOK World.emptyWorld.ctx := by
+  refine ⟨by decide, ?_⟩
+  intro c hc
+  simp [World.emptyWorld, Ctx.ids] at hc
+
 /-- A closed program's final world is well formed. -/
 theorem ClosedProgram.wf (p : ClosedProgram) : p.post.WellFormed :=
-  checkWorld_wf _ _ _ p.post_ok World.emptyWorld_wf
+  checkWorld_wf _ _ _ p.post_ok
+    ⟨World.emptyWorld_wf, World.emptyWorld_historyOK, Ctx.loansReady_of_loans_nil rfl⟩
 
 /-- The observation of a closed program: the bytes of one allocation's backend. -/
 noncomputable def ClosedProgram.snapshot (p : ClosedProgram) (a : AllocId) :

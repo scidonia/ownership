@@ -81,6 +81,7 @@ loans are imported only to keep the layer's imports as stated.
 -/
 import Cap.Context
 import Cap.Loans
+import Cap.Retag
 
 namespace Cap
 
@@ -104,6 +105,25 @@ def Owner.WellFormed (o : Owner) (D : Nat) : Prop :=
 capability identifiers. -/
 def Ctx.WellFormed (C : Ctx) : Prop :=
   C.Realizes ∧ (∀ o ∈ C.owners, o.WellFormed C.D) ∧ C.ids.Nodup
+
+/-- The three loan-readiness facts every command-level proof about the
+delegation route needs: lender names distinct, every lender absent from the
+context's live identifiers, and every lender historically issued. They are
+clauses 1 (lender half), 6 and 3 of `World.BorrowOK`, stated above the command
+dispatcher because `Cap/Borrow.lean` sits downstream of it. -/
+def Ctx.LoansReady (C : Ctx) : Prop :=
+  (C.loans.loans.map (·.lender)).Nodup
+  ∧ (∀ l ∈ C.loans.loans, l.lender ∉ C.ids)
+  ∧ (∀ l ∈ C.loans.loans, l.lender ∈ C.issued)
+
+/-- A context with no outstanding loans is loan-ready. -/
+theorem Ctx.loansReady_of_loans_nil {C : Ctx} (h : C.loans.loans = []) :
+    C.LoansReady := by
+  refine ⟨by simp [h], ?_, ?_⟩
+  · intro l hl
+    simp [h] at hl
+  · intro l hl
+    simp [h] at hl
 
 /-! ### Supporting lemmas on trees -/
 
@@ -137,34 +157,6 @@ theorem Tree.mem_ids_of_exists_find? {t : Tree} {id : CapId}
 theorem Tree.find?_mem_ids {t : Tree} {id : CapId} {c : Leaf} (h : t.find? id = some c) :
     id ∈ t.ids :=
   Tree.mem_ids_of_exists_find? ⟨c, h⟩
-
-/-- An identifier in `Tree.ids` is found by `Tree.find?`. -/
-theorem Tree.exists_find?_of_mem_ids {t : Tree} {id : CapId} (h : id ∈ t.ids) :
-    ∃ c, t.find? id = some c := by
-  induction t with
-  | leaf c =>
-    have hci : id = c.id := by simpa only [Tree.ids, List.mem_singleton] using h
-    exact ⟨c, by simp only [Tree.find?]; exact ite_eq_left hci.symm⟩
-  | frac i l r ihl ihr =>
-    simp only [Tree.ids, List.mem_append] at h
-    rcases h with hl | hr
-    · obtain ⟨c, hc⟩ := ihl hl
-      exact ⟨c, by simp [Tree.find?, hc]⟩
-    · cases hlx : l.find? id with
-      | some d => exact ⟨d, by simp [Tree.find?, hlx]⟩
-      | none =>
-        obtain ⟨c, hc⟩ := ihr hr
-        exact ⟨c, by simp [Tree.find?, hlx, hc]⟩
-  | spatial i l r ihl ihr =>
-    simp only [Tree.ids, List.mem_append] at h
-    rcases h with hl | hr
-    · obtain ⟨c, hc⟩ := ihl hl
-      exact ⟨c, by simp [Tree.find?, hc]⟩
-    · cases hlx : l.find? id with
-      | some d => exact ⟨d, by simp [Tree.find?, hlx]⟩
-      | none =>
-        obtain ⟨c, hc⟩ := ihr hr
-        exact ⟨c, by simp [Tree.find?, hlx, hc]⟩
 
 /-- A list of capability identifiers with no occurrence of `id` is unchanged by
 filtering `id` out. -/
@@ -1662,5 +1654,106 @@ example : ctx64.WellFormed := by
   · simp [Ctx.ids, ctx64, owner64, Owner.init, Owner.ids, Tree.ids]
 
 end InvariantExamples
+
+/-- The retag preserves the found leaves' allocation and extent. -/
+theorem Owner.retagLeaf?_leavesWithin {o o' : Owner} {old new : CapId}
+    (h : o.retagLeaf? old new = some o') (hlw : o.LeavesWithin) : o'.LeavesWithin := by
+  rw [Owner.retagLeaf?_eq h]
+  intro x c hc
+  exact Tree.retag_leavesWithin (Owner.retagLeaf?_fresh h) (fun y c hy => hlw y c hy) x c hc
+
+/-- The retag preserves the disposal entitlement. -/
+theorem Owner.retagLeaf?_disposalPresent {o o' : Owner} {old new : CapId}
+    (h : o.retagLeaf? old new = some o') (hd : o.DisposalPresent) :
+    o'.DisposalPresent := by
+  rw [Owner.retagLeaf?_eq h]
+  have hnew := Owner.retagLeaf?_fresh h
+  rcases hd with ⟨c, hc⟩ | hd
+  · by_cases hdo : o.disposal = old
+    · right
+      show o.disposal ∉ (o.root.retag old new).ids
+      rw [hdo]
+      exact Tree.not_mem_ids_retag_old hnew
+    · left
+      refine ⟨c, ?_⟩
+      have hdn : o.disposal ≠ new := by
+        intro hid
+        exact hnew (hid ▸ Tree.mem_ids_of_find? hc)
+      rw [Tree.find?_retag_of_ne hdo hdn]
+      exact hc
+  · by_cases hdn : o.disposal = new
+    · left
+      obtain ⟨c0, hc0, _hact⟩ := Owner.retagLeaf?_active h
+      refine ⟨{ c0 with id := new }, ?_⟩
+      rw [hdn]
+      exact Tree.find?_retag_new hc0 hnew
+    · right
+      show o.disposal ∉ (o.root.retag old new).ids
+      rw [Tree.retag_ids_map]
+      intro hmem
+      rcases List.mem_map.mp hmem with ⟨x, hx, hfx⟩
+      by_cases hxo : x = old
+      · rw [if_pos hxo] at hfx
+        exact hdn hfx.symm
+      · rw [if_neg hxo] at hfx
+        exact hd (hfx ▸ hx)
+
+/-- The retag preserves the owner invariant. -/
+theorem Owner.retagLeaf?_wellFormed {o o' : Owner} {D : Nat} {old new : CapId}
+    (h : o.retagLeaf? old new = some o') (hwf : o.WellFormed D) : o'.WellFormed D :=
+  ⟨(Owner.retagLeaf?_covered h).mpr hwf.1, Owner.retagLeaf?_leavesWithin h hwf.2.1,
+    Owner.retagLeaf?_disposalPresent h hwf.2.2⟩
+
+/-- An identifier of the replaced owner that the replacement drops is absent
+from the updated context's identifiers. -/
+theorem flatMap_update_ids_not_mem_of_owner (l : List Owner) (a : AllocId)
+    (o o' : Owner) (x : CapId)
+    (hndAlloc : (l.map (·.alloc)).Nodup) (hidsnd : (l.flatMap Owner.ids).Nodup)
+    (hmem : o ∈ l) (hoa : o.alloc = a) (hx : x ∈ o.ids) (ho' : x ∉ o'.ids) :
+    x ∉ (l.map (fun y => if y.alloc = a then o' else y)).flatMap Owner.ids := by
+  induction l with
+  | nil => simp at hmem
+  | cons y ys ih =>
+    have hndy : y.ids.Nodup := (List.nodup_append.mp hidsnd).1
+    have hndys : (ys.flatMap Owner.ids).Nodup := (List.nodup_append.mp hidsnd).2.1
+    have hdisj : ∀ u ∈ y.ids, ∀ v ∈ ys.flatMap Owner.ids, u ≠ v :=
+      (List.nodup_append.mp hidsnd).2.2
+    have hndAlloc' : (ys.map (·.alloc)).Nodup := (List.nodup_cons.mp hndAlloc).2
+    by_cases hya : y.alloc = a
+    · have hyo : y = o :=
+        alloc_eq_of_mem hndAlloc List.mem_cons_self hmem (by rw [hya, hoa])
+      have hnotalloc : a ∉ ys.map (·.alloc) := by
+        simpa [hya] using (List.nodup_cons.mp hndAlloc).1
+      have hysmap : ys.map (fun z => if z.alloc = a then o' else z) = ys := by
+        have hmap := List.map_congr_left (l := ys)
+          (f := fun z => if z.alloc = a then o' else z) (g := fun z => z)
+          (fun z hz => by
+            have hza : z.alloc ≠ a := fun h => hnotalloc (List.mem_map.mpr ⟨z, hz, h⟩)
+            simp [hza])
+        simpa using hmap
+      rw [List.map_cons, ite_eq_left hya, List.flatMap_cons, hysmap]
+      intro hmemx
+      rcases List.mem_append.mp hmemx with h | h
+      · exact ho' h
+      · have hx' : x ∈ y.ids := by rw [hyo]; exact hx
+        exact hdisj x hx' x h rfl
+    · have hmem' : o ∈ ys := by
+        rcases List.mem_cons.mp hmem with h | h
+        · exact absurd (h ▸ hoa) hya
+        · exact h
+      rw [List.map_cons, ite_eq_right hya, List.flatMap_cons]
+      intro hmemx
+      rcases List.mem_append.mp hmemx with h | h
+      · have hxo : x ∈ ys.flatMap Owner.ids := List.mem_flatMap.mpr ⟨o, hmem', hx⟩
+        exact hdisj x h x hxo rfl
+      · exact ih hndAlloc' hndys hmem' h
+
+/-- A context update whose replacement drops an identifier of the replaced
+owner omits that identifier. -/
+theorem Ctx.not_mem_ids_update_of_owner {C : Ctx} {a : AllocId} {o o' : Owner}
+    {x : CapId} (hreal : C.Realizes) (hnd : C.ids.Nodup) (hmem : o ∈ C.owners)
+    (hoa : o.alloc = a) (hx : x ∈ o.ids) (ho' : x ∉ o'.ids) :
+    x ∉ (C.update a o').ids :=
+  flatMap_update_ids_not_mem_of_owner C.owners a o o' x hreal.2 hnd hmem hoa hx ho'
 
 end Cap

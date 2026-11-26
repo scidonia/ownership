@@ -314,7 +314,7 @@ def world : World :=
     heaps := fun a => if a = alloc then some (Backend.empty 64) else none }
 
 /-- The example disposal state: no loans are outstanding. -/
-def state : DisposalState := { world := world, loans := ⟨[], []⟩ }
+def state : DisposalState := { world := world, loans := ⟨[], [], 1⟩ }
 
 theorem owner_covered : owner.Covered 64 :=
   Owner.rootReconstructed_covered
@@ -340,9 +340,14 @@ theorem state_not_legal_missing : ¬ state.Legal alloc ⟨9⟩ := by
 example : state.free? alloc ⟨9⟩ = none :=
   DisposalState.free?_none_of_not_legal state_not_legal_missing
 
+/-- The example outstanding loan. -/
+def loanFixture : Loan :=
+  { id := ⟨0⟩, alloc := ⟨0⟩, base := ⟨1⟩, lender := ⟨1⟩, borrower := ⟨3⟩,
+    lifetime := ⟨0⟩, lo := 0, hi := 64, q := 64, ceiling := .readWrite }
+
 /-- An outstanding loan refuses disposal. -/
 def loanState : DisposalState :=
-  { state with loans := ⟨[], [{ id := ⟨0⟩, alloc := ⟨0⟩, lender := ⟨1⟩, borrower := ⟨3⟩, lifetime := ⟨0⟩ }]⟩ }
+  { state with loans := ⟨[], [loanFixture], 1⟩ }
 
 theorem loanState_not_legal : ¬ loanState.Legal alloc ⟨2⟩ := by
   intro h

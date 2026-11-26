@@ -49,7 +49,13 @@ check_ok UniverseDemo.lean
 check_ok CapNegative.lean
 check_ok CapMarshal.lean
 check_ok CapBorrow.lean
+check_ok CapDelegation.lean
+check_ok CapChainRepair.lean
 check_ok CapDiscipline.lean
+check_ok CapReconstruction.lean
+check_ok CapReconstructionSealed.lean
+check_ok CapRealization.lean
+check_ok CapUnionFindReuse.lean
 check_ok CapSealAccept.lean
 check_ok CapFreshness.lean
 check_ok OwnedAccept.lean

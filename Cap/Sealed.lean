@@ -106,4 +106,39 @@ theorem boundary_no_physical_proof :
        "the sealed interface observes only a snapshot"] := by
   decide
 
+/-! ### A delegation program through the sealed boundary -/
+
+/-- A sealed delegation run: allocate a 4-byte owner, borrow its root for a
+fresh borrower, write through the borrower, return it, and write through the
+lender's restored capability. -/
+def sealedDelegationCmds : List UCmd :=
+  [ .alloc 4 ⟨1⟩ ⟨2⟩,
+    .beginBorrow ⟨0⟩ ⟨1⟩ ⟨3⟩ ⟨10⟩,
+    .write ⟨0⟩ ⟨3⟩ 0 7,
+    .endBorrow ⟨0⟩ ⟨10⟩,
+    .write ⟨0⟩ ⟨1⟩ 1 9 ]
+
+/-- The sealed boundary accepts the delegation program. -/
+theorem sealedDelegation_ok :
+    (Sealed.empty.run sealedDelegationCmds).isOk = true := by
+  decide
+
+/-- The only observation of the delegation run is a copy of the allocation's
+bytes: the byte the borrower wrote and the byte the restored lender wrote. -/
+theorem sealedDelegation_snapshot :
+    (Sealed.empty.run sealedDelegationCmds).toOption.map
+      (fun s => s.snapshot ⟨0⟩) = some (some ([7, 9, 0, 0] : List UInt8)) := by
+  decide
+
+/-- A completed delegation run's sealed state carries the combined invariant and
+observes exactly those bytes. -/
+theorem sealedDelegation_run {s' : Sealed}
+    (h : Sealed.empty.run sealedDelegationCmds = .ok s') :
+    s'.w.FullInv ∧ s'.snapshot ⟨0⟩ = some ([7, 9, 0, 0] : List UInt8) := by
+  refine ⟨Sealed.run_invariant h, ?_⟩
+  have h' := sealedDelegation_snapshot
+  rw [h] at h'
+  change some (s'.snapshot ⟨0⟩) = some (some ([7, 9, 0, 0] : List UInt8)) at h'
+  simpa using h'
+
 end Cap

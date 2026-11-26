@@ -71,15 +71,15 @@ theorem checkWorld_cons_ok {w w' : World} {c : UCmd} {rest : List UCmd}
         · simp [checkWorld, hpos, hw]
         · simpa [checkWorld, hpos, hw] using h
     · simp [checkWorld, hpos] at h
-  | beginLoan a lender loanId =>
-    cases hw : w.beginLoanChecked a lender loanId with
+  | beginBorrow a lender borrower loanId =>
+    cases hw : w.beginBorrowChecked a lender borrower loanId with
     | error e => simp [checkWorld, hw] at h
     | ok w1 =>
       refine ⟨w1, ?_, ?_⟩
       · simp [checkWorld, hw]
       · simpa [checkWorld, hw] using h
-  | endLoan a loanId =>
-    cases hw : w.endLoanChecked a loanId with
+  | endBorrow a loanId =>
+    cases hw : w.endBorrowChecked a loanId with
     | error e => simp [checkWorld, hw] at h
     | ok w1 =>
       refine ⟨w1, ?_, ?_⟩
