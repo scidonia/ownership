@@ -25,7 +25,7 @@ lake build capuf
 ./.lake/build/bin/capuf
 ```
 
-Observed: `lake build Cap` completed (the later executable build reports 74 jobs
+Observed: `lake build Cap` completed (the committed-tree executable build reports 76 jobs
 for the package plus driver); `capability controls: OK`; the axiom audit exited
 `0` with no `sorryAx` and only the standard `propext`, `Classical.choice`,
 `Quot.sound` footprints; the docs census reported `OK (141 rows)`.
