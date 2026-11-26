@@ -11,8 +11,8 @@ import Cap.Discipline
 import Cap.Sealed
 import Cap.Certify
 import Cap.UFReuse
+import Cap.UFReuseRunner
 import Cap.Reconstruction
-import Cap.ReconstructionSealed
 import Cap.Integrated
 
 open Cap
@@ -79,11 +79,8 @@ open Cap
 #print axioms Cap.iClosedDelegation_owner
 #print axioms Cap.iClosedDelegation_snapshot
 
-/-! ### The sealed and closed delegation certificates -/
+/-! ### The closed delegation certificates -/
 
-#print axioms Cap.sealedDelegation_ok
-#print axioms Cap.sealedDelegation_snapshot
-#print axioms Cap.sealedDelegation_run
 #print axioms Cap.closedDelegation_ok
 #print axioms Cap.closedDelegation_snapshot
 #print axioms Cap.closedDelegation_wf
@@ -102,6 +99,32 @@ open Cap
 #print axioms Cap.reuseSecond_same_iff
 #print axioms Cap.reuseTwoFinds_eq
 #print axioms Cap.reuseTwoFinds_same_iff
+
+/-! ### The state-threaded reusable union-find runner -/
+
+#print axioms Cap.replay_append
+#print axioms Cap.compressAll_length
+#print axioms Cap.findRootF_rank_le
+#print axioms Cap.rootPath_rank_lt
+#print axioms Cap.ranked_compress
+#print axioms Cap.ranked_compressAll
+#print axioms Cap.compressAll_chase_ranked
+#print axioms Cap.compressAll_chase_same_iff
+#print axioms Cap.PathRunner.find_ranked
+#print axioms Cap.PathRunner.find_same_iff
+#print axioms Cap.reuseRunnerFirst_root
+#print axioms Cap.reuseRunnerFirst_parent
+#print axioms Cap.reuseRunnerFirst_parent_eq
+#print axioms Cap.reuseRunnerFirst_trace
+#print axioms Cap.reuseRunnerSecond_root
+#print axioms Cap.reuseRunnerSecond_parent
+#print axioms Cap.reuseRunnerSecond_parent_eq
+#print axioms Cap.reuseRunnerSecond_trace
+#print axioms Cap.reuseRunnerFreshFour_parent
+#print axioms Cap.reuseRunnerFreshFour_trace
+#print axioms Cap.reuseRunnerSecond_consumes
+#print axioms Cap.reuseRunnerSecond_same_iff
+#print axioms Cap.reuseRunnerSecond_acyclic
 
 /-! ### Borrowed subdivision and reconstruction obligations -/
 
@@ -134,30 +157,22 @@ open Cap
 #print axioms Cap.Reconstruction.State.splitSpatial_none_of_issued
 #print axioms Cap.Reconstruction.State.splitFraction_none_of_retired
 #print axioms Cap.Reconstruction.State.write_inv
+#print axioms Cap.Reconstruction.State.Storage.of_heap
+#print axioms Cap.Reconstruction.State.initial_storage
+#print axioms Cap.Reconstruction.State.write_storage
+#print axioms Cap.Reconstruction.State.borrow_storage
+#print axioms Cap.Reconstruction.State.splitSpatial_storage
+#print axioms Cap.Reconstruction.State.splitFraction_storage
+#print axioms Cap.Reconstruction.State.reconstruct_storage
+#print axioms Cap.Reconstruction.State.return_storage
 #print axioms Cap.Reconstruction.World.splitAtChecked_refuses_with_loan
 
-/-! ### The sealed reconstruction path -/
+/-! ### The sealed integrated boundary -/
 
-#print axioms Cap.Reconstruction.Sealed.invariant
-#print axioms Cap.Reconstruction.Sealed.initial
-#print axioms Cap.Reconstruction.Sealed.lifecycle
-#print axioms Cap.Reconstruction.lifecycle_ok
-#print axioms Cap.Reconstruction.lifecycle_snapshot
-#print axioms Cap.Reconstruction.lifecycle_authority
-#print axioms Cap.Reconstruction.lifecycle_retired
-#print axioms Cap.Reconstruction.lifecycle_restores
-#print axioms Cap.Reconstruction.lifecycle_snapshot_of_ok
-#print axioms Cap.Reconstruction.lifecycle_authority_of_ok
-#print axioms Cap.Reconstruction.lifecycle_retired_of_ok
-#print axioms Cap.Reconstruction.lifecycle_restores_of_ok
-#print axioms Cap.Reconstruction.lifecycle_inv_of_ok
-#print axioms Cap.Reconstruction.reuse_ok
-#print axioms Cap.Reconstruction.reuse_snapshot
-#print axioms Cap.Reconstruction.reuse_authority
-#print axioms Cap.Reconstruction.reuse_retired
-#print axioms Cap.Reconstruction.reuse_snapshot_of_ok
-#print axioms Cap.Reconstruction.reuse_authority_of_ok
-#print axioms Cap.Reconstruction.reuse_inv_of_ok
+#print axioms Cap.Sealed.invariant
+#print axioms Cap.Sealed.run
+#print axioms Cap.Integrated.Sealed.run_invariant
+#print axioms Cap.Integrated.lifecycle64_snapshot_of_ok
 
 /-! ### The integrated multi-allocation semantics -/
 
@@ -176,6 +191,8 @@ open Cap
 #print axioms Cap.Integrated.Prog.never_refuses
 #print axioms Cap.Integrated.Prog.finish_inv
 #print axioms Cap.Integrated.Sealed.invariant
+#print axioms Cap.Integrated.Sealed.run
+#print axioms Cap.Integrated.Sealed.run_invariant
 #print axioms Cap.Integrated.lifecycle64_ok
 #print axioms Cap.Integrated.lifecycle64_snapshot
 #print axioms Cap.Integrated.lifecycle64_authority

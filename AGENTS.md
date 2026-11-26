@@ -381,8 +381,36 @@
   `propext`, `Classical.choice` and `Quot.sound`. The sealed `UFRunner` is not
   threaded through this example: its world, representation and rank are private
   and it returns only one find's observation, so a second call would need a
-  successor-runner operation and a new rank certificate for the post-state.
+  successor-runner operation and a new rank certificate for the post-state; the
+  functional successor-runner is `Cap/UFReuseRunner.lean`.
   `bench/CapUnionFindReuse.lean` repeats the exact arrays as executable guards.
+- `Cap/UFReuseRunner.lean` is the state-threaded sealed runner on the functional
+  model. `PathRunner origin n rank` has a private constructor and private fields
+  for the current array, its length, the ranked-forest certificate, the
+  partition witness against the origin and the recorded compression history.
+  `PathRunner.find` returns the root together with the successor runner whose
+  array is the predecessor's with the chase's `rootPath` compressed to that
+  root; the successor keeps the origin, the domain and the rank function, so a
+  second call reads the first call's output array and history rather than the
+  origin. `compressAll_length`, `ranked_compress`/`ranked_compressAll` and
+  `compressAll_chase_ranked` show full-path compression preserves the length
+  and the ranked-forest certificate; the rank decrease along the chase is
+  `findRootF_rank_le` and `rootPath_rank_lt`, and the partition is preserved by
+  `compressAll_chase_same_iff`. On the five-node example
+  `reuseRunnerFirst_parent` and `reuseRunnerSecond_parent` give exactly
+  `[0,0,0,0,2]` and `[0,0,0,0,0]`; `reuseRunnerSecond_consumes` states that the
+  second call is run on the first successor (whose array differs from
+  `reuseStart`), that the successor's history is `[3,2,1]` followed by `[4,2]`,
+  and that a fresh find from node 4 on the origin records the longer single path
+  `[4,2,1]` and leaves node 3 pointing at 2, so its final array is
+  `[0,0,0,2,0]` rather than `[0,0,0,0,0]`. `reuseRunnerSecond_same_iff`
+  composes the partition back to the origin, and the runner's `ranked`/`acyclic`
+  accessors expose the two certificates. The runner is general over finite
+  histories it records itself; it has no union, no amortised-complexity claim,
+  no byte-backend correspondence, and the rank function is fixed for the run.
+  The sealed `UFCertified.UFRunner`, which wraps a world and a representation
+  predicate, is unchanged; this runner threads the functional `UF.Arr`. The
+  controls are `bench/CapUFReuseRunner.lean`.
 - `Cap/Marshal.lean` is the verified marshalling layer for the closed code
   universe. `Codec c` carries `encode : El c → List UInt8`, `decode`, and
   `decode_encode`; `codec` supplies one for every code (tagged products/sums,
@@ -640,29 +668,26 @@ shows the certificate it would have to emit, not proof-producing elaboration.
   `bench/CapDelegation.lean` adds the distinct-borrower controls on the checked
   world route (borrow, reborrow, return order, disposal, and the same borrow
   through a fractional split), each refusal paired with its affirmative case.
-- `Cap/Sealed.lean` is the sealed execution boundary: `Sealed` has a private
-  constructor, a private representation field and a private invariant proof, so
-  outside the module a sealed world can be held and observed but not manufactured,
-  read or stripped of its invariant. There is no arbitrary-world entry point: the
-  canonical state starts from the empty world (`Sealed.empty`), a proof-facing
-  certified import requires the full invariant (`Sealed.importCertified`), and a
-  run yields a sealed state only when the checker accepts (`Sealed.run`), carrying
-  `World.checkWorld_fullInv` through. The only observation is
-  `Sealed.snapshot` of one allocation, an immutable list. The old `Sealed.ofRun`
-  (arbitrary pre/post world plus an accepted empty run) is removed;
-  `bench/CapSealReject.lean` checks both the constructor and `ofRun` are
-  unavailable, `bench/CapSealPeekReject.lean` checks the field, and
-  `bench/CapSealAccept.lean` builds and runs the canonical state.
-  `Sealed.invariant`, `Sealed.empty_invariant`, `Sealed.importCertified_invariant`
-  and `Sealed.run_invariant` state the carried invariant; `Sealed.snapshot_eq`
-  reads the represented backend.
-  `boundaryClaims` lists the executable-edge claims with their status: the
-  checker's execution and invariant are proved, while the C store trace, physical
-  reference counts and physical storage independence are runtime contracts and
-  concurrency is excluded; `boundary_no_physical_proof` records that no physical
-  claim is marked proved. Lean has no module opacity, so this seals the
-  *construction* path, not physical storage: the pure model's backends are
-  shared by copied programs, which is the C runner's contract, not a theorem.
+- `Cap/Sealed.lean` is the sealed execution boundary, and it is an alias module
+  over `Cap.Integrated`: `Sealed` is `Integrated.Sealed`, and `initial`, `run`,
+  `snapshot`, the checked operations and the observation aliases re-export that
+  boundary. There is no `World`/`UCmd` sealed entry point and no certified world
+  import. `Sealed.run` executes a list of integrated `Cmd` values, carries
+  `State.run_inv`, and returns no state on a refused step. The observations are a
+  per-allocation snapshot, byte read, fragment description, retired names,
+  outstanding return obligations and live allocation list. The private
+  integrated constructor and invariant proof are what prevent manufacture.
+  `boundaryClaims` lists the executable-edge claims with their status: integrated
+  command execution and invariant preservation are proved, while the C store
+  trace, physical reference counts and physical storage independence are runtime
+  contracts and concurrency is excluded; `boundary_no_physical_proof` records
+  that no physical claim is marked proved. Lean has no module opacity, so this
+  seals the *construction* path, not physical storage: the pure model's data is
+  shared by copied values, which is the C runner's contract, not a theorem.
+  `bench/CapSealAccept.lean` builds the canonical state, runs integrated
+  commands and observes the bytes; `bench/CapSealReject.lean` checks that the
+  constructor and the retired world entry point are unavailable, and
+  `bench/CapSealPeekReject.lean` checks the representation field.
 - `Cap/Reconstruction.lean` is the borrowed-subdivision model. A `Forest` records
   the checked spatial or fractional rule at every interior node, and its
   `budget` is the frontier sum (`budget_eq_toTree`); `Valid` requires every
@@ -674,59 +699,46 @@ shows the certificate it would have to emit, not proof-producing elaboration.
   and `reconstructAt` restores a suspended parent from two children matched to
   its recorded rule. `State` pairs the forest with the reference heap, the
   issued and retired names and the outstanding `Restore` obligations; `State.Inv`
-  is frontier coverage plus forest validity. `State.write`, `borrow`,
-  `splitSpatial`, `splitFraction`, `reconstruct` and `return` are checked, each
-  preserving `State.Inv` (`State.*_inv`), with the obligation frames
+  is frontier coverage plus forest validity, and `State.Storage` separately says
+  the heap holds that allocation with exactly `len` bytes. `State.write`,
+  `borrow`, `splitSpatial`, `splitFraction`, `reconstruct` and `return` are
+  checked, each preserving `State.Inv` (`State.*_inv`) and `State.Storage`
+  (`State.*_storage`), with the obligation frames
   `splitSpatial_frames_restores`/`splitFraction_frames_restores` and the
   refusals `return_none_of_no_leaf` (return before reconstruction),
   `splitSpatial_none_of_issued` and `splitFraction_none_of_retired`. This is a
-  separate model, not the world command path: `World.splitAtChecked` still tests
+  component model, not the world command path: `World.splitAtChecked` still tests
   the allocation-wide loan exclusion, recorded by
   `World.splitAtChecked_refuses_with_loan`, so the world `UCmd` split/join guard
   does not consult this forest.
   `bench/CapReconstruction.lean` drives the 64-byte borrow/split/write/
   reconstruct/return lifecycle with each refusal paired to its affirmative case.
-- `Cap/ReconstructionSealed.lean` is the second sealed boundary, over
-  `Reconstruction.State`: a private constructor and private invariant proof, so
-  a client can hold a state but obtain one only from an operation the checker
-  accepted. The operations are `write`, `borrow`, `splitSpatial`,
-  `splitFraction`, `reconstruct` and `return`; each accepted call returns a
-  sealed state with `State.Inv` rebuilt from its preservation theorem, and a
-  refused call returns an error and no state. The observations are a heap
-  snapshot, per-fragment authority descriptions, the retired access names and
-  the outstanding restoration obligations (`Sealed.snapshot`, `Sealed.authority?`,
-  `Sealed.retired`, `Sealed.restores`). `Sealed.lifecycle` drives the 64-byte
-  cycle (`lifecycle_ok`, `lifecycle_snapshot`), and `Sealed.reuseLifecycle` runs
-  a second full cycle on the first cycle's output (`reuse_ok`). The two
-  boundaries are complementary rather than one routed through the other: the
-  `Cap.Sealed` `UCmd` path keeps its allocation-wide split/join guard, and
-  routing `World.splitAtChecked` through this forest is not claimed.
-  `bench/CapReconstructionSealed.lean` exercises both cycles and the refusals.
-- `Cap/Integrated.lean` is the multi-allocation reconstruction state: `State` is
-  a list of `Reconstruction.State` keyed by `AllocId`, and `State.Inv` requires
-  distinct allocation identifiers and every component's `State.Inv`. `Cmd` is
-  the checked command language (`alloc`, `write`, `borrow`, `splitSpatial`,
-  `splitFraction`, `reconstruct`, `ret`, `free`); every command names its
-  allocation, and `State.exec` refuses an absent one. `State.exec_inv` and
-  `State.run_inv` preserve `State.Inv`; `State.exec_frames_other` shows that an
-  accepted command leaves every other allocation's lookup — and therefore its
-  snapshot — unchanged. `State.free` is accepted only for a single whole active
-  leaf with no outstanding return obligation, read structurally by
-  `wholeActiveB_iff`. `Prog` is the typed wrapper: a command list together with
-  the boolean check from an invariant start state, and `Prog.never_refuses`
-  derives an accepting run. `Sealed` is the private multi-allocation boundary
-  with snapshot, byte-read, fragment, retired-name and obligation observations;
-  `Sealed.lifecycle64` is the 64-byte borrow/split/write/reconstruct/return
+- `Cap/Integrated.lean` is the one integrated sealed semantics: `State` is a
+  list of `Reconstruction.State` keyed by `AllocId`, and `State.Inv` requires
+  distinct allocation identifiers, every component's `State.Inv`, and every
+  component's `State.Storage`. `Cmd` is the checked command language (`alloc`,
+  `write`, `borrow`, `splitSpatial`, `splitFraction`, `reconstruct`, `ret`,
+  `free`); every command names its allocation, and `State.exec` refuses an
+  absent one. `State.exec_inv` and `State.run_inv` preserve `State.Inv`;
+  `State.exec_frames_other` shows that an accepted command leaves every other
+  allocation's lookup — and therefore its snapshot — unchanged. `State.free` is
+  accepted only for a single whole active leaf with no outstanding return
+  obligation, read structurally by `wholeActiveB_iff`. `Prog` is the typed
+  wrapper: a command list together with the boolean check from an invariant start
+  state, and `Prog.never_refuses` derives an accepting run. `Sealed` is the
+  private multi-allocation boundary with snapshot, byte-read, fragment,
+  retired-name and obligation observations; `Sealed.run` executes a whole command
+  list, `Sealed.lifecycle64` is the 64-byte borrow/split/write/reconstruct/return
   cycle, `Sealed.reuseLifecycle` runs a second cycle on its output, and
   `Sealed.alloc` adds a second allocation. `bench/CapIntegrated.lean` exercises
   independent two-allocation borrowing, an independent sibling split while a
-  loan is outstanding, the return order and the free guard;
+  loan is outstanding, the return order, the free guard and the refusal controls
+  retained from the retired single-allocation sealed module;
   `bench/CapIntegratedPeekReject.lean` checks the sealed representation and
-  constructor are private. `Cap.Sealed` still wraps `World`/`UCmd`: this module
-  does not route it, and `World.splitAtChecked` keeps its allocation-wide loan
-  guard. A later migration needs the storage, ledger and history components of
-  `World.FullInv` in `State.Inv` and one `State` behind the `Cap.Sealed`
-  interface.
+  constructor are private. The world `World`/`UCmd` path and `World.FullInv`
+  remain as separate theorems on their own state, and `World.splitAtChecked`
+  keeps its allocation-wide loan guard. The sealed path is the integrated
+  reconstruction language; it does not claim to route `World` through the forest.
 - `Cap/Trace.lean` states trace properties of the checker language:
   `checkWorld_cons_ok` splits an accepted command list at its first command, and
   `checkWorld_write_guard` proves that a write at any position of an accepted

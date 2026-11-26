@@ -6,8 +6,9 @@ open Cap.Integrated
 /-!
 Executable controls for the integrated multi-allocation reconstruction path.
 
-The fixture is the same 64-byte allocation as `Cap.ReconstructionSealed`, now
-one component of a multi-allocation state. The controls exercise:
+The fixture is the same 64-byte allocation as the retired single-allocation
+sealed controls, now one component of a multi-allocation state. The controls
+exercise:
 
 * two allocations borrowed independently, written and returned in either order;
 * a split of an independent sibling region while a loan on the same allocation
@@ -248,3 +249,97 @@ private def lifecycleReconstructed : Sealed :=
         s.read? ⟨1⟩ 0 == some 5 &&
         decide (s.authority? ⟨1⟩ ⟨10⟩ = some whole1)
   | none => false)
+
+/-! ### Refusal controls retained from the retired single-allocation boundary -/
+
+/- The dormant lender is not a current leaf while the borrow is outstanding; the
+affirmative control is the write through the borrower. -/
+#guard (lifecycleBorrowed.write ⟨0⟩ ⟨1⟩ 0 7).isOk = false
+#guard (lifecycleBorrowed.write ⟨0⟩ ⟨3⟩ 0 7).isOk
+
+/- After the split the suspended parent name is not a current leaf. -/
+#guard (lifecycleSplit.write ⟨0⟩ ⟨3⟩ 0 7).isOk = false
+#guard (lifecycleSplit.splitSpatial ⟨0⟩ ⟨3⟩ ⟨10⟩ ⟨11⟩ 0 32 32 64).isOk = false
+
+/- Child names are retired after reconstruction and cannot write; the
+affirmative control is the write through a child before reconstruction. -/
+#guard (lifecycleReconstructed.write ⟨0⟩ ⟨4⟩ 0 7).isOk = false
+#guard (lifecycleReconstructed.write ⟨0⟩ ⟨5⟩ 40 9).isOk = false
+#guard (lifecycleSplit.write ⟨0⟩ ⟨4⟩ 0 7).isOk
+
+/- A return before reconstruction is refused; the affirmative control is the
+accepted return after reconstruction. -/
+#guard (lifecycleSplit.return ⟨0⟩ ⟨3⟩).isOk = false
+#guard (lifecycleProcessed.return ⟨0⟩ ⟨3⟩).isOk = false
+#guard (lifecycleReconstructed.return ⟨0⟩ ⟨3⟩).isOk
+
+/- A return through the lender name is refused; the lender is not a borrower. -/
+#guard (lifecycleReconstructed.return ⟨0⟩ ⟨1⟩).isOk = false
+#guard (Sealed.initial64.return ⟨0⟩ ⟨1⟩).isOk = false
+
+/- A reconstruction without a suspension is refused; the affirmative control is
+the reconstruction of the suspended `⟨3⟩`. -/
+#guard (Sealed.initial64.reconstruct ⟨0⟩ ⟨1⟩).isOk = false
+#guard (lifecycleBorrowed.reconstruct ⟨0⟩ ⟨1⟩).isOk = false
+#guard (lifecycleProcessed.reconstruct ⟨0⟩ ⟨3⟩).isOk
+
+/- A write through a name that was never issued is refused. -/
+#guard (Sealed.initial64.write ⟨0⟩ ⟨12⟩ 0 7).isOk = false
+#guard (Sealed.initial64.write ⟨0⟩ ⟨1⟩ 0 7).isOk
+
+/- Overlapping, incomplete and out-of-parent child intervals are refused; the
+affirmative control is the exact partition. -/
+#guard (lifecycleBorrowed.splitSpatial ⟨0⟩ ⟨3⟩ ⟨4⟩ ⟨5⟩ 0 32 30 64).isOk = false
+#guard (lifecycleBorrowed.splitSpatial ⟨0⟩ ⟨3⟩ ⟨4⟩ ⟨5⟩ 0 32 40 64).isOk = false
+#guard (lifecycleBorrowed.splitSpatial ⟨0⟩ ⟨3⟩ ⟨4⟩ ⟨5⟩ 0 32 32 65).isOk = false
+#guard (lifecycleBorrowed.splitSpatial ⟨0⟩ ⟨3⟩ ⟨4⟩ ⟨5⟩ 0 32 32 64).isOk
+
+/- Shares that do not sum to the parent, or that are zero, are refused; the
+affirmative control is the exact share sum. -/
+#guard (lifecycleBorrowed.splitFraction ⟨0⟩ ⟨3⟩ ⟨4⟩ ⟨5⟩ 32 30).isOk = false
+#guard (lifecycleBorrowed.splitFraction ⟨0⟩ ⟨3⟩ ⟨4⟩ ⟨5⟩ 0 64).isOk = false
+#guard (lifecycleBorrowed.splitFraction ⟨0⟩ ⟨3⟩ ⟨4⟩ ⟨5⟩ 40 40).isOk = false
+#guard (lifecycleBorrowed.splitFraction ⟨0⟩ ⟨3⟩ ⟨4⟩ ⟨5⟩ 40 24).isOk
+
+/- A retired child name cannot be issued again; the affirmative control is a
+split with fresh names on the reconstructed borrower. -/
+#guard (lifecycleReconstructed.splitSpatial ⟨0⟩ ⟨4⟩ ⟨6⟩ ⟨7⟩ 0 16 16 32).isOk = false
+#guard (lifecycleReconstructed.splitSpatial ⟨0⟩ ⟨3⟩ ⟨4⟩ ⟨6⟩ 0 32 32 64).isOk = false
+#guard (lifecycleReconstructed.splitSpatial ⟨0⟩ ⟨3⟩ ⟨6⟩ ⟨7⟩ 0 32 32 64).isOk
+
+private def lifecycleReturned : Sealed :=
+  match lifecycleReconstructed.return ⟨0⟩ ⟨3⟩ with
+  | .ok s => s
+  | .error _ => lifecycleReconstructed
+
+/- A returned borrower name cannot be borrowed again; the affirmative control is
+a borrow with a fresh name. -/
+#guard (lifecycleReturned.borrow ⟨0⟩ ⟨1⟩ ⟨3⟩).isOk = false
+#guard (lifecycleReturned.borrow ⟨0⟩ ⟨1⟩ ⟨6⟩).isOk
+
+/- A descendant obligation blocks reconstruction of the suspended parent and
+return of the outer loan; discharging it unblocks the reconstruction. -/
+private def childBorrowed : Sealed :=
+  match lifecycleSplit.borrow ⟨0⟩ ⟨4⟩ ⟨6⟩ with
+  | .ok s => s
+  | .error _ => lifecycleSplit
+
+#guard (lifecycleSplit.borrow ⟨0⟩ ⟨4⟩ ⟨6⟩).isOk
+#guard (childBorrowed.reconstruct ⟨0⟩ ⟨3⟩).isOk = false
+#guard (childBorrowed.return ⟨0⟩ ⟨3⟩).isOk = false
+#guard (childBorrowed.return ⟨0⟩ ⟨6⟩).isOk
+#guard (match childBorrowed.return ⟨0⟩ ⟨6⟩ with
+  | .ok s => (s.reconstruct ⟨0⟩ ⟨3⟩).isOk
+  | .error _ => false)
+
+/- Fractional subdivision through the integrated boundary: the two children keep
+the parent footprint and split its share, and reconstruction restores it. -/
+private def lifecycleFrac : Sealed :=
+  match lifecycleBorrowed.splitFraction ⟨0⟩ ⟨3⟩ ⟨4⟩ ⟨5⟩ 40 24 with
+  | .ok s => s
+  | .error _ => lifecycleBorrowed
+
+#guard lifecycleFrac.authority? ⟨0⟩ ⟨4⟩ |>.isSome
+#guard lifecycleFrac.authority? ⟨0⟩ ⟨5⟩ |>.isSome
+#guard (lifecycleFrac.write ⟨0⟩ ⟨4⟩ 0 7).isOk = false
+#guard (lifecycleFrac.reconstruct ⟨0⟩ ⟨3⟩).isOk

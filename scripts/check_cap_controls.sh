@@ -53,10 +53,10 @@ check_ok CapDelegation.lean
 check_ok CapChainRepair.lean
 check_ok CapDiscipline.lean
 check_ok CapReconstruction.lean
-check_ok CapReconstructionSealed.lean
 check_ok CapIntegrated.lean
 check_ok CapRealization.lean
 check_ok CapUnionFindReuse.lean
+check_ok CapUFReuseRunner.lean
 check_ok CapSealAccept.lean
 check_ok CapFreshness.lean
 check_ok OwnedAccept.lean
@@ -69,8 +69,8 @@ check_fail CapSurfaceReject.lean "splitAt refused"
 check_fail CapSurfaceReject.lean "splitFraction refused"
 check_fail OwnedReject.lean "used 2 times"
 check_fail OwnedNoAccess.lean "is private"
-check_fail CapSealReject.lean "Cap.Sealed.mk"
-check_fail CapSealReject.lean "Cap.Sealed.ofRun"
+check_fail CapSealReject.lean "Sealed.mk"
+check_fail CapSealReject.lean "importCertified"
 check_fail CapSealPeekReject.lean "is private"
 check_fail CapIntegratedPeekReject.lean "is private"
 

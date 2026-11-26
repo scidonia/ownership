@@ -1,80 +1,118 @@
 /-
 The sealed execution boundary.
 
-Lean has no module opacity: a public `World` can be built and taken apart
-anywhere. This module narrows the boundary the only way the language permits —
-a structure whose constructor is private to this file, so other modules can hold
-and use a sealed world but cannot manufacture one or destructure it. A sealed
-world is produced only from a command list the checker accepted, and its
-observable interface is a snapshot of one allocation.
+`Cap.Integrated.Sealed` is the one sealed path: a multi-allocation
+reconstruction state whose constructor and carried invariant are private, so a
+client can hold and observe a state but obtain one only from `initial`, an
+accepted command, or `run`. This module re-exports that boundary under the
+historical `Cap.Sealed` name; the `World`/`UCmd` wrapper that used to live here
+is gone. The world command path and its `World.FullInv` remain as their own
+theorems, but they are not a sealed entry point.
 
-What is proved here is the *bookkeeping* boundary: every sealed world reaches
-the outside through an accepted run; running more commands is deterministic; and
-the physical claims at the executable edge are listed with their status rather
-than asserted. What is deliberately not claimed is storage independence: the
-model's backends are pure lists, a copy of a program and its world shares them,
-and nothing here says two executed programs have independent physical storage.
-That is the C runner's contract (`runtime-bridge/`), stated as a runtime
-assumption, not a theorem of this model.
+The operations are `alloc`, `write`, `borrow`, `splitSpatial`, `splitFraction`,
+`reconstruct`, `return`, `free`, and the whole-run `run`; every accepted call
+returns a sealed state with the integrated invariant rebuilt from its
+preservation theorem, and a refused call returns an error and no state. The
+observations are a per-allocation heap snapshot, a byte read, a fragment
+description, the retired access names, the outstanding return obligations and the
+live allocation list.
+
+What is proved is the bookkeeping boundary: every sealed state carries the
+integrated invariant, and a run reaches the outside only through accepted
+commands. The state is pure data, so a copied sealed value shares its
+representation; the execution-edge claims are listed with their status in
+`boundaryClaims` rather than asserted.
 -/
-import Cap.FullInv
+import Cap.Integrated
 
 namespace Cap
 
-/-- A world reachable only through this module's constructors, carrying the
-combined invariant. -/
-structure Sealed where
-  private mk ::
-  private w : World
-  private h : World.FullInv w
+/-- The sealed state is the integrated multi-allocation state. -/
+abbrev Sealed := Integrated.Sealed
 
-private def mkSealed (w : World) (h : World.FullInv w) : Sealed := Sealed.mk w h
+namespace Sealed
 
-private def openSealed (s : Sealed) : World := s.w
+/-- The canonical sealed state: one whole fresh allocation. -/
+abbrev initial (a : AllocId) (n D : Nat) (pos : 0 < D)
+    (rootId disposalId : CapId) : Sealed :=
+  Integrated.Sealed.initial a n D pos rootId disposalId
 
-/-- The canonical sealed state starts from the empty world. -/
-def Sealed.empty : Sealed := mkSealed World.emptyWorld World.emptyWorld_fullInv
+/-- The 64-byte fixture: allocation `⟨0⟩`, root `⟨1⟩`, disposal `⟨2⟩`. -/
+abbrev initial64 : Sealed := Integrated.Sealed.initial64
 
-/-- A certified imported model state, for proofs that need to start elsewhere.
-The full invariant is required, so malformed worlds cannot enter. This is the
-proof-facing API; executable clients start from `Sealed.empty`. -/
-def Sealed.importCertified (w : World) (h : w.FullInv) : Sealed := mkSealed w h
+/-- Run an integrated command list inside the sealed boundary. -/
+abbrev run (s : Sealed) (cmds : List Integrated.Cmd) : Except String Sealed :=
+  Integrated.Sealed.run s cmds
 
-/-- Run commands inside the sealed boundary. The invariant is carried by the
-constructor, so an accepted run yields a sealed world that satisfies it; a
-refused run yields no state. -/
-def Sealed.run (s : Sealed) (cmds : List UCmd) : Except String Sealed :=
-  match h : checkWorld (openSealed s) cmds with
-  | .ok w' => .ok (mkSealed w' (World.checkWorld_fullInv _ _ _ h s.h))
-  | .error e => .error e
+/-- Every sealed state carries the integrated invariant. -/
+abbrev invariant := Integrated.Sealed.invariant
 
-/-- The only observation: a copy of one allocation's bytes. The result is an
-immutable list, so a snapshot cannot alias a mutable buffer. -/
-def Sealed.snapshot (s : Sealed) (a : AllocId) : Option (List UInt8) :=
-  (openSealed s).heaps a |>.map (·.buf)
+/-- The live allocation identifiers. -/
+abbrev allocations (s : Sealed) : List AllocId := Integrated.Sealed.allocations s
 
-/-- Snapshotting a sealed world returns the bytes of its represented backend. -/
-theorem Sealed.snapshot_eq (s : Sealed) (a : AllocId) (b : Backend)
-    (hb : (openSealed s).heaps a = some b) :
-    s.snapshot a = some b.buf := by
-  unfold Sealed.snapshot
-  rw [hb]
-  rfl
+/-- Add a fresh allocation. -/
+abbrev alloc (s : Sealed) (a : AllocId) (n D : Nat) (pos : 0 < D)
+    (rootId disposalId : CapId) : Except String Sealed :=
+  Integrated.Sealed.alloc s a n D pos rootId disposalId
 
-/-- Every sealed state, however obtained, satisfies the combined invariant. -/
-theorem Sealed.invariant (s : Sealed) : s.w.FullInv := s.h
+/-- Write one byte through a current fragment. -/
+abbrev write (s : Sealed) (a : AllocId) (id : CapId) (i : Nat) (v : UInt8) :
+    Except String Sealed :=
+  Integrated.Sealed.write s a id i v
 
-/-- The canonical state satisfies the combined invariant. -/
-theorem Sealed.empty_invariant : Sealed.empty.w.FullInv := Sealed.empty.h
+/-- Borrow a current active fragment. -/
+abbrev borrow (s : Sealed) (a : AllocId) (lender borrower : CapId) :
+    Except String Sealed :=
+  Integrated.Sealed.borrow s a lender borrower
 
-/-- A certified import satisfies the combined invariant. -/
-theorem Sealed.importCertified_invariant (w : World) (h : w.FullInv) :
-    (Sealed.importCertified w h).w.FullInv :=
-  (Sealed.importCertified w h).h
+/-- Spatially subdivide a current fragment. -/
+abbrev splitSpatial (s : Sealed) (a : AllocId) (parentId c1 c2 : CapId)
+    (lo1 hi1 lo2 hi2 : Nat) : Except String Sealed :=
+  Integrated.Sealed.splitSpatial s a parentId c1 c2 lo1 hi1 lo2 hi2
 
-/-- A completed run's sealed state satisfies the combined invariant. -/
-theorem Sealed.run_invariant {s s' : Sealed} {cmds : List UCmd}
-    (h : s.run cmds = .ok s') : s'.w.FullInv := s'.h
+/-- Fractionally subdivide a current fragment. -/
+abbrev splitFraction (s : Sealed) (a : AllocId) (parentId c1 c2 : CapId)
+    (q1 q2 : Nat) : Except String Sealed :=
+  Integrated.Sealed.splitFraction s a parentId c1 c2 q1 q2
+
+/-- Reconstruct a suspended fragment. -/
+abbrev reconstruct (s : Sealed) (a : AllocId) (parentId : CapId) :
+    Except String Sealed :=
+  Integrated.Sealed.reconstruct s a parentId
+
+/-- Return a borrowed fragment. -/
+abbrev «return» (s : Sealed) (a : AllocId) (borrower : CapId) :
+    Except String Sealed :=
+  Integrated.Sealed.return s a borrower
+
+/-- Free a whole active allocation with no outstanding obligation. -/
+abbrev free (s : Sealed) (a : AllocId) : Except String Sealed :=
+  Integrated.Sealed.free s a
+
+/-- A copy of one allocation's bytes. -/
+abbrev snapshot (s : Sealed) (a : AllocId) : Option (List UInt8) :=
+  Integrated.Sealed.snapshot s a
+
+/-- Read one byte of one allocation. -/
+abbrev read? (s : Sealed) (a : AllocId) (i : Nat) : Option UInt8 :=
+  Integrated.Sealed.read? s a i
+
+/-- The current fragment of one allocation with the given access name. -/
+abbrev authority? (s : Sealed) (a : AllocId) (id : CapId) :
+    Option Reconstruction.Fragment :=
+  Integrated.Sealed.authority? s a id
+
+/-- The access names retired by one allocation, most recent first. -/
+abbrev retiredOf (s : Sealed) (a : AllocId) : List CapId :=
+  Integrated.Sealed.retiredOf s a
+
+/-- The outstanding return obligations of one allocation, most recent first. -/
+abbrev restoresOf (s : Sealed) (a : AllocId) : List Reconstruction.Restore :=
+  Integrated.Sealed.restoresOf s a
+
+end Sealed
+
+/-! ### Executable-edge claims -/
 
 /-- The status of a claim at the executable boundary. -/
 inductive TrustLevel where
@@ -89,9 +127,9 @@ inductive TrustLevel where
 /-- The claims at the executable boundary and their status. The physical claims
 are runtime contracts, not theorems of this model. -/
 def boundaryClaims : List (String × TrustLevel) :=
-  [ ("the checker's accepted command list is executed exactly", .proved),
-    ("an accepted run preserves the world invariant", .proved),
-    ("the sealed interface observes only a snapshot", .proved),
+  [ ("the integrated checker's accepted command list is executed exactly", .proved),
+    ("an accepted run preserves the integrated invariant", .proved),
+    ("the sealed interface observes only snapshots, reads, fragments, retired names and obligations", .proved),
     ("the C runtime performs the same store trace", .runtimeContract "A-perf"),
     ("counted references correspond to physical reference counts", .runtimeContract "A-count"),
     ("a copy of a program has physically independent storage", .runtimeContract "A-copy"),
@@ -101,44 +139,9 @@ def boundaryClaims : List (String × TrustLevel) :=
 runtime contracts and which are out of scope. -/
 theorem boundary_no_physical_proof :
     ∀ c ∈ boundaryClaims, c.2 = .proved → c.1 ∈
-      ["the checker's accepted command list is executed exactly",
-       "an accepted run preserves the world invariant",
-       "the sealed interface observes only a snapshot"] := by
+      ["the integrated checker's accepted command list is executed exactly",
+       "an accepted run preserves the integrated invariant",
+       "the sealed interface observes only snapshots, reads, fragments, retired names and obligations"] := by
   decide
-
-/-! ### A delegation program through the sealed boundary -/
-
-/-- A sealed delegation run: allocate a 4-byte owner, borrow its root for a
-fresh borrower, write through the borrower, return it, and write through the
-lender's restored capability. -/
-def sealedDelegationCmds : List UCmd :=
-  [ .alloc 4 ⟨1⟩ ⟨2⟩,
-    .beginBorrow ⟨0⟩ ⟨1⟩ ⟨3⟩ ⟨10⟩,
-    .write ⟨0⟩ ⟨3⟩ 0 7,
-    .endBorrow ⟨0⟩ ⟨10⟩,
-    .write ⟨0⟩ ⟨1⟩ 1 9 ]
-
-/-- The sealed boundary accepts the delegation program. -/
-theorem sealedDelegation_ok :
-    (Sealed.empty.run sealedDelegationCmds).isOk = true := by
-  decide
-
-/-- The only observation of the delegation run is a copy of the allocation's
-bytes: the byte the borrower wrote and the byte the restored lender wrote. -/
-theorem sealedDelegation_snapshot :
-    (Sealed.empty.run sealedDelegationCmds).toOption.map
-      (fun s => s.snapshot ⟨0⟩) = some (some ([7, 9, 0, 0] : List UInt8)) := by
-  decide
-
-/-- A completed delegation run's sealed state carries the combined invariant and
-observes exactly those bytes. -/
-theorem sealedDelegation_run {s' : Sealed}
-    (h : Sealed.empty.run sealedDelegationCmds = .ok s') :
-    s'.w.FullInv ∧ s'.snapshot ⟨0⟩ = some ([7, 9, 0, 0] : List UInt8) := by
-  refine ⟨Sealed.run_invariant h, ?_⟩
-  have h' := sealedDelegation_snapshot
-  rw [h] at h'
-  change some (s'.snapshot ⟨0⟩) = some (some ([7, 9, 0, 0] : List UInt8)) at h'
-  simpa using h'
 
 end Cap

@@ -7,10 +7,12 @@ obligations. This module lifts that model to a collection of allocations keyed b
 `AllocId`:
 
 * `State` is a list of `Reconstruction.State` values, one per live allocation.
-  `State.Inv` requires the allocation identifiers to be distinct and every
-  component to satisfy the reconstruction invariant. Access names are scoped to
-  their allocation: every checked command names the allocation it acts on, and
-  the observations take the same allocation identifier.
+  `State.Inv` requires the allocation identifiers to be distinct, every component
+  to satisfy the reconstruction invariant, and every component heap to hold its
+  allocation with the recorded `len` (`Reconstruction.State.Storage`). Access
+  names are scoped to their allocation: every checked command names the
+  allocation it acts on, and the observations take the same allocation
+  identifier.
 * `Cmd` is the checked command language: allocation, write, borrow, spatial and
   fractional subdivision, reconstruction, return and free. Each command acts on
   one allocation and delegates to the component operation. A command on an
@@ -27,39 +29,34 @@ obligations. This module lifts that model to a collection of allocations keyed b
   accepting run from the certificate, so a `Prog` cannot be built from a step the
   checker refuses.
 * `Sealed` is the private boundary over the integrated state. Its constructor and
-  carried invariant are private; the only way to obtain one is `initial` or an
-  accepted operation. Observations are a per-allocation heap snapshot, a byte
-  read, a fragment description, the retired names and the outstanding return
-  obligations. The 64-byte lifecycle borrows the whole fragment, splits it into
-  `[0,32)` and `[32,64)`, writes both halves, reconstructs and returns the loan,
-  and the bytes survive. A second full cycle and a second allocation are accepted
-  on the output.
+  carried invariant are private; the only way to obtain one is `initial`, an
+  accepted operation, or `Sealed.run` over the checked command list. Observations
+  are a per-allocation heap snapshot, a byte read, a fragment description, the
+  retired names and the outstanding return obligations. The 64-byte lifecycle
+  borrows the whole fragment, splits it into `[0,32)` and `[32,64)`, writes both
+  halves, reconstructs and returns the loan, and the bytes survive. A second full
+  cycle and a second allocation are accepted on the output.
 
-This module is the second, multi-allocation boundary. `Cap.Sealed` **does not**
-use it: `Cap.Sealed` still wraps `World` and the `UCmd` checker, and
-`World.splitAtChecked` still carries the allocation-wide loan guard that the
-reconstruction path replaced on its own state. Routing `Cap.Sealed` through this
-module — one `State` behind the same sealed interface, with the storage, ledger
-and history components of `World.FullInv` folded into `State.Inv` — is the
-migration this module prepares and does not perform. `Cap.UCmd`, `Cap.Sealed` and
-`Cap.IProg` are left in place.
+This module is the one sealed path. `Cap.Sealed` re-exports `Sealed` and its
+observations, so a client of the sealed boundary runs the integrated `Cmd`
+language rather than the `World`/`UCmd` checker. `Cap.ReconstructionSealed` has
+been retired; its lifecycle and controls live here, and the single-allocation
+`Reconstruction.State` is now only a component of this state.
 
-What `State.Inv` is not: it is the reconstruction invariant — distinct
-allocations, and each component's `Reconstruction.State.Inv` — not the combined
-`World.FullInv`. It carries no storage agreement, ledger, global issuance
-history or loan bookkeeping. A state whose component heap is empty still
-satisfies `State.Inv`, and `State.snapshot` then returns `none`; the storage
-component is not recovered here, so the missing-storage construction is still
-admissible at this layer. Folding the `World.FullInv` components into
-`State.Inv`, and proving the component heaps agree with their allocations, is
-part of the migration above.
+What `State.Inv` is: distinct allocations, each component's
+`Reconstruction.State.Inv`, and each component's `Reconstruction.State.Storage`
+— the component heap holds that allocation with exactly `len` bytes. Storage is
+part of the invariant, so a component whose heap is empty is rejected rather than
+observed as `none`. It is still not the combined `World.FullInv`: the ledger,
+global issuance history and world loan bookkeeping remain on the world path, and
+this module does not claim that `World.splitAtChecked` consults the
+reconstruction forest. It also does not turn a `World` into a component.
 
 The private constructor is what prevents manufacture; the state is pure data, so
 a copied sealed value shares its representation. That is the same model boundary
-as `Cap.Sealed` and `Cap.Reconstruction.Sealed`, and it is stated rather than
-claimed away.
+as before, and it is stated rather than claimed away.
 -/
-import Cap.ReconstructionSealed
+import Cap.Reconstruction
 
 namespace Cap
 
@@ -76,10 +73,11 @@ structure State where
 def State.allocIds (s : State) : List AllocId :=
   s.allocs.map (fun st => st.alloc)
 
-/-- The integrated invariant: the allocations are distinct and each component is
-a valid reconstruction state. -/
+/-- The integrated invariant: the allocations are distinct, every component is
+a valid reconstruction state, and every component's heap holds its allocation
+with the recorded `len`. -/
 def State.Inv (s : State) : Prop :=
-  s.allocIds.Nodup ∧ ∀ st ∈ s.allocs, st.Inv
+  s.allocIds.Nodup ∧ ∀ st ∈ s.allocs, st.Inv ∧ st.Storage
 
 /-- The empty state has no live allocation. -/
 def State.empty : State := { allocs := [] }
@@ -177,7 +175,8 @@ theorem State.initial_inv (a : AllocId) (n D : Nat) (pos : 0 < D)
   · intro st hst
     simp [State.initial] at hst
     subst hst
-    exact Reconstruction.State.initial_inv a n D pos rootId disposalId
+    exact ⟨Reconstruction.State.initial_inv a n D pos rootId disposalId,
+      Reconstruction.State.initial_storage a n D pos rootId disposalId⟩
 
 /-- The 64-byte integrated fixture: allocation `⟨0⟩`, root `⟨1⟩`, disposal
 `⟨2⟩`. -/
@@ -214,7 +213,8 @@ theorem findState?_eq_some_mem {l : List Reconstruction.State} {a : AllocId}
         exact ⟨List.mem_cons_of_mem head hmem, halloc⟩
 
 theorem State.find?_inv {s : State} (hinv : s.Inv) {a : AllocId}
-    {st : Reconstruction.State} (h : s.find? a = some st) : st.Inv := by
+    {st : Reconstruction.State} (h : s.find? a = some st) :
+    st.Inv ∧ st.Storage := by
   obtain ⟨hmem, _⟩ := findState?_eq_some_mem h
   exact hinv.2 st hmem
 
@@ -317,9 +317,9 @@ theorem updateState_inv {l l' : List Reconstruction.State} {a : AllocId}
     {f : Reconstruction.State → Option Reconstruction.State}
     (h : updateState l a f = some l')
     (hnodup : (l.map (fun st => st.alloc)).Nodup)
-    (hall : ∀ st ∈ l, st.Inv)
-    (hf : ∀ st st', st.Inv → f st = some st' → st'.Inv) :
-    (l'.map (fun st => st.alloc)).Nodup ∧ ∀ st ∈ l', st.Inv := by
+    (hall : ∀ st ∈ l, st.Inv ∧ st.Storage)
+    (hf : ∀ st st', st.Inv → st.Storage → f st = some st' → st'.Inv ∧ st'.Storage) :
+    (l'.map (fun st => st.alloc)).Nodup ∧ ∀ st ∈ l', st.Inv ∧ st.Storage := by
   induction l generalizing l' with
   | nil => simp [updateState] at h
   | cons head tail ih =>
@@ -344,7 +344,7 @@ theorem updateState_inv {l l' : List Reconstruction.State} {a : AllocId}
               · intro x hx
                 rcases List.mem_cons.mp hx with heq | hx
                 · rw [heq]
-                  exact hf head next (hall head (by simp)) hfst
+                  exact hf head next (hall head (by simp)).1 (hall head (by simp)).2 hfst
                 · exact hall x (by simp [hx])
             · rw [if_neg hkey'] at h
               simp at h
@@ -373,7 +373,8 @@ theorem updateState_inv {l l' : List Reconstruction.State} {a : AllocId}
 theorem State.update_inv {s s' : State} {a : AllocId}
     {f : Reconstruction.State → Option Reconstruction.State}
     (h : s.update a f = some s') (hinv : s.Inv)
-    (hf : ∀ st st', st.Inv → f st = some st' → st'.Inv) : s'.Inv := by
+    (hf : ∀ st st', st.Inv → st.Storage → f st = some st' → st'.Inv ∧ st'.Storage) :
+    s'.Inv := by
   obtain ⟨hnodup, hall⟩ := hinv
   unfold State.update at h
   cases hupd : updateState s.allocs a f with
@@ -403,7 +404,8 @@ theorem State.alloc_inv {s s' : State} {a : AllocId} {n D : Nat} {pos : 0 < D}
     · intro st hst
       rw [List.mem_cons] at hst
       rcases hst with rfl | hst
-      · exact Reconstruction.State.initial_inv a n D pos rootId disposalId
+      · exact ⟨Reconstruction.State.initial_inv a n D pos rootId disposalId,
+          Reconstruction.State.initial_storage a n D pos rootId disposalId⟩
       · exact hall st hst
   · simp at h
 
@@ -590,22 +592,34 @@ theorem State.exec_inv {s s' : State} {c : Cmd}
       exact State.alloc_inv h hinv
   | write a id i v =>
       exact State.update_inv h hinv
-        (fun st st' hst hw => Reconstruction.State.write_inv hw hst)
+        (fun st st' hst hstor hw =>
+          ⟨Reconstruction.State.write_inv hw hst,
+           Reconstruction.State.write_storage hw hstor⟩)
   | borrow a lender borrower =>
       exact State.update_inv h hinv
-        (fun st st' hst hb => Reconstruction.State.borrow_inv hb hst)
+        (fun st st' hst hstor hb =>
+          ⟨Reconstruction.State.borrow_inv hb hst,
+           Reconstruction.State.borrow_storage hb hstor⟩)
   | splitSpatial a parentId c1 c2 lo1 hi1 lo2 hi2 =>
       exact State.update_inv h hinv
-        (fun st st' hst hs => Reconstruction.State.splitSpatial_inv hs hst)
+        (fun st st' hst hstor hs =>
+          ⟨Reconstruction.State.splitSpatial_inv hs hst,
+           Reconstruction.State.splitSpatial_storage hs hstor⟩)
   | splitFraction a parentId c1 c2 q1 q2 =>
       exact State.update_inv h hinv
-        (fun st st' hst hs => Reconstruction.State.splitFraction_inv hs hst)
+        (fun st st' hst hstor hs =>
+          ⟨Reconstruction.State.splitFraction_inv hs hst,
+           Reconstruction.State.splitFraction_storage hs hstor⟩)
   | reconstruct a parentId =>
       exact State.update_inv h hinv
-        (fun st st' hst hr => Reconstruction.State.reconstruct_inv hr hst)
+        (fun st st' hst hstor hr =>
+          ⟨Reconstruction.State.reconstruct_inv hr hst,
+           Reconstruction.State.reconstruct_storage hr hstor⟩)
   | ret a borrower =>
       exact State.update_inv h hinv
-        (fun st st' hst hr => Reconstruction.State.return_inv hr hst)
+        (fun st st' hst hstor hr =>
+          ⟨Reconstruction.State.return_inv hr hst,
+           Reconstruction.State.return_storage hr hstor⟩)
   | free a =>
       exact State.free_inv h hinv
 
@@ -841,6 +855,18 @@ def Sealed.return (s : Sealed) (a : AllocId) (borrower : CapId) :
 def Sealed.free (s : Sealed) (a : AllocId) : Except String Sealed :=
   s.runCmd (.free a)
     "free refused: not a single whole active leaf or a return obligation is outstanding"
+
+/-- Run a command list inside the sealed boundary. The invariant is carried
+through `State.run_inv`, so an accepted run yields a sealed state and a refused
+step yields no state. -/
+def Sealed.run (s : Sealed) (cmds : List Cmd) : Except String Sealed :=
+  match h : State.run (openSealed s) cmds with
+  | some s' => .ok (mkSealed s' (State.run_inv h s.inv))
+  | none => .error "run refused: a command was rejected by the checker"
+
+/-- An accepted run's sealed result carries the integrated invariant. -/
+theorem Sealed.run_invariant {s s' : Sealed} {cmds : List Cmd}
+    (h : s.run cmds = .ok s') : s'.s.Inv := s'.inv
 
 /-- A copy of one allocation's bytes. -/
 def Sealed.snapshot (s : Sealed) (a : AllocId) : Option (List UInt8) :=

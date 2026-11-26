@@ -69,6 +69,18 @@ structure Restore where
   ceiling : Ceiling
 deriving DecidableEq, Repr
 
+/-- A plain-data description of a current fragment: allocation, interval, share,
+ceiling and state. This is the exported view of a leaf; the proof fields stay
+inside the reconstruction model. -/
+structure Fragment where
+  alloc : AllocId
+  lo : Nat
+  hi : Nat
+  q : Nat
+  ceiling : Ceiling
+  state : CapState
+deriving DecidableEq, Repr
+
 /-- A checked reconstruction rule. The parent fragment is suspended and the two
 rule fragments are the fragments the children must be reconstructed to. -/
 def RuleValid (kind : RuleKind) (parent left right : Leaf) : Prop :=
@@ -715,6 +727,20 @@ rule is checked. -/
 def State.Inv (s : State) : Prop :=
   s.Covered ∧ s.forest.Valid
 
+/-- The component's represented storage: its heap holds the allocation with
+exactly `len` bytes. This is the storage half of the integrated invariant; the
+reconstruction invariant alone does not mention the heap. -/
+def State.Storage (s : State) : Prop :=
+  ∃ xs, s.heap.lookup? s.alloc = some xs ∧ xs.length = s.len
+
+/-- A state whose heap still holds the same allocation and length satisfies
+`Storage` whenever its predecessor does. -/
+theorem State.Storage.of_heap {s s' : State} (hheap : s'.heap = s.heap)
+    (ha : s'.alloc = s.alloc) (hlen : s'.len = s.len) (hs : s.Storage) :
+    s'.Storage := by
+  obtain ⟨xs, hlook, hlen'⟩ := hs
+  exact ⟨xs, by rw [hheap, ha, hlook], by rw [hlen, hlen']⟩
+
 /-- A whole live allocation satisfies the reconstruction invariant. -/
 theorem State.initial_inv (a : AllocId) (n D : Nat) (pos : 0 < D)
     (rootId disposalId : CapId) : (State.initial a n D pos rootId disposalId).Inv := by
@@ -726,6 +752,34 @@ theorem State.initial_inv (a : AllocId) (n D : Nat) (pos : 0 < D)
     have hx' : 0 ≤ x ∧ x < n := ⟨Nat.zero_le x, hx⟩
     simp [Forest.budget, Leaf.budget, hx']
   · trivial
+
+/-- A whole live allocation's heap holds exactly its `len` bytes. -/
+theorem State.initial_storage (a : AllocId) (n D : Nat) (pos : 0 < D)
+    (rootId disposalId : CapId) :
+    (State.initial a n D pos rootId disposalId).Storage := by
+  refine ⟨List.replicate n 0, ?_, by simp [State.initial]⟩
+  simp [State.initial, Heap.alloc, Heap.empty, Heap.lookup?, Heap.lookupList?, Heap.updateList]
+
+/-- The restored whole fragment of the 64-byte fixture, as observed. -/
+def wholeFragment : Fragment :=
+  { alloc := ⟨0⟩, lo := 0, hi := 64, q := 64,
+    ceiling := .readWrite, state := .active }
+
+/-- The heap after the first 64-byte lifecycle: byte 0 written through the left
+child and byte 40 through the right child. -/
+def firstSnapshot : List UInt8 :=
+  [7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+   0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+   0, 0, 0, 0, 0, 0, 0, 0, 9, 0, 0, 0, 0, 0, 0, 0,
+   0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+
+/-- The heap after both lifecycles: the first cycle's bytes at 0 and 40, plus
+the second cycle's bytes at 1 and 33. -/
+def secondSnapshot : List UInt8 :=
+  [7, 12, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+   0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+   0, 13, 0, 0, 0, 0, 0, 0, 9, 0, 0, 0, 0, 0, 0, 0,
+   0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
 
 /-- Write a byte through an active whole-share fragment of a read--write
 ceiling. The access name must be a current leaf. -/
@@ -754,6 +808,28 @@ theorem State.write_inv {s s' : State} {id : CapId} {i : Nat} {v : UInt8}
         subst s'
         exact hinv
       · simp at h
+    · simp at h
+
+/-- A write changes only the bytes, not the represented allocation or its
+length. -/
+theorem State.write_storage {s s' : State} {id : CapId} {i : Nat} {v : UInt8}
+    (h : s.write id i v = some s') (hst : s.Storage) : s'.Storage := by
+  obtain ⟨xs, hlook, hlen⟩ := hst
+  unfold State.write at h
+  split at h
+  · simp at h
+  · split at h
+    · cases hw : s.heap.write? s.alloc i v with
+      | none => simp [hw] at h
+      | some h' =>
+          simp only [hw, Option.some.injEq] at h
+          subst h
+          have hmap : (Heap.lookup? h' s.alloc).map List.length = some s.len := by
+            rw [Heap.write_preserves_length hw]
+            simp [hlook, hlen]
+          cases hl : Heap.lookup? h' s.alloc with
+          | none => simp [hl] at hmap
+          | some ys => exact ⟨ys, by simpa using hl, by simpa [hl] using hmap⟩
     · simp at h
 
 /-- Borrow a current active fragment: retag its access name and record the
@@ -968,6 +1044,96 @@ theorem State.return_inv {s s' : State} {borrower : CapId}
             rw [Forest.retagLeaf_budget hretag x]
             exact hcov x hx
           · exact Forest.retagLeaf_valid hretag hval
+      · simp at h
+
+/-- Beginning a borrow leaves the represented heap, allocation and length
+unchanged. -/
+theorem State.borrow_storage {s s' : State} {lender borrower : CapId}
+    (h : s.borrow lender borrower = some s') (hst : s.Storage) : s'.Storage := by
+  obtain ⟨xs, hlook, hlen⟩ := hst
+  unfold State.borrow at h
+  split at h
+  · simp at h
+  · rename_i c hfind
+    split at h
+    · rename_i hok
+      split at h
+      · simp at h
+      · rename_i f' p hretag
+        simp only [Option.some.injEq] at h
+        subst h
+        exact State.Storage.of_heap rfl rfl rfl ⟨xs, hlook, hlen⟩
+    · simp at h
+
+/-- A spatial subdivision leaves the represented heap, allocation and length
+unchanged. -/
+theorem State.splitSpatial_storage {s s' : State} {parentId c1 c2 : CapId}
+    {lo1 hi1 lo2 hi2 : Nat}
+    (h : s.splitSpatial parentId c1 c2 lo1 hi1 lo2 hi2 = some s')
+    (hst : s.Storage) : s'.Storage := by
+  obtain ⟨xs, hlook, hlen⟩ := hst
+  unfold State.splitSpatial at h
+  split at h
+  · simp at h
+  · rename_i f' p hsplit
+    split at h
+    · rename_i hfresh
+      simp only [Option.some.injEq] at h
+      subst h
+      exact State.Storage.of_heap rfl rfl rfl ⟨xs, hlook, hlen⟩
+    · simp at h
+
+/-- A fractional subdivision leaves the represented heap, allocation and length
+unchanged. -/
+theorem State.splitFraction_storage {s s' : State} {parentId c1 c2 : CapId}
+    {q1 q2 : Nat}
+    (h : s.splitFraction parentId c1 c2 q1 q2 = some s')
+    (hst : s.Storage) : s'.Storage := by
+  obtain ⟨xs, hlook, hlen⟩ := hst
+  unfold State.splitFraction at h
+  split at h
+  · simp at h
+  · rename_i f' p hsplit
+    split at h
+    · rename_i hfresh
+      simp only [Option.some.injEq] at h
+      subst h
+      exact State.Storage.of_heap rfl rfl rfl ⟨xs, hlook, hlen⟩
+    · simp at h
+
+/-- Reconstruction leaves the represented heap, allocation and length
+unchanged. -/
+theorem State.reconstruct_storage {s s' : State} {parentId : CapId}
+    (h : s.reconstruct parentId = some s') (hst : s.Storage) : s'.Storage := by
+  obtain ⟨xs, hlook, hlen⟩ := hst
+  unfold State.reconstruct at h
+  split at h
+  · simp at h
+  · rename_i f' lf rf hrec
+    simp only [Option.some.injEq] at h
+    subst h
+    exact State.Storage.of_heap rfl rfl rfl ⟨xs, hlook, hlen⟩
+
+/-- Returning a borrow leaves the represented heap, allocation and length
+unchanged. -/
+theorem State.return_storage {s s' : State} {borrower : CapId}
+    (h : s.return borrower = some s') (hst : s.Storage) : s'.Storage := by
+  obtain ⟨xs, hlook, hlen⟩ := hst
+  unfold State.return at h
+  split at h
+  · simp at h
+  · rename_i r hrestore
+    split at h
+    · simp at h
+    · rename_i c hleaf
+      split at h
+      · rename_i hok
+        split at h
+        · simp at h
+        · rename_i f' p hretag
+          simp only [Option.some.injEq] at h
+          subst h
+          exact State.Storage.of_heap rfl rfl rfl ⟨xs, hlook, hlen⟩
       · simp at h
 
 /-- A return is refused while the borrowed name is not a current leaf, in

@@ -100,7 +100,7 @@ The stack, bottom to top, each layer trusting only the ones below it:
 algorithms as clients & \file{Cap/UFRun.lean} \\
 sealed certificates & \file{Cap/Runner.lean} \\
 unified checker/interpreter & \file{Cap/Unified.lean} \\
-sealed reconstruction & \file{Cap/ReconstructionSealed.lean} \\
+sealed execution & \file{Cap/Integrated.lean} \\
 reconstruction forest & \file{Cap/Reconstruction.lean} \\
 coupled chain state & \file{Cap/Discipline.lean} \\
 delegation chain & \file{Cap/Delegation.lean} \\
@@ -451,16 +451,18 @@ independent sibling range is refused on the \lean{UCmd} path, and the world
 route does not consult the forest. Removing that allocation-wide test is the
 named next integration; nothing here claims it.
 
-The sealed counterpart (\file{Cap/ReconstructionSealed.lean}) has a private
-constructor and private invariant proof over \lean{Reconstruction.State}, with
-\lean{write}, \lean{borrow}, \lean{splitSpatial}, \lean{splitFraction},
-\lean{reconstruct} and \lean{return} as the only operations. Accepted calls
-return a sealed state carrying the rebuilt invariant; refused calls return an
-error and no state. Its observations are a heap snapshot, per-fragment
-authority, retired names and outstanding restoration obligations.
-\lean{Sealed.lifecycle} runs the 64-byte example and \lean{Sealed.reuseLifecycle}
-runs a second full cycle on the first's output. The two sealed boundaries are
-complementary rather than one routed through the other.
+The sealed boundary is \file{Cap/Integrated.lean}, re-exported by
+\file{Cap/Sealed.lean}. It lifts the reconstruction state to a list of
+allocations, keeps the constructor and invariant proof private, and exposes the
+checked \lean{Cmd} operations plus a whole-run \lean{run}. \lean{State.Inv}
+includes each component's \lean{Reconstruction.State.Storage}, so a component
+whose heap does not hold its allocation with the recorded length is rejected.
+Its observations are a heap snapshot, byte read, per-fragment authority, retired
+names, outstanding restoration obligations and the live allocation list.
+\lean{Sealed.lifecycle64} runs the 64-byte example and
+\lean{Sealed.reuseLifecycle} runs a second full cycle on the first's output. The
+retired single-allocation \file{Cap/ReconstructionSealed.lean} is gone; its
+controls live in \file{bench/CapIntegrated.lean}.
 
 \section{Certificates and the sealed boundary}
 
@@ -612,9 +614,9 @@ reference heap & 51{,}956 \\
   the allocation; the allocation-wide guard does not consult the reconstruction
   forest, so the reconstruction model's borrowed subdivision is not integrated
   into the world path.
-\item The sealed boundary is not module-enforced. The sealed reconstruction path
-  is a second sealed surface beside the world path, not the world path routed
-  through the forest.
+\item The sealed boundary is not module-enforced. The sealed path is the
+  integrated multi-allocation reconstruction state; the world \lean{UCmd} path is
+  a separate theorem surface and is not routed through the forest.
 \item No in-place-update or compiled-performance claim anywhere in \file{Cap/}.
 \item Union-find correctness is the concrete five-node reuse instance and the
   four-node write-discipline instance, not the general theorem. The two-find

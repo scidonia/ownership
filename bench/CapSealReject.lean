@@ -1,10 +1,10 @@
 import Cap.Sealed
 open Cap
 
--- Outside `Cap.Sealed`, a sealed world cannot be manufactured: its constructor
--- is private.
-example (w : World) (h : w.FullInv) : Sealed := Sealed.mk w h
+-- Outside the integrated module, a sealed state cannot be manufactured: the
+-- constructor is private there and the `Cap.Sealed` alias does not expose it.
+example (s : Integrated.State) (h : s.Inv) : Sealed := Sealed.mk s h
 
--- Nor is there an arbitrary-world entry point: the old `ofRun` took a
--- caller-supplied world and an empty accepted run.
-example (w : World) : Sealed := Sealed.ofRun w [] w (by rfl)
+-- Nor is there a world entry point: the old certified import is gone, so the
+-- sealed boundary cannot be fed a `World`/`UCmd` state.
+example : Sealed.importCertified = Sealed.importCertified := rfl

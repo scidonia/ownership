@@ -123,7 +123,7 @@ Module & Content \\
 \file{Cap/Discipline.lean} & world and delegation-chain correspondence \\
 \file{Cap/Delegation.lean} & nested delegation chain, rooted path, checked begin/end \\
 \file{Cap/Reconstruction.lean} & borrowed subdivision and reconstruction obligations \\
-\file{Cap/ReconstructionSealed.lean} & sealed borrowed-reconstruction lifecycle \\
+\file{Cap/Integrated.lean} & integrated multi-allocation sealed execution \\
 \file{Cap/UFReuse.lean} & reusable two-find compression on the functional model \\
 \file{Cap/FullInv.lean} & the combined invariant and its preservation \\
 \file{Cap/Bytes.lean} & reference byte heap \\
@@ -154,7 +154,7 @@ R3 & Delegation by retagging is the borrowed-authority mechanism: a borrow retag
 R4 & \file{Cap/Disposal.lean}: one \texttt{Legal} predicate (entitlement, coverage, reconstructed root, empty loans) and a checked \texttt{free?}; not yet a command of the unified language. \\
 R5 & Not done: the complete split/borrow/fill/read/rejoin/restore/snapshot/free trace. \\
 G7 & \file{Cap/UFReuse.lean}: two full-path finds on the functional model, \texttt{[0,0,1,2,2]} from node 3 to \texttt{[0,0,0,0,2]} then from node 4 to \texttt{[0,0,0,0,0]}, with the first output's ranked-forest witness admitting the second operation as a certificate rather than a restated array. The sealed \texttt{UFRunner} is not threaded through it. \\
-Reconstruction & \file{Cap/Reconstruction.lean} records checked spatial and fractional subdivision rules, a reconstruction operation and restoration obligations, each preserving the reconstruction invariant; \file{Cap/ReconstructionSealed.lean} drives the 64-byte lifecycle twice through a sealed boundary. This is a separate state machine: the world \texttt{UCmd} split/join guard remains allocation-wide. \\
+Reconstruction & \file{Cap/Reconstruction.lean} records checked spatial and fractional subdivision rules, a reconstruction operation and restoration obligations, each preserving the reconstruction invariant; \file{Cap/Integrated.lean} lifts it to a multi-allocation state and \file{Cap/Sealed.lean} re-exports the integrated sealed boundary, whose invariant includes each component's storage agreement. The world \texttt{UCmd} split/join guard remains allocation-wide. \\
 Validation & \texttt{scripts/check\_cap\_controls.sh} requires each negative fixture to fail with its intended diagnostic; \texttt{check\_all} runs it. \\
 Examples & Union-find and a linear-probing hash set under the guard API, with their limits stated. \\
 \bottomrule
@@ -572,28 +572,29 @@ immutable snapshot from the post-world. Certificates compose: \texttt{checkWorld
 runs an appended command list from the first part's result, and \texttt{Prog.seq} makes
 the second program start in the first one's post-world. \texttt{Cap/Indexed.lean}'s `Ix` is a
 specification type by comparison: its `run` field alone does not establish a
-post-relation, which is now stated in that module. \file{Cap/Sealed.lean}
-seals the construction path and the representation: \texttt{Sealed} has a
+post-relation, which is now stated in that module. \file{Cap/Sealed.lean} re-exports the integrated sealed boundary from
+\file{Cap/Integrated.lean}: \texttt{Sealed} is \texttt{Integrated.Sealed}, with a
 private constructor, a private representation field and a private invariant
-proof; the canonical state starts from the empty world
-(\texttt{Sealed.empty}), a proof-facing certified import requires the combined
-invariant (\texttt{Sealed.importCertified}), and a run yields a sealed state only
-on acceptance, carrying \texttt{World.checkWorld\_fullInv} through
-(\texttt{Sealed.run\_invariant}). Negative fixtures check that the constructor, the representation field and
-any arbitrary-world entry point are unavailable
+proof. The canonical state is one whole fresh allocation
+(\texttt{Sealed.initial}); \texttt{Sealed.run} executes the checked integrated
+\texttt{Cmd} list and carries \texttt{State.run\_inv} through
+(\texttt{Sealed.run\_invariant}). Negative fixtures check that the constructor,
+the representation field and the retired world entry point are unavailable
 (\texttt{bench/CapSealReject.lean}, \texttt{bench/CapSealPeekReject.lean}). The
-only observation is \texttt{Sealed.snapshot} of one allocation, an immutable
-list.
-\texttt{boundaryClaims} lists the executable-edge claims with their status: the
-checker's execution, the world invariant and the snapshot interface are proved,
-while the C store trace, physical reference counts and physical storage
-independence are runtime contracts and concurrency is excluded. Physical storage
-independence is not a theorem of the pure model --- copied programs share
-backends --- so the C runner's contract and the complete command set remain
-open (the runner handoff's P0). The invariant the sealed state carries is
-\texttt{World.FullInv = World.TopInv} $\land$ \texttt{World.BorrowOK}
-(\file{Cap/FullInv.lean}), preserved by whole executions
-(\texttt{World.checkWorld\_fullInv}) and initialized at the empty world.
+observations are a per-allocation snapshot, byte read, fragment description,
+retired access names and outstanding restoration obligations.
+\texttt{boundaryClaims} lists the executable-edge claims with their status:
+integrated command execution, invariant preservation and the observation
+interface are proved, while the C store trace, physical reference counts and
+physical storage independence are runtime contracts and concurrency is excluded.
+Physical storage independence is not a theorem of the pure model --- copied
+values share their representation --- so the C runner's contract and the complete
+command set remain open (the runner handoff's P0). The invariant the sealed state
+carries is the integrated state invariant: distinct allocations, each
+component's reconstruction invariant, and each component's storage agreement
+(\texttt{Reconstruction.State.Storage}). \texttt{World.FullInv} remains a
+separate invariant on the world \texttt{UCmd} path, not the sealed state's
+carrier.
 \texttt{World.BorrowOK} is the integrated delegation invariant: distinct
 loan/lender/borrower/lifetime names, issuance and liveness, the recorded chain
 base, global lender detachment, active-terminal-or-delegated authority,
@@ -1036,7 +1037,7 @@ context (\texttt{Ctx.loans}). Disposal refuses while a loan is attached to the
 allocation (\texttt{World.freeChecked\_refused\_of\_loan}), and the indexed
 \texttt{free} constructor carries that condition together with the recorded
 capability's success. The borrowed-subdivision lifecycle is proved in the
-separate reconstruction model of Section~\ref{sec:reconstruction}; its
+reconstruction model of Section~\ref{sec:reconstruction}; its
 integration into this world split/join guard remains open.
 
 \section{The delegation invariant}
@@ -1061,8 +1062,9 @@ the order of the world loan list.
 
 \section{Borrowed subdivision and reconstruction}\label{sec:reconstruction}
 
-\file{Cap/Reconstruction.lean} is a separate state machine for the borrowed
-subdivision lifecycle. A \texttt{Forest} records at each interior node the
+\file{Cap/Reconstruction.lean} is the component model for the borrowed
+subdivision lifecycle; \file{Cap/Integrated.lean} lifts it to a list of
+allocations and supplies the sealed boundary. A \texttt{Forest} records at each interior node the
 checked spatial or fractional rule that produced its children, and its
 \texttt{budget} is the frontier sum (\texttt{budget\_eq\_toTree}); \texttt{Valid}
 requires every recorded rule to be checked. \texttt{RuleValid} states the two
@@ -1089,23 +1091,28 @@ refused (\texttt{return\_none\_of\_no\_leaf}), and a child name that was already
 issued or retired is refused (\texttt{splitSpatial\_none\_of\_issued},
 \texttt{splitFraction\_none\_of\_retired}).
 
-\file{Cap/ReconstructionSealed.lean} seals that state: the constructor and the
-invariant proof are private, and the only operations are the six above. An
-accepted call returns a sealed state with the invariant rebuilt from its
-preservation theorem; a refused call returns an error and no state. Observations
-are a heap snapshot, per-fragment authority descriptions, the retired access
-names and the outstanding restoration obligations. \texttt{Sealed.lifecycle}
+\file{Cap/Integrated.lean} lifts the state to a list of allocations and supplies
+the sealed boundary; \file{Cap/Sealed.lean} re-exports it. The integrated
+constructor and invariant proof are private, the checked language is the
+\texttt{Cmd} constructors plus a whole-run \texttt{run}, and an accepted call
+returns a sealed state with the integrated invariant rebuilt from its
+preservation theorem. \texttt{State.Inv} includes each component's
+\texttt{Reconstruction.State.Storage}, so a component whose heap does not hold
+its allocation with the recorded length is rejected. Observations are a heap
+snapshot, byte read, per-fragment authority descriptions, the retired access
+names and the outstanding restoration obligations. \texttt{Sealed.lifecycle64}
 drives the 64-byte borrow/split/write/reconstruct/return example and
 \texttt{Sealed.reuseLifecycle} runs a second full cycle on the first's output
-(\texttt{lifecycle\_ok}, \texttt{lifecycle\_snapshot}, \texttt{reuse\_ok}).
+(\texttt{lifecycle64\_ok}, \texttt{lifecycle64\_snapshot}, \texttt{reuse64\_ok}).
 
-These are not the world \texttt{UCmd} path. \texttt{World.splitAtChecked},
+The world \texttt{UCmd} path remains separate. \texttt{World.splitAtChecked},
 \texttt{splitFractionChecked} and \texttt{joinChecked} still test the
 allocation-wide loan exclusion
 (\texttt{World.splitAtChecked\_refuses\_with\_loan}), so the world route neither
 splits a borrowed range nor an independent sibling range while a loan is
-outstanding, and it does not consult this forest. The completion criterion's
-single integrated world-and-restoration execution path is therefore not claimed.
+outstanding, and it does not consult this forest. The sealed path executes the
+integrated reconstruction language; the completion criterion's single integrated
+world-and-restoration execution path is therefore not claimed.
 
 \section{A reusable union-find client}\label{sec:reuse}
 
@@ -1147,7 +1154,7 @@ loan bookkeeping, delegation invariant, chain correspondence & Loans, Borrow, Di
 nested delegation chain, rooted path, derived holder, checked begin/end & Delegation \\
 coupled world/chain state, borrow/return correspondence & Discipline \\
 borrowed subdivision, reconstruction and restoration invariant & Reconstruction \\
-sealed reconstruction lifecycle and its reuse & ReconstructionSealed \\
+integrated sealed execution and its reuse & Integrated \\
 two-find reusable compression on the functional model & UFReuse \\
 reference heap, snapshot independence & Bytes \\
 backend refinement, interpreter agreement, world relation & Backend, Exec, World \\
@@ -1174,7 +1181,8 @@ command carrier, with the lifecycle run through that route. The delegation chain
 is repaired as a rooted path with a derived holder, and its checked begin/end
 operations preserve validity; the coupled state's borrow and return preserve the
 world/chain correspondence. Borrowed subdivision and reconstruction are proved
-in a separate state machine, with its own sealed lifecycle, and the two-find
+in the reconstruction model, lifted to the integrated multi-allocation state and
+executed through its sealed boundary; the two-find
 reuse example is proved on the functional model. Also open: the read discipline;
 storage agreement as a world invariant (R2); integration of the reconstruction
 forest into the world split/join guard (R3) --- the reconstruction model exists,
@@ -1195,9 +1203,9 @@ Earlier wording & Precise statement \\
 \midrule
 The context is never a public value & The intended runner will encapsulate execution; the current context, session and world are public pure model data \\
 Deep checker soundness & Acceptance implies the current guard/transition and coverage results; the unified command language preserves the proved command carrier over whole runs \\
-Nested borrowing & The command language carries nested delegation; the chain is a rooted path with a derived holder, and the correspondence and preservation theorems cover chains. Borrowed subdivision is a separate reconstruction state machine with a sealed lifecycle, not yet consulted by the world split/join guard \\
-World borrowed reconstruction & The reconstruction model and its sealed boundary prove subdivision, reconstruction and restoration; \texttt{World.splitAtChecked} keeps the allocation-wide loan exclusion and does not consult the forest, so no single integrated world/sealed path is claimed \\
-64-byte acceptance run & The unified lifecycle runs alloc, write, split, write, fractional split, join, write and free; the separate reconstruction lifecycle runs borrow, split, write, reconstruct and return in its own sealed state machine. A single world trace combining a live borrow with decomposition awaits integration of the reconstruction forest into the world guard \\
+Nested borrowing & The command language carries nested delegation; the chain is a rooted path with a derived holder, and the correspondence and preservation theorems cover chains. Borrowed subdivision is proved in the reconstruction model and executed through the integrated sealed state; the world split/join guard still does not consult it \\
+World borrowed reconstruction & The reconstruction model, the integrated multi-allocation state and its sealed boundary prove subdivision, reconstruction and restoration; \texttt{World.splitAtChecked} keeps the allocation-wide loan exclusion and does not consult the forest, so no single integrated world/sealed path is claimed \\
+64-byte acceptance run & The unified lifecycle runs alloc, write, split, write, fractional split, join, write and free; the integrated sealed lifecycle runs borrow, split, write, reconstruct and return in the checked multi-allocation state. A single world trace combining a live borrow with decomposition awaits integration of the reconstruction forest into the world guard \\
 Mutable backend & A pure buffer state machine over lists, not native mutation or RC=1 \\
 Admission excludes closures & Canonical storage excludes arbitrary original values; the encoding relation alone is not confinement \\
 \bottomrule

@@ -36,7 +36,7 @@ world invariant              Cap/WorldInvariant.lean the bundle every command pr
 delegation invariant         Cap/Borrow.lean         chain base, detachment, terminal-or-delegated
 delegation chain             Cap/Delegation.lean     rooted path, checked begin/end
 coupled chain state          Cap/Discipline.lean     world/chain correspondence
-sealed reconstruction        Cap/ReconstructionSealed.lean  borrow/split/reconstruct/return
+sealed execution             Cap/Integrated.lean     checked multi-allocation commands
 reconstruction forest        Cap/Reconstruction.lean subdivision rules, restoration obligations
 context                      Cap/Context.lean        many owners, allocation, disposal
 invariants                   Cap/Invariant.lean      leaves-within, well-formedness
@@ -208,8 +208,8 @@ because the world loan list's order is not determined by `BorrowOK`.
 
 Stated limits, on purpose: the world `UCmd` path still refuses a split or
 fractional join while any loan is outstanding on the allocation. That guard is
-allocation-wide, so it also refuses a split of an independent sibling range. A
-separate reconstruction model (below) implements borrowed subdivision and
+allocation-wide, so it also refuses a split of an independent sibling range. The
+reconstruction model (below) implements borrowed subdivision and
 restoration, but `World.splitAtChecked` does not consult it; full world
 integration is not claimed.
 
@@ -243,15 +243,18 @@ independent sibling range is refused on the `UCmd` path. Removing that
 allocation-wide test and consulting the forest is the named next integration;
 nothing here claims it.
 
-The sealed counterpart is `Cap/ReconstructionSealed.lean`: a private constructor
-and private invariant proof over `Reconstruction.State`, with `write`, `borrow`,
-`splitSpatial`, `splitFraction`, `reconstruct` and `return` as the only
-operations. Accepted calls return a sealed state carrying the rebuilt invariant;
-refused calls return an error and no state. Its observations are a heap snapshot,
-per-fragment authority, retired names and outstanding restoration obligations.
-`Sealed.lifecycle` runs the 64-byte example and `Sealed.reuseLifecycle` runs a
-second full cycle on the first's output. The two sealed boundaries are
-complementary rather than one routed through the other.
+The sealed boundary is `Cap/Integrated.lean`, re-exported as `Cap/Sealed.lean`:
+a private constructor and invariant proof over the multi-allocation state, with
+`alloc`, `write`, `borrow`, `splitSpatial`, `splitFraction`, `reconstruct`,
+`return`, `free`, and a whole-run `run` over the checked `Cmd` list. `State.Inv`
+includes each component's `Reconstruction.State.Storage`, so a component whose
+heap does not hold its allocation with the recorded `len` bytes is rejected.
+Its observations are a heap snapshot, byte read, per-fragment authority, retired
+names, outstanding restoration obligations and the live allocation list.
+`Sealed.lifecycle64` runs the 64-byte example and `Sealed.reuseLifecycle` runs a
+second full cycle on the first's output. The retired single-allocation
+`Cap/ReconstructionSealed.lean` is gone; its controls live in
+`bench/CapIntegrated.lean`.
 
 ## 11. Certificates and the sealed boundary (`Cap/Runner.lean`)
 
@@ -320,9 +323,9 @@ same caveat.
   allocation; the allocation-wide guard does not consult the reconstruction
   forest, so the reconstruction model's borrowed subdivision is not integrated
   into the world path.
-- The sealed boundary is not module-enforced. The sealed reconstruction path is
-  a second sealed surface beside the world path, not the world path routed
-  through the forest.
+- The sealed boundary is not module-enforced. The sealed path is the integrated
+  multi-allocation reconstruction state; the world `UCmd` path is a separate
+  theorem surface and is not routed through the forest.
 - No in-place-update or compiled-performance claim anywhere in `Cap/`.
 - Union-find correctness is the concrete five-node reuse instance and the
   four-node write-discipline instance, not the general theorem. The two-find

@@ -212,19 +212,19 @@ drop|paper/sealed-ownership.tex|Integrated invariant and primitive preservation
 drop|paper/sealed-ownership.tex|Distinct-borrower transitions in that theorem
 drop|paper/sealed-ownership.tex|The intended discipline includes this operation
 add|AGENTS.md|Cap/Reconstruction.lean
-add|AGENTS.md|Cap/ReconstructionSealed.lean
+add|AGENTS.md|the one integrated sealed semantics
 add|AGENTS.md|World.splitAtChecked_refuses_with_loan
 add|AGENTS.md|derived holder
 add|AGENTS.md|reuseFirst_accepts_second
-add|docs/notes/cap-tutorial.md|The sealed counterpart is `Cap/ReconstructionSealed.lean`
+add|docs/notes/cap-tutorial.md|The sealed boundary is `Cap/Integrated.lean`
 add|docs/notes/cap-tutorial.md|No claim that `World.splitAtChecked` consults the reconstruction forest
 add|report/capability-report.tex|borrowed subdivision, reconstruction and restoration invariant
 add|report/capability-report.tex|two-find reusable compression on the functional model
 add|report/cap-tutorial.tex|Borrowed subdivision and reconstruction
 add|paper/sealed-ownership.tex|World-guard integration (open)
-add|paper/sealed-ownership.tex|a second state machine, not the world command path
+add|paper/sealed-ownership.tex|the sealed path now executes the integrated multi-allocation reconstruction language
 add|paper/sealed-ownership.tex|reuseFirst\_accepts\_second
-add|paper/sealed-ownership.tex|its integration into the world command guard
+add|paper/sealed-ownership.tex|its sealed boundary executes that integrated language
 ROWS
 
 if [ "$fail" -ne 0 ]; then

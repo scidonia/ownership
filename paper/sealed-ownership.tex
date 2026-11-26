@@ -4,8 +4,8 @@
 %   latexmk -pdf -interaction=nonstopmode sealed-ownership.tex
 %
 % Status note: research draft reviewed against implementation a240557, extended
-% with the repaired delegation chain, the reconstruction model and its sealed
-% lifecycle, and the two-find reuse result.
+% with the repaired delegation chain, the reconstruction model and its integrated
+% sealed execution, and the two-find reuse result.
 % Established declarations and target obligations are distinguished in the text.
 % Integration of the reconstruction forest into the world command guard, and a
 % verified C backend, remain open.
@@ -108,10 +108,11 @@ duplicate accounting of lender and borrower shares. Delegation by retagging is
 part of the combined invariant: the checked command language begins and ends
 distinct-borrower loans, and every accepted run preserves allocation binding,
 active-terminal-or-delegated authority, acyclicity, and non-duplication of
-lender and borrower authority. A separate reconstruction state machine, with
-its own sealed lifecycle, proves borrowed subdivision, restoration and a second
-execution on the resulting state; its integration into the world command guard
-remains open. The development identifies the logical
+lender and borrower authority. A reconstruction state machine, lifted to an
+integrated multi-allocation state, proves borrowed subdivision, restoration and a
+second execution on the resulting state; its sealed boundary executes that
+integrated language, while integration into the world command guard remains
+open. The development identifies the logical
 obligations for a sealed low-level implementation interface, including resource
 reconstruction and concrete C execution.
 \end{abstract}
@@ -171,9 +172,10 @@ refusal (Section~\ref{sec:execution}). The combined theorem covers the command
 language's borrow and return commands; distinct-borrower delegation is the retag
 mechanism the combined invariant carries, and a rooted chain with a derived
 holder and checked begin/end operations states its admissible transitions
-(Section~\ref{sec:delegation}). A separate reconstruction state machine proves
-borrowed subdivision, reconstruction and restoration, with its own sealed
-lifecycle (Section~\ref{sec:delegation}).
+(Section~\ref{sec:delegation}). A reconstruction state machine proves
+borrowed subdivision, reconstruction and restoration; the integrated
+multi-allocation state supplies the sealed boundary
+(Section~\ref{sec:delegation}).
 \item Representation-sensitive examples: computable full-path compression and
 byte marshalling, including exact correspondence between certified updates and
 checked write traces (Section~\ref{sec:clients}). A two-find instance proves the
@@ -185,10 +187,11 @@ algorithms and implementing the sealed boundary in C
 
 The central research objective remains a single sealed discipline covering
 usable borrowing, reconstruction, and repeated algorithm execution. The present
-artifact has not completed that integration: the reconstruction forest and its
-sealed lifecycle are a second state machine, the world command path keeps its
-allocation-wide split/join guard, and the reusable two-find result is on the
-functional model rather than through the sealed runner. We distinguish
+artifact has not completed the world-path half of that integration: the sealed
+path now executes the integrated multi-allocation reconstruction language, but
+the world command path keeps its allocation-wide split/join guard, and the
+reusable two-find result is on the functional model rather than through the
+sealed runner. We distinguish
 declarations in the artifact, concrete controls, and proposed interface
 obligations throughout; none of the proposed C boundary results is used as a
 premise of the existing Lean theorems.
@@ -422,10 +425,14 @@ type; neither replaces the required connection to execution.
 
 \subsection{Sealing and closed execution}
 
-\lean{Sealed} has private construction and stores a world with
-\lean{FullInv}. \lean{Sealed.empty} starts from the empty world;
-\lean{importCertified} requires the invariant; \lean{run} uses the checker;
-\lean{snapshot} exposes an immutable list of bytes. The API's invariant theorem
+\lean{Sealed} re-exports the integrated boundary of
+\lean{Cap.Integrated}: private construction, a private representation, and a
+private invariant proof over the multi-allocation reconstruction state.
+\lean{Sealed.initial} starts from one whole fresh allocation; \lean{run} executes
+the checked \lean{Cmd} list; \lean{snapshot} and the other observations expose
+immutable views. The carried invariant requires distinct allocations, each
+component's reconstruction invariant, and each component's storage agreement.
+The API's invariant theorem
 is useful even though the underlying model is ordinary persistent Lean data.
 It is not a theorem that a client cannot copy a sealed value or replay a
 computation against an earlier model state.
@@ -528,15 +535,16 @@ the order of the world loan list.
 Supporting a borrowed spatial split requires a return obligation over the
 resulting frontier. A return must recover the delegated resource and retire all
 its descendant access authority; recovering one historical identifier is not
-enough. The artifact now proves this lifecycle in a separate reconstruction
-model. A forest records the checked spatial or fractional rule at every interior
-node, its budget is the frontier sum, and validity requires every recorded rule
-to be checked. The state pairs the forest with the issued and retired names and
-the outstanding restoration obligations; writes, borrows, both subdivisions,
-reconstruction and return each preserve the reconstruction invariant, and a
-return before reconstruction is refused. A private-constructor boundary over
-that state exposes only these operations and runs the 64-byte lifecycle,
-including a second full cycle on the first cycle's output.
+enough. The artifact now proves this lifecycle in a reconstruction model lifted
+to a multi-allocation state. A forest records the checked spatial or fractional
+rule at every interior node, its budget is the frontier sum, and validity
+requires every recorded rule to be checked. The state pairs the forest with the
+issued and retired names and the outstanding restoration obligations; writes,
+borrows, both subdivisions, reconstruction and return each preserve the
+reconstruction invariant and the component storage agreement, and a return before
+reconstruction is refused. The integrated state's private-constructor boundary
+exposes the checked command language and a whole-run \lean{run}, and runs the
+64-byte lifecycle, including a second full cycle on the first cycle's output.
 
 The model is not routed through the world command language. The checked world's
 split, fractional split and join still test the allocation-wide loan exclusion,
@@ -659,7 +667,7 @@ does not prove physical snapshot independence for a future C implementation.
 
 Table~\ref{tab:evidence} states the evidence in the current repository, which
 extends the reviewed artifact revision \lean{a240557} with the repaired
-delegation chain, the reconstruction model and its sealed lifecycle, and the
+delegation chain, the reconstruction model and its integrated sealed execution, and the
 two-find reuse result. The repository contains Lean declarations and proof bodies
 for the listed results, together with executable controls. A fresh Lean build and
 timing record for this editorial revision are not supplied; no performance result
@@ -677,7 +685,7 @@ Ledger & Budget preservation and writable-authority uniqueness & World guard int
 Checked language & Whole-run \lean{FullInv} preservation; per-write authority; borrow and return commands & A single invariant combining world execution and the reconstruction forest \\
 Indexed programs & Post-context and no-refusal theorems & Representation-sensitive operational client type \\
 Delegation & Retag budget lemma; rooted chain with derived holder and checked begin/end; world/chain correspondence; combined-invariant preservation & A single sealed world path carrying the reconstruction invariant \\
-Reconstruction & Checked spatial and fractional rules; reconstruction and restoration invariant; sealed 64-byte lifecycle with a second cycle & Consultation by the world split/join guard; concrete implementation \\
+Reconstruction & Checked spatial and fractional rules; reconstruction and restoration invariant; integrated sealed 64-byte lifecycle with a second cycle & Consultation by the world split/join guard; concrete implementation \\
 Union-find & Functional results, exact two-find reuse on the functional model, computable full-path certificates, exact write traces & Reusable full-path sealed runner and compiled demonstration \\
 Marshalling & Round trips, range guards, representation and exact write trace & Concrete layout and ABI relation \\
 \bottomrule
@@ -806,27 +814,30 @@ the first two are executable paths in their own right.
 \emph{World borrowing and sealed delegation (proved).} The retag invariant
 relates dormant lenders, terminal holders, resource footprints, and acyclic
 restoration dependencies; every command of the checked language preserves it,
-and the sealed world boundary carries the combined invariant through accepted
-runs. The delegation chain is a rooted path with a derived holder, and checked
-begin/end transitions preserve its validity together with the world/chain
-correspondence. Borrow, write and return are proved against that coupled state.
+and the world command path carries the combined invariant through accepted
+runs. The sealed boundary carries the integrated state invariant through its
+accepted commands. The delegation chain is a rooted path with a derived holder,
+and checked begin/end transitions preserve its validity together with the
+world/chain correspondence. Borrow, write and return are proved against that
+coupled state.
 
-\emph{Reconstruction model and sealed reconstruction lifecycle (proved,
-separate).} A forest records a checked spatial or fractional rule at every
+\emph{Reconstruction model and integrated sealed execution (proved).} A forest
+records a checked spatial or fractional rule at every
 interior node; its budget is the frontier sum and validity requires every rule to
 be checked. The state carries issued and retired names and restoration
 obligations, and write, borrow, both subdivisions, reconstruction and return
-preserve the reconstruction invariant. A private-constructor sealed boundary
-over that state runs the 64-byte borrow/split/write/reconstruct/return lifecycle
-and a second full cycle on the first's output. This is a second state machine,
-not the world command path.
+preserve the reconstruction invariant and the component storage agreement. The
+multi-allocation integrated state's private-constructor sealed boundary executes
+the checked command language and runs the 64-byte borrow/split/write/reconstruct/
+return lifecycle and a second full cycle on the first's output. The sealed path
+is this integrated language; the world command path remains separate.
 
 \emph{World-guard integration (open).} The checked world's split, fractional
 split and join still test the allocation-wide loan exclusion. They therefore
 refuse an independent sibling range of a borrowed allocation, and they do not
 consult the reconstruction forest. Removing that test, consulting the forest,
 and proving one integrated world-and-restoration invariant through the world
-checker and its sealed boundary is the completion criterion, and it is not
+checker is the completion criterion, and it is not
 achieved. No result here should be read as claiming that
 \lean{World.splitAtChecked} consults the reconstruction forest.
 
@@ -865,9 +876,9 @@ this execution model.
 
 Retagging extends the design toward usable borrowing without counting a dormant
 lender and its borrower twice. Its preservation protocol is proved, and borrowed
-subdivision and restoration are proved in a separate reconstruction state
-machine with its own sealed lifecycle. Integrating that forest into the world
-command guard, so that one sealed execution path carries delegation and
+subdivision and restoration are proved in the reconstruction model and executed
+through the integrated sealed state. Integrating that forest into the world
+command guard, so that one sealed execution path carries world delegation and
 reconstruction together, is the remaining mathematical requirement. Combined
 with an operational
 algorithm interface and a concrete implementation simulation, that result would
