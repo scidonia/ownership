@@ -25,3 +25,7 @@ name = "OwnershipLcnf"
 
 [[lean_lib]]
 name = "Cap"
+
+[[lean_exe]]
+name = "capuf"
+root = "bench.CapUFDriver"

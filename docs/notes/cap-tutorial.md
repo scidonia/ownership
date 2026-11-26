@@ -224,12 +224,24 @@ that produced them, the issued and retired names, and the outstanding `Restore`
 obligations. `State.Inv` is frontier coverage, forest validity and the ownership
 account `State.Accounts`: the budget at every byte is still `D`, every recorded
 rule is checked, and the account constrains current authority-node identities,
-issuance coverage, retirement, dormant lenders, restoration realization and
-resource agreement. The account is not a structural restatement of the forest: it
-relates the forest to `issued`, `retired` and `restores`, so a retired or dormant
-name is not a current leaf (`State.Accounts.retired_not_current`,
+issuance coverage, retirement, dormant lenders, restoration realization,
+resource agreement and restoration order. The account is not a structural
+restatement of the forest: it relates the forest to `issued`, `retired` and
+`restores`, so a retired or dormant name is not a current leaf
+(`State.Accounts.retired_not_current`,
 `State.Accounts.dormant_not_current`) and an appended obligation naming an
 unissued party breaks the predicate (`State.Accounts.cons_restore_not_accounts`).
+
+`Restore.Depends r r'` means `r'.lender = r.borrower`; `State.RestoreOrder`
+requires every dependency to strictly decrease the index in `restores`, which is
+the direction borrowing prepends. `State.Accounts.dependency_wellFounded` rules
+out a positive delegation cycle and `State.Accounts.restore_reaches_terminal`
+finds a finite path from every obligation to a terminal forest node with the
+recorded resource agreeing along it. A suspended terminal parent is connected to
+its current rule descendants by `Forest.suspended_frontier_realizes`.
+`bench/CapRestorationOrder.lean` records the two-edge cycle that the earlier
+fields admit and the repaired account rejects, together with a valid nested
+borrow and a missing-terminal refusal.
 
 `State.borrow` retags a current fragment and records the dormant lender.
 `State.splitSpatial` and `State.splitFraction` subdivide a current fragment ---

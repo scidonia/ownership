@@ -419,27 +419,58 @@
   The sealed `UFCertified.UFRunner`, which wraps a world and a representation
   predicate, is unchanged; this runner threads the functional `UF.Arr`. The
   controls are `bench/CapUFReuseRunner.lean`.
-- `Cap/UFIntegrated.lean` runs two full-path finds through the integrated sealed
-  boundary instead of the functional array. A parent array is held in one
-  allocation's bytes: `decode` reads a buffer as a `UF.Arr`, `Rep s a arr` says
-  the allocation's snapshot decodes to `arr`, and `Rep.fits` bounds every value by
-  a byte. `chase?` follows parent pointers with `Sealed.read?`, `compressPath`
-  writes the root at each path node with `Sealed.write` through the whole-share
-  capability, and `sealedFind` returns the root with the successor sealed state.
-  `chase?_eq` proves the sealed chase is `UF.findRootF`/`rootPath` whenever the
-  reads agree with the array, and `ufStart_reads`/`ufFirstState_reads` discharge
-  that for the two successive allocations. The first find from node 3 leaves
-  `[0,0,0,0,2]` and the second, run on the first call's returned state from node
-  4, leaves `[0,0,0,0,0]`, matching `reuseRunnerFirst`/`reuseRunnerSecond`; a fresh
-  find from node 4 on the start state instead leaves `[0,0,0,2,0]`
-  (`ufSecond_consumes`). `ufSecond_invariant`/`ufSecondOther_invariant` re-export
-  `Sealed.state_inv`, `ufSecondOwnershipFrames_of_ok` records that the whole-share
-  capabilities, retired names, return obligations, both heaps and both live
-  identities are unchanged, and `ufSecondOther_frames` covers a second
-  allocation. Not proved: a general per-write refinement or frame law over sealed
-  command lists — the final arrays are kernel-checked computations of the actual
-  run, not instances of a derived write lemma. The controls are
-  `bench/CapUFIntegrated.lean`.
+- `Cap/UFGeneric.lean` is the general full-path union-find through the sealed
+  boundary. `decode`/`Rep` relate an allocation's bytes to a parent array, and
+  `Rep.read` derives the read agreement from the representation itself. Reads go
+  through `Sealed.read?`, the heap's index read: existence and bounds only, not a
+  capability check. Writes are capability-checked: `Writable` is the whole active
+  read--write leaf named by the capability and spanning `[0, n)`,
+  `Writable.write_exists` derives acceptance from it, and
+  `Writable.write_preserved`/`Writable.frames` keep it. The bounded chase
+  `chase?` returns `some (root, path)` only when the reads reach a fixed point and
+  `none` on fuel exhaustion; it never reports `(x, [])` for an exhausted search.
+  `chase?_none_iff` makes the contract exact (`none` iff the functional chase does
+  not stop within the fuel), `chase?_some_spec` identifies a `some` result with
+  `UF.findRootF`/`rootPath`, and `chase?_eq_ranked` shows a ranked forest always
+  completes at `rank x + 1`, so an exhausted chase cannot masquerade as a root
+  find. The single-write laws are `sealed_write_component`,
+  `sealed_write_snapshot_self` and `sealed_write_frames`; the last preserves
+  `WriteFrame` — every other allocation's snapshot, and every allocation's
+  authority, retired names, return obligations and the live list.
+  `compressPath_spec` lifts the write law over the compression path, and
+  `sealedFind_spec` proves for an arbitrary represented ranked forest that the
+  find completes, the root is the functional root and a fixed point, the
+  post-buffer represents exactly `UF.compressAll p r (rootPath p fuel x)`, the
+  array stays ranked, acyclic and in range, `UF.Same` is preserved in both
+  directions, the successor keeps `Writable` and satisfies `State.Inv`, and the
+  unrelated observations are framed. `findRanked` is the wrapper whose fuel is
+  the rank bound rather than a caller choice; `findRanked_spec` returns the
+  successor `Precondition` and `findRanked_twice` runs two calls on an arbitrary
+  forest without reconstructing preconditions. The byte representation caps
+  `n ≤ 256` (`Precondition.fits`), and no large-scale performance is claimed.
+  The one frame lemma this layer does not supply is the storage one: `WriteFrame`
+  frames observations, not a per-allocation `Storage` component, because the
+  sealed state exposes only the global `State.Inv`.
+- `Cap/UFIntegrated.lean` instantiates the general theorems on the five-node
+  forest `[0,0,1,2,2]`. `ufStart_precondition` supplies the general
+  preconditions; `ufFirst_spec` is `findRanked_spec` on the fixture, and
+  `ufFirst_general` identifies the computed root `0` and array `[0,0,0,0,2]`.
+  The second call consumes the first call's successor (`ufSecond_general`,
+  `ufSecond_run`), leaving `[0,0,0,0,0]`, matching
+  `reuseRunnerFirst`/`reuseRunnerSecond`; a fresh find from node 4 on the start
+  state instead leaves `[0,0,0,2,0]` (`ufSecond_consumes`).
+  `ufSecond_invariant`/`ufSecondOther_invariant` re-export `Sealed.state_inv`,
+  `ufSecondOwnershipFrames_of_ok` records that the whole-share capabilities,
+  retired names, return obligations, both heaps and both live identities are
+  unchanged, and `ufSecondOther_frames` covers a second allocation. The
+  `decide`-based root/snapshot options are the compiled controls, and
+  `bench/CapUFIntegrated.lean` also exercises the exhaustion contract (zero or
+  insufficient fuel is a refused find, never a root) and the write-authority
+  predicate. The runnable driver is `lake exe capuf`
+  (`bench/CapUFDriver.lean`): it executes both calls through the general path
+  and repeats them with an unrelated allocation, failing if any root or snapshot
+  differs. On the pinned rc3 build it printed roots `0,0,0`, parent
+  `[0,0,0,0,0]` and unrelated allocation `[5,0,0]`.
 - `llvm-bridge/` is the compiled-C kernel package, outside the `Cap` library.
   `c/store8.c` is `void store8(uint8_t *p, uint64_t i, uint8_t v) { p[i] = v; }`;
   `scripts/emit-ir.sh` compiles it on a worker, and `ir/store8.ll` is clang's
@@ -756,18 +787,31 @@ shows the certificate it would have to emit, not proof-producing elaboration.
   issued and retired names and the outstanding `Restore` obligations; `State.Inv`
   is frontier coverage, forest validity and the ownership accounting predicate
   `State.Accounts`, and `State.Storage` separately says the heap holds that
-  allocation with exactly `len` bytes. `State.Accounts` constrains current
+  `State.Accounts` constrains current
   authority-node identities, issuance coverage, retirement, dormant lenders,
-  restoration realization and resource agreement, so a retired or dormant name
-  is not a current leaf (`State.Accounts.retired_not_current`,
+  restoration realization, resource agreement and restoration order, so a
+  retired or dormant name is not a current leaf
+  (`State.Accounts.retired_not_current`,
   `State.Accounts.dormant_not_current`) and an appended restoration naming an
   unissued party breaks it (`State.Accounts.cons_restore_not_accounts`). The
   account is not a structural restatement of the forest: its fields
   (`nodeIds_nodup`, `issue_covers`, `retired_absent`, `restores_issued`,
   `borrowers_nodup`, `lenders_nodup`, `lender_ne_borrower`, `dormant_absent`,
   `borrower_not_rule`, `restore_realized`, `node_agrees`, `nested_agrees`,
-  `rule_fragments_issued`) relate the forest to `issued`, `retired` and
-  `restores`, so changing only those histories can invalidate it.
+  `restore_order`, `rule_fragments_issued`) relate the forest to `issued`,
+  `retired` and `restores`, so changing only those histories can invalidate it.
+  `Restore.Depends r r'` means `r'.lender = r.borrower`; `State.RestoreOrder`
+  requires every such dependency to strictly decrease the index in `restores`.
+  Since borrowing prepends a record, dependencies run from later records to
+  earlier ones. `State.Accounts.dependency_wellFounded` rules out a positive
+  delegation cycle, and `State.Accounts.restore_reaches_terminal` shows every
+  outstanding obligation reaches a terminal forest node by a finite path with
+  the recorded resource agreeing along it; `Forest.suspended_frontier_realizes`
+  connects a suspended parent to its `Forest.nodes` entry, its rule descendants
+  and the descendant frontier budget. `bench/CapRestorationOrder.lean` checks
+  that the earlier fields admit a two-edge cycle while the repaired account
+  rejects it, that a longer cycle and a missing terminal are rejected, and that
+  a valid nested borrow is accepted.
   `State.write`,
   `borrow`, `splitSpatial`, `splitFraction`, `reconstruct` and `return` are
   checked, each preserving `State.Inv` (`State.*_inv`) and `State.Storage`
@@ -806,7 +850,11 @@ shows the certificate it would have to emit, not proof-producing elaboration.
   wrapper: a command list together with the boolean check from an invariant start
   state, and `Prog.never_refuses` derives an accepting run. `Sealed` is the
   private multi-allocation boundary with snapshot, byte-read, fragment,
-  retired-name and obligation observations; `Sealed.run` executes a whole command
+  retired-name and obligation observations; an accepted sealed write is exactly
+  the underlying state's accepted write command (`Sealed.write_ok_iff`), and a
+  command the state accepts produces a sealed successor
+  (`Sealed.write_exists_of_exec`), which is what a capability-derived write uses.
+  `Sealed.run` executes a whole command
   list, `Sealed.lifecycle64` is the 64-byte borrow/split/write/reconstruct/return
   cycle, `Sealed.reuseLifecycle` runs a second cycle on its output, and
   `Sealed.alloc` adds a second allocation. `bench/CapIntegrated.lean` exercises

@@ -1036,6 +1036,20 @@ theorem Sealed.write_ok_iff (s : Sealed) (a : AllocId) (id : CapId) (i : Nat)
       rw [hnone] at h
       simp at h
 
+/-- A write command the underlying state accepts produces a sealed successor:
+the boundary returns exactly the state the command produced. This is the
+existence half of `Sealed.write_ok_iff` that a caller uses when it has derived
+the state-level acceptance from the capability evidence rather than observed an
+accepted write. -/
+theorem Sealed.write_exists_of_exec (s : Sealed) (a : AllocId) (id : CapId)
+    (i : Nat) (v : UInt8)
+    (h : ∃ t : State, s.state.exec (.write a id i v) = some t) :
+    ∃ s' : Sealed, Sealed.write s a id i v = .ok s' := by
+  obtain ⟨t, ht⟩ := h
+  refine ⟨mkSealed t (State.exec_inv ht s.inv), ?_⟩
+  exact (Sealed.write_ok_iff s a id i v _).2 (by
+    simpa [Sealed.state, mkSealed] using ht)
+
 /-- Borrow a current active fragment of one allocation. -/
 def Sealed.borrow (s : Sealed) (a : AllocId) (lender borrower : CapId) :
     Except String Sealed :=

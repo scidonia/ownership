@@ -915,8 +915,14 @@ interior node; its budget is the frontier sum and validity requires every rule t
 be checked. The state carries issued and retired names and restoration
 obligations; its invariant includes an ownership account relating the forest to
 those histories, excluding retired and dormant names from current authority,
-requiring each outstanding obligation to be realized, and making nested
-obligations agree on their resource. Write, borrow, both subdivisions,
+requiring each outstanding obligation to be realized, making nested obligations
+agree on their resource, and ordering dependencies strictly along the obligation
+list. A dependency holds when the second record's lender is the first's
+borrower; borrowing prepends, so following one strictly decreases the list
+index. This rules out a cycle of obligations that justify one another, and every
+obligation reaches a terminal forest node with its recorded resource agreeing
+along the path; a suspended terminal parent is connected to its rule
+descendants and descendant frontier budget. Write, borrow, both subdivisions,
 reconstruction and return preserve the reconstruction invariant and the component
 storage agreement. The
 multi-allocation integrated state's private-constructor sealed boundary executes

@@ -95,6 +95,24 @@ theorem Restore.SameResource.symm {r r' : Restore} (h : r.SameResource r') :
     r'.SameResource r :=
   ⟨h.1.symm, h.2.1.symm, h.2.2.1.symm, h.2.2.2.1.symm, h.2.2.2.2.symm⟩
 
+/-- Resource agreement is reflexive. -/
+theorem Restore.SameResource.refl (r : Restore) : r.SameResource r :=
+  ⟨rfl, rfl, rfl, rfl, rfl⟩
+
+/-- Resource agreement is transitive. -/
+theorem Restore.SameResource.trans {r r' r'' : Restore}
+    (h : r.SameResource r') (h' : r'.SameResource r'') : r.SameResource r'' :=
+  ⟨h.1.trans h'.1, h.2.1.trans h'.2.1, h.2.2.1.trans h'.2.2.1,
+   h.2.2.2.1.trans h'.2.2.2.1, h.2.2.2.2.trans h'.2.2.2.2⟩
+
+/-- A return obligation depends on another when it delegates the resource onward:
+the other record's lender is this record's borrower. -/
+def Restore.Depends (r r' : Restore) : Prop := r'.lender = r.borrower
+
+instance (r r' : Restore) : Decidable (r.Depends r') := by
+  unfold Restore.Depends
+  infer_instance
+
 /-- Leaf agreement entails resource agreement. -/
 theorem Leaf.Agrees.sameResource {a b : Leaf} (h : a.Agrees b) : a.SameResource b :=
   ⟨h.2.1, h.2.2.1, h.2.2.2.1, h.2.2.2.2.1, h.2.2.2.2.2.1⟩
@@ -354,6 +372,51 @@ theorem rule_id_mem_ids {f : Forest} {x : CapId} (h : x ∈ f.ruleIds) :
           (List.mem_append.mpr (Or.inl (ihl h)))))
       · exact List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _
           (List.mem_append.mpr (Or.inr (ihr h)))))
+
+/-- A split's budget depends only on the budgets of its two current subtrees. -/
+theorem split_budget_of_children {kind : RuleKind} {p lr rr : Leaf} {l r : Forest}
+    (hl : ∀ x, l.budget x = (Forest.leaf lr).budget x)
+    (hr : ∀ x, r.budget x = (Forest.leaf rr).budget x) :
+    ∀ x, (Forest.split kind p lr rr l r).budget x =
+      (Forest.split kind p lr rr (.leaf lr) (.leaf rr)).budget x := by
+  intro x
+  cases kind <;> simp [Forest.budget, hl x, hr x]
+
+/-- A suspended parent is an authority node, its rule fragments are the frontier
+identities recorded by `ruleIds` rather than current nodes, and the parent's
+allocation and ceiling are carried by those descendants. When each current
+subtree realizes its rule fragment's budget, the split's frontier budget is the
+suspended parent's budget at every byte. -/
+theorem suspended_frontier_realizes {kind : RuleKind} {parent leftRule rightRule : Leaf}
+    {left right : Forest}
+    (hv : RuleValid kind parent leftRule rightRule)
+    (hl : ∀ x, left.budget x = (Forest.leaf leftRule).budget x)
+    (hr : ∀ x, right.budget x = (Forest.leaf rightRule).budget x) :
+    parent ∈ Forest.nodes (Forest.split kind parent leftRule rightRule left right) ∧
+    leftRule.id ∈ Forest.ruleIds (Forest.split kind parent leftRule rightRule left right) ∧
+    rightRule.id ∈ Forest.ruleIds (Forest.split kind parent leftRule rightRule left right) ∧
+    leftRule.alloc = parent.alloc ∧ rightRule.alloc = parent.alloc ∧
+    leftRule.ceiling = parent.ceiling ∧ rightRule.ceiling = parent.ceiling ∧
+    (∀ x, (Forest.split kind parent leftRule rightRule left right).budget x =
+      (Forest.leaf parent).budget x) := by
+  obtain ⟨hps, hla, hra, hlc, hrc, hls, hrs, -, -, -, hpart⟩ := hv
+  refine ⟨by simp [Forest.nodes], by simp [Forest.ruleIds], by simp [Forest.ruleIds],
+    hla, hra, hlc, hrc, ?_⟩
+  intro x
+  rw [split_budget_of_children hl hr x]
+  cases kind with
+  | spatial =>
+      obtain ⟨hlo, hhi, hrhi, hql, hqr⟩ := hpart
+      exact Forest.spatial_split_budget (p := parent) (l := leftRule)
+        (r := rightRule) (x := x)
+        (by rw [hls, hps]) (by rw [hrs, hps]) hlo hhi hrhi hql hqr
+        (by rw [← hlo, ← hhi]; exact leftRule.ordered)
+        (by rw [← hrhi]; exact rightRule.ordered)
+  | fractional =>
+      obtain ⟨hlo1, hhi1, hlo2, hhi2, hq1, hq2, hsum⟩ := hpart
+      exact Forest.fractional_split_budget (p := parent) (l := leftRule)
+        (r := rightRule) (x := x)
+        (by rw [hls, hps]) (by rw [hrs, hps]) hlo1 hhi1 hlo2 hhi2 hsum
 
 /-- Modify the first current leaf with the given name. Returns the updated forest
 and the leaf that was replaced. -/
@@ -2723,6 +2786,29 @@ def State.initial (a : AllocId) (n D : Nat) (pos : 0 < D)
     retired := [],
     restores := [] }
 
+/-- Outstanding obligations are ordered so that following a delegation strictly
+decreases the index in `restores`. Borrowing prepends a record, so a newer
+borrower precedes the obligation of the lender it borrowed from; a dependency
+therefore runs from a later record to an earlier one. -/
+def State.RestoreOrder (s : State) : Prop :=
+  ∀ r ∈ s.restores, ∀ r' ∈ s.restores, Restore.Depends r r' →
+    s.restores.idxOf r' < s.restores.idxOf r
+
+/-- Positive-length delegation among the outstanding obligations of one state.
+Every step stays inside `restores`, so the list order bounds the whole path. -/
+inductive State.RestoreReaches (s : State) (r : Restore) : Restore → Prop
+  | single {r' : Restore} : r ∈ s.restores → Restore.Depends r r' →
+      r' ∈ s.restores → State.RestoreReaches s r r'
+  | tail {r' r'' : Restore} : State.RestoreReaches s r r' →
+      r' ∈ s.restores → Restore.Depends r' r'' → r'' ∈ s.restores →
+      State.RestoreReaches s r r''
+
+/-- A terminal obligation: no outstanding obligation continues from it, and its
+recorded resource agrees with a node of the current forest. -/
+def State.RestoreTerminal (s : State) (r : Restore) (c : Leaf) : Prop :=
+  r ∈ s.restores ∧ (∀ r' ∈ s.restores, ¬ Restore.Depends r r') ∧
+  c ∈ s.forest.nodes ∧ c.id = r.borrower ∧ r.Agrees c
+
 /-- The frontier covers every byte of the allocation. -/
 def State.Covered (s : State) : Prop :=
   ∀ x, x < s.len → s.forest.budget x = s.D
@@ -2753,6 +2839,9 @@ def State.Covered (s : State) : Prop :=
 * `node_agrees` and `nested_agrees` — the resource recorded by an obligation
   agrees with its live fragment, and nested obligations agree on the same
   resource; this is what prevents one budget from being claimed twice.
+* `restore_order` — following an onward delegation strictly decreases the index
+  in `restores`, so no cycle of obligations can justify itself; with
+  `restore_realized` every obligation then reaches a terminal forest node.
 * `rule_fragments_issued` — the rule fragments of every suspension were issued,
   which makes a fresh child name disjoint from every existing obligation. -/
 structure State.Accounts (s : State) : Prop where
@@ -2772,6 +2861,7 @@ structure State.Accounts (s : State) : Prop where
       c.id = r.borrower → r.Agrees c
   nested_agrees : ∀ r ∈ s.restores, ∀ r' ∈ s.restores,
       r'.lender = r.borrower → r.SameResource r'
+  restore_order : s.RestoreOrder
   rule_fragments_issued : ∀ id ∈ s.forest.ruleIds, id ∈ s.issued
 
 /-- Current active leaf identities are distinct. -/
@@ -2838,6 +2928,7 @@ theorem State.initial_inv (a : AllocId) (n D : Nat) (pos : 0 < D)
         restore_realized := ?_
         node_agrees := ?_
         nested_agrees := ?_
+        restore_order := ?_
         rule_fragments_issued := ?_ }
     · simp [State.initial, Forest.nodes]
     · intro id hid
@@ -2861,8 +2952,163 @@ theorem State.initial_inv (a : AllocId) (n D : Nat) (pos : 0 < D)
       simp [State.initial] at hr
     · intro r hr
       simp [State.initial] at hr
+    · intro r hr
+      simp [State.initial] at hr
     · intro id hid
       simp [State.initial, Forest.ruleIds] at hid
+
+/-- Delegation paths compose. -/
+theorem State.RestoreReaches.trans {s : State} {a b c : Restore}
+    (hab : State.RestoreReaches s a b) (hbc : State.RestoreReaches s b c) :
+    State.RestoreReaches s a c := by
+  induction hbc with
+  | single hb hd hc => exact .tail hab hb hd hc
+  | tail _ hb hd hc ih => exact .tail ih hb hd hc
+
+/-- Every positive delegation step strictly decreases the list index. -/
+theorem State.Accounts.restoreReaches_idx_lt {s : State} (h : s.Accounts)
+    {r r' : Restore} (hp : State.RestoreReaches s r r') :
+    s.restores.idxOf r' < s.restores.idxOf r := by
+  induction hp with
+  | single hr hd hmem => exact h.restore_order _ hr _ hmem hd
+  | tail _ hmem hd hmem' ih =>
+      exact Nat.lt_trans (h.restore_order _ hmem _ hmem' hd) ih
+
+/-- Restoration dependencies are acyclic: no outstanding obligation reaches
+itself by a positive-length delegation path. -/
+theorem State.Accounts.dependency_wellFounded {s : State} (h : s.Accounts)
+    {r : Restore} : ¬ State.RestoreReaches s r r := by
+  intro hp
+  have := h.restoreReaches_idx_lt hp
+  exact Nat.lt_irrefl _ this
+
+/-- Resource agreement is transported along a delegation path. -/
+theorem State.Accounts.restoreReaches_sameResource {s : State} (h : s.Accounts)
+    {r r' : Restore} (hp : State.RestoreReaches s r r') :
+    r.SameResource r' := by
+  induction hp with
+  | single hr hd hmem => exact h.nested_agrees _ hr _ hmem hd
+  | tail _ hmem hd hmem' ih =>
+      exact ih.trans (h.nested_agrees _ hmem _ hmem' hd)
+
+/-- Every outstanding obligation reaches a terminal forest node by a finite
+delegation path, and the obligation's recorded resource agrees with that node.
+The terminal may be an active current leaf or a suspended reconstruction parent;
+`restore_terminal_agrees` transports the resource agreement back along the
+path, and `Forest.suspended_frontier_realizes` connects a suspended parent to
+its rule descendants. -/
+theorem State.Accounts.restore_reaches_terminal {s : State} (h : s.Accounts)
+    {r : Restore} (hr : r ∈ s.restores) :
+    ∃ r' : Restore, ∃ c : Leaf,
+      State.RestoreTerminal s r' c ∧ (r' = r ∨ State.RestoreReaches s r r') ∧
+      r.Agrees c := by
+  have key : ∀ n : Nat, ∀ r : Restore, r ∈ s.restores →
+      s.restores.idxOf r < n →
+      ∃ r' : Restore, ∃ c : Leaf,
+        State.RestoreTerminal s r' c ∧
+        (r' = r ∨ State.RestoreReaches s r r') ∧ r.Agrees c := by
+    intro n
+    induction n with
+    | zero =>
+        intro r _ hlt
+        omega
+    | succ n ih =>
+        intro r hr hlt
+        by_cases hdel : ∃ r' ∈ s.restores, Restore.Depends r r'
+        · obtain ⟨r', hr', hd⟩ := hdel
+          have hidx : s.restores.idxOf r' < s.restores.idxOf r :=
+            h.restore_order r hr r' hr' hd
+          obtain ⟨rT, c, hterm, hpath, hrag⟩ := ih r' hr' (by omega)
+          refine ⟨rT, c, hterm, ?_, ?_⟩
+          · rcases hpath with rfl | hp
+            · exact Or.inr (State.RestoreReaches.single hr hd hr')
+            · exact Or.inr ((State.RestoreReaches.single hr hd hr').trans hp)
+          · exact Restore.Agrees.of_sameResource
+              (h.nested_agrees r hr r' hr' hd).symm hrag
+        · rcases h.restore_realized r hr with hnode | hdeleg
+          · obtain ⟨c, hc, hcid, hag⟩ := hnode
+            exact ⟨r, c,
+              ⟨hr, (fun r' hr' hd => hdel ⟨r', hr', hd⟩), hc, hcid, hag⟩,
+              Or.inl rfl, hag⟩
+          · exact absurd hdeleg hdel
+  exact key (s.restores.idxOf r + 1) r hr (Nat.lt_succ_self _)
+
+/-- The resource agreement of a terminal node is the agreement of every
+obligation on the delegation path that reaches it. -/
+theorem State.Accounts.restore_terminal_agrees {s : State} (h : s.Accounts)
+    {r r' : Restore} {c : Leaf} (hr : r ∈ s.restores)
+    (hp : r' = r ∨ State.RestoreReaches s r r')
+    (ht : State.RestoreTerminal s r' c) : r.Agrees c := by
+  have hs : r.SameResource r' := by
+    rcases hp with rfl | hp
+    · exact ⟨rfl, rfl, rfl, rfl, rfl⟩
+    · exact h.restoreReaches_sameResource hp
+  exact Restore.Agrees.of_sameResource hs.symm ht.2.2.2.2
+
+/-- The index of an element distinct from a prepended head shifts by one. -/
+private theorem idxOf_cons_ne_restore {l : List Restore} {a b : Restore} (h : a ≠ b) :
+    (a :: l).idxOf b = l.idxOf b + 1 := by
+  simp [List.idxOf_cons, h]
+
+/-- Filtering preserves the strict index order of two retained records. -/
+private theorem idxOf_filter_lt_restore {l : List Restore} {p : Restore → Bool}
+    {a b : Restore} (ha : a ∈ l.filter p) (hb : b ∈ l.filter p)
+    (h : l.idxOf a < l.idxOf b) :
+    (l.filter p).idxOf a < (l.filter p).idxOf b := by
+  induction l with
+  | nil => exact absurd ha (by simp)
+  | cons x xs ih =>
+      by_cases hx : p x
+      · rw [List.filter_cons, if_pos hx] at ha hb ⊢
+        rcases List.mem_cons.mp ha with h_eq_a | ha
+        · subst a
+          rcases List.mem_cons.mp hb with h_eq_b | hb
+          · subst b
+            exact absurd h (Nat.lt_irrefl _)
+          · have hxb : x ≠ b := by
+              intro hbeq
+              subst b
+              rw [List.idxOf_cons_self] at h
+              omega
+            rw [List.idxOf_cons_self, idxOf_cons_ne_restore hxb]
+            omega
+        · rcases List.mem_cons.mp hb with h_eq_b | hb
+          · subst b
+            rw [List.idxOf_cons_self] at h
+            omega
+          · by_cases hxa : x = a
+            · subst a
+              have hxb : x ≠ b := by
+                intro hbeq
+                subst b
+                rw [List.idxOf_cons_self] at h
+                omega
+              rw [List.idxOf_cons_self, idxOf_cons_ne_restore hxb]
+              omega
+            · have hxb : x ≠ b := by
+                intro hbeq
+                subst b
+                rw [List.idxOf_cons_self] at h
+                omega
+              have hx' : xs.idxOf a < xs.idxOf b := by
+                rw [idxOf_cons_ne_restore hxa,
+                  idxOf_cons_ne_restore hxb] at h
+                omega
+              have hrec := ih ha hb hx'
+              rw [idxOf_cons_ne_restore hxa, idxOf_cons_ne_restore hxb]
+              omega
+      · rw [List.filter_cons, if_neg hx] at ha hb ⊢
+        have hpa : p a := (List.mem_filter.mp ha).2
+        have hpb : p b := (List.mem_filter.mp hb).2
+        have hxa : x ≠ a := by
+          intro heq
+          exact hx (heq ▸ hpa)
+        have hxb : x ≠ b := by
+          intro heq
+          exact hx (heq ▸ hpb)
+        rw [idxOf_cons_ne_restore hxa, idxOf_cons_ne_restore hxb] at h
+        have hx' : xs.idxOf a < xs.idxOf b := by omega
+        exact ih ha hb hx'
 
 /-- A whole live allocation's heap holds exactly its `len` bytes. -/
 theorem State.initial_storage (a : AllocId) (n D : Nat) (pos : 0 < D)
@@ -2931,6 +3177,7 @@ theorem State.write_inv {s s' : State} {id : CapId} {i : Nat} {v : UInt8}
             restore_realized := hinv.2.2.restore_realized
             node_agrees := hinv.2.2.node_agrees
             nested_agrees := hinv.2.2.nested_agrees
+            restore_order := hinv.2.2.restore_order
             rule_fragments_issued := hinv.2.2.rule_fragments_issued }
       · simp at h
     · simp at h
@@ -3072,6 +3319,7 @@ theorem State.splitSpatial_inv {s s' : State} {parentId c1 c2 : CapId}
             restore_realized := ?_
             node_agrees := ?_
             nested_agrees := ?_
+            restore_order := ?_
             rule_fragments_issued := ?_ }
         · intro id hid
           rcases Forest.splitSpatialAt_ids_mem hsplit hid with ho | ho | ho
@@ -3131,6 +3379,7 @@ theorem State.splitSpatial_inv {s s' : State} {parentId c1 c2 : CapId}
           · exact absurd (by rw [← ho, hcid]; exact (hacct.restores_issued r hr).2) hfresh.2.1
         · intro r hr r' hr' hrel
           exact hacct.nested_agrees r hr r' hr' hrel
+        · exact hacct.restore_order
         · intro id hid
           rcases Forest.splitSpatialAt_ruleIds_mem hsplit hid with ho | ho | ho
           · exact List.mem_cons_of_mem _ (List.mem_cons_of_mem _
@@ -3182,6 +3431,7 @@ theorem State.splitFraction_inv {s s' : State} {parentId c1 c2 : CapId}
             restore_realized := ?_
             node_agrees := ?_
             nested_agrees := ?_
+            restore_order := ?_
             rule_fragments_issued := ?_ }
         · intro id hid
           rcases Forest.splitFractionAt_ids_mem hsplit hid with ho | ho | ho
@@ -3241,6 +3491,7 @@ theorem State.splitFraction_inv {s s' : State} {parentId c1 c2 : CapId}
           · exact absurd (by rw [← ho, hcid]; exact (hacct.restores_issued r hr).2) hfresh.2.1
         · intro r hr r' hr' hrel
           exact hacct.nested_agrees r hr r' hr' hrel
+        · exact hacct.restore_order
         · intro id hid
           rcases Forest.splitFractionAt_ruleIds_mem hsplit hid with ho | ho | ho
           · exact List.mem_cons_of_mem _ (List.mem_cons_of_mem _
@@ -3312,6 +3563,7 @@ theorem State.reconstruct_inv {s s' : State} {parentId : CapId}
           restore_realized := ?_
           node_agrees := ?_
           nested_agrees := ?_
+          restore_order := ?_
           rule_fragments_issued := ?_ }
       · intro id hid
         rcases Forest.ids_mem_nodes_or_ruleIds hid with ho | ho
@@ -3361,6 +3613,7 @@ theorem State.reconstruct_inv {s s' : State} {parentId : CapId}
         exact hacct.node_agrees r hr c' (hsub hc') hcid
       · intro r hr r' hr' hrel
         exact hacct.nested_agrees r hr r' hr' hrel
+      · exact hacct.restore_order
       · intro id hid
         exact hacct.rule_fragments_issued id
           (Forest.reconstructAt_ruleIds_mem hrec hid)
@@ -3391,6 +3644,12 @@ theorem State.borrow_inv {s s' : State} {lender borrower : CapId}
           hacct.issue_covers lender
             (hcid ▸ Forest.node_id_mem_ids (Forest.mem_nodes_of_mem_leaves hcleaf))
         have hne : borrower ≠ lender := hok.2.2.2
+        have hhead_ne : ∀ r ∈ s.restores,
+            (⟨lender, borrower, p.alloc, p.lo, p.hi, p.q, p.ceiling⟩ : Restore) ≠ r := by
+          intro r hr heq
+          have hb : r.borrower = borrower :=
+            (congrArg Restore.borrower heq).symm
+          exact hok.2.1 (by rw [← hb]; exact (hacct.restores_issued r hr).2)
         refine ⟨?_, ?_, ?_⟩
         · intro x hx
           change f'.budget x = s.D
@@ -3411,6 +3670,7 @@ theorem State.borrow_inv {s s' : State} {lender borrower : CapId}
               restore_realized := ?_
               node_agrees := ?_
               nested_agrees := ?_
+              restore_order := ?_
               rule_fragments_issued := ?_ }
           · intro id hid
             rcases Forest.retagLeaf_ids_mem hretag hid with ho | ho
@@ -3498,6 +3758,21 @@ theorem State.borrow_inv {s s' : State} {lender borrower : CapId}
                 rw [hpc]
                 exact ⟨hag.1, hag.2.1, hag.2.2.1, hag.2.2.2.1, hag.2.2.2.2⟩
               · exact hacct.nested_agrees r hr r' hr' hrel
+          · intro r hr r' hr' hrel
+            rcases List.mem_cons.mp hr with rfl | hr
+            · rcases List.mem_cons.mp hr' with rfl | hr'
+              · exact absurd (by simpa [Restore.Depends] using hrel) (Ne.symm hne)
+              · have hrel' : r'.lender = borrower := by
+                  simpa [Restore.Depends] using hrel
+                exact absurd (hrel' ▸ (hacct.restores_issued r' hr').1) hok.2.1
+            · rcases List.mem_cons.mp hr' with rfl | hr'
+              · rw [List.idxOf_cons_self,
+                  idxOf_cons_ne_restore (hhead_ne r hr)]
+                omega
+              · have hord := hacct.restore_order r hr r' hr' hrel
+                rw [idxOf_cons_ne_restore (hhead_ne r' hr'),
+                    idxOf_cons_ne_restore (hhead_ne r hr)]
+                omega
           · intro id hid
             exact List.mem_cons_of_mem _
               (hacct.rule_fragments_issued id (Forest.retagLeaf_ruleIds_mem hretag hid))
@@ -3553,6 +3828,7 @@ theorem State.return_inv {s s' : State} {borrower : CapId}
                 restore_realized := ?_
                 node_agrees := ?_
                 nested_agrees := ?_
+                restore_order := ?_
                 rule_fragments_issued := ?_ }
             · intro id hid
               rcases Forest.retagLeaf_ids_mem hretag hid with ho | ho
@@ -3644,6 +3920,16 @@ theorem State.return_inv {s s' : State} {borrower : CapId}
             · intro r' hr' r'' hr'' hrel
               exact hacct.nested_agrees r' (List.mem_filter.mp hr').1 r''
                 (List.mem_filter.mp hr'').1 hrel
+            · intro r' hr' r'' hr'' hrel
+              change r' ∈ s.restores.filter
+                (fun x => decide (x.borrower ≠ borrower)) at hr'
+              change r'' ∈ s.restores.filter
+                (fun x => decide (x.borrower ≠ borrower)) at hr''
+              exact idxOf_filter_lt_restore
+                (p := fun x => decide (x.borrower ≠ borrower))
+                hr'' hr'
+                (hacct.restore_order r' (List.mem_filter.mp hr').1 r''
+                  (List.mem_filter.mp hr'').1 hrel)
             · intro id hid
               exact hacct.rule_fragments_issued id
                 (Forest.retagLeaf_ruleIds_mem hretag hid)

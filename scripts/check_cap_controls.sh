@@ -53,6 +53,7 @@ check_ok CapDelegation.lean
 check_ok CapChainRepair.lean
 check_ok CapDiscipline.lean
 check_ok CapReconstruction.lean
+check_ok CapRestorationOrder.lean
 check_ok CapIntegrated.lean
 check_ok CapRealization.lean
 check_ok CapUnionFindReuse.lean

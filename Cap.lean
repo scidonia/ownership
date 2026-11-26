@@ -48,4 +48,5 @@ import Cap.Discipline
 import Cap.Sealed
 import Cap.Reconstruction
 import Cap.Integrated
+import Cap.UFGeneric
 import Cap.UFIntegrated

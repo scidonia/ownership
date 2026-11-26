@@ -176,6 +176,14 @@ open Cap
 #print axioms Cap.Reconstruction.State.Accounts.dormant_not_current
 #print axioms Cap.Reconstruction.State.Accounts.retired_not_current
 #print axioms Cap.Reconstruction.State.Accounts.cons_restore_not_accounts
+#print axioms Cap.Reconstruction.Forest.split_budget_of_children
+#print axioms Cap.Reconstruction.Forest.suspended_frontier_realizes
+#print axioms Cap.Reconstruction.Restore.SameResource.trans
+#print axioms Cap.Reconstruction.State.Accounts.restoreReaches_idx_lt
+#print axioms Cap.Reconstruction.State.Accounts.dependency_wellFounded
+#print axioms Cap.Reconstruction.State.Accounts.restoreReaches_sameResource
+#print axioms Cap.Reconstruction.State.Accounts.restore_reaches_terminal
+#print axioms Cap.Reconstruction.State.Accounts.restore_terminal_agrees
 #print axioms Cap.Reconstruction.World.splitAtChecked_refuses_with_loan
 
 /-! ### The sealed integrated boundary -/
@@ -227,28 +235,72 @@ open Cap
 #print axioms Cap.Integrated.lifecycle64Prog_no_refusal
 #print axioms Cap.Integrated.lifecycle64Prog_finish_inv
 
-/-! ### The two-call union-find through the integrated sealed boundary -/
+/-! ### The general sealed union-find -/
 
-#print axioms Cap.UFIntegrated.Rep.fits
-#print axioms Cap.UFIntegrated.chase?_eq
-#print axioms Cap.UFIntegrated.sealedFind_chase
+#print axioms Cap.state_read?_snapshot
+#print axioms Cap.heap_write_lookup
+#print axioms Cap.heap_write_lookup_ne
+#print axioms Cap.heap_lookupList?_updateList_ne
+#print axioms Cap.Reconstruction.Forest.findLeaf?_leaf
+#print axioms Cap.Reconstruction.State.write_component
+#print axioms Cap.Integrated.findState?_updateState_self
+#print axioms Cap.Integrated.findState?_updateState_some
+#print axioms Cap.Integrated.updateState_none_of_find_none
+#print axioms Cap.Integrated.updateState_exists
+#print axioms Cap.Integrated.updateState_allocIds
+#print axioms Cap.Integrated.State.update_find_self
+#print axioms Cap.Integrated.Sealed.write_exists_of_exec
+#print axioms Cap.sealed_write_component
+#print axioms Cap.sealed_write_snapshot_self
+#print axioms Cap.WriteFrame.refl
+#print axioms Cap.WriteFrame.trans
+#print axioms Cap.sealed_write_frames
+#print axioms Cap.UFGeneric.Rep.fits
+#print axioms Cap.UFGeneric.eq_map_ofNat_of_map_toNat
+#print axioms Cap.UFGeneric.Rep.snapshot_eq
+#print axioms Cap.UFGeneric.Rep.read
+#print axioms Cap.UFGeneric.chase?_eq_of_stops
+#print axioms Cap.UFGeneric.chase?_some_spec
+#print axioms Cap.UFGeneric.chase?_none_iff
+#print axioms Cap.UFGeneric.chase?_eq_ranked
+#print axioms Cap.UFGeneric.Writable.component
+#print axioms Cap.UFGeneric.Writable.write_exists
+#print axioms Cap.UFGeneric.Writable.write_preserved
+#print axioms Cap.UFGeneric.Writable.frames
+#print axioms Cap.UFGeneric.decode_set
+#print axioms Cap.UFGeneric.compressPath_spec
+#print axioms Cap.UFGeneric.sealedFind_some
+#print axioms Cap.UFGeneric.sealedFind_ok_stops
+#print axioms Cap.UFGeneric.sealedFind_error_of_no_stops
+#print axioms Cap.UFGeneric.sealedFind_spec
+#print axioms Cap.UFGeneric.findRanked_eq
+#print axioms Cap.UFGeneric.findRanked_spec
+#print axioms Cap.UFGeneric.findRanked_twice
+
+/-! ### The two-call union-find instance -/
+
 #print axioms Cap.UFIntegrated.setup_ok
 #print axioms Cap.UFIntegrated.ufStart_snapshot
 #print axioms Cap.UFIntegrated.ufStart_rep
-#print axioms Cap.UFIntegrated.ufStart_reads
-#print axioms Cap.UFIntegrated.origin_steps
-#print axioms Cap.UFIntegrated.ufStart_chase
+#print axioms Cap.UFIntegrated.ufStart_ranked
+#print axioms Cap.UFIntegrated.ufStart_writable
+#print axioms Cap.UFIntegrated.ufStart_precondition
+#print axioms Cap.UFIntegrated.ufFirst_chase
+#print axioms Cap.UFIntegrated.ufFirst_spec
+#print axioms Cap.UFIntegrated.ufFirst_general
 #print axioms Cap.UFIntegrated.ufFirst_root
 #print axioms Cap.UFIntegrated.ufFirst_snapshot
-#print axioms Cap.UFIntegrated.ufFirst_root_spec
 #print axioms Cap.UFIntegrated.ufFirst_rep
+#print axioms Cap.UFIntegrated.ufFirst_precondition
+#print axioms Cap.UFIntegrated.ufFirst_frame
+#print axioms Cap.UFIntegrated.ufFirst_root_spec
 #print axioms Cap.UFIntegrated.ufFirst_matches_runner
 #print axioms Cap.UFIntegrated.ufFirstState_snapshot
-#print axioms Cap.UFIntegrated.ufFirstState_reads
+#print axioms Cap.UFIntegrated.ufSecond_chase
+#print axioms Cap.UFIntegrated.ufSecond_general
 #print axioms Cap.UFIntegrated.ufSecond_run
 #print axioms Cap.UFIntegrated.ufSecond_root
 #print axioms Cap.UFIntegrated.ufSecond_snapshot
-#print axioms Cap.UFIntegrated.ufSecond_chase
 #print axioms Cap.UFIntegrated.ufSecond_root_spec
 #print axioms Cap.UFIntegrated.ufSecond_rep
 #print axioms Cap.UFIntegrated.ufSecond_matches_runner

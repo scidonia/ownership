@@ -60,3 +60,27 @@ open Cap
       s.read? ⟨0⟩ 0 == some 0 &&
       s.snapshot ⟨0⟩ == some [0, 0, 1, 2, 0]
   | .error _ => false)
+
+/-! ### The completion contract of the general find -/
+
+/- The bounded chase never reports an exhausted search as a root: zero fuel is
+none, not the pair `(3, [])` the old bounded helper returned. -/
+#guard (Cap.UFGeneric.chase? Cap.UFIntegrated.ufStart ⟨0⟩ 0 3).isNone
+/- One step short of the rank bound: the chase from node 3 needs four steps
+(3 → 2 → 1 → 0). -/
+#guard (Cap.UFGeneric.chase? Cap.UFIntegrated.ufStart ⟨0⟩ 3 3).isNone
+/- At the rank bound the chase completes and returns a root and path. -/
+#guard (Cap.UFGeneric.chase? Cap.UFIntegrated.ufStart ⟨0⟩ 4 3).isSome
+/- An exhausted chase makes the find refuse; it carries no state. -/
+#guard (Cap.UFGeneric.sealedFind Cap.UFIntegrated.ufStart ⟨0⟩ ⟨1⟩ 0 3).isOk = false
+#guard (Cap.UFGeneric.sealedFind Cap.UFIntegrated.ufStart ⟨0⟩ ⟨1⟩ 3 3).isOk = false
+#guard (Cap.UFGeneric.sealedFind Cap.UFIntegrated.ufStart ⟨0⟩ ⟨1⟩ 0 3).toOption.isNone
+
+/-! ### Whole-fragment write authority -/
+
+/- The whole-share capability is a writable whole fragment of the five bytes. -/
+#guard (Cap.UFGeneric.writableB Cap.UFIntegrated.ufStart ⟨0⟩ ⟨1⟩ 5)
+/- The disposal name is not a write authority. -/
+#guard (Cap.UFGeneric.writableB Cap.UFIntegrated.ufStart ⟨0⟩ ⟨2⟩ 5 = false)
+/- A fragment claiming the wrong length is not this allocation's whole share. -/
+#guard (Cap.UFGeneric.writableB Cap.UFIntegrated.ufStart ⟨0⟩ ⟨1⟩ 6 = false)

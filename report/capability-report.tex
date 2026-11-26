@@ -1091,9 +1091,19 @@ frontier coverage, forest validity and the ownership account
 \texttt{State.Accounts}. The budget at every byte is still $D$, every recorded
 rule is checked, and the account constrains the current authority-node
 identities, issuance coverage, retirement, dormant lenders, restoration
-realization and resource agreement. It is not a structural restatement of the
-forest: it relates the forest to \texttt{issued}, \texttt{retired} and
-\texttt{restores}. A retired or dormant name is therefore not a current leaf
+realization, resource agreement and restoration order. It is not a structural
+restatement of the forest: it relates the forest to \texttt{issued},
+\texttt{retired} and \texttt{restores}. \texttt{Restore.Depends} relates two
+obligations when the second's lender is the first's borrower, and
+\texttt{State.RestoreOrder} requires each dependency to strictly decrease the
+index in \texttt{restores}; borrowing prepends, so dependencies run from later
+records to earlier ones. \texttt{State.Accounts.dependency\_wellFounded} rules
+out a positive delegation cycle, and
+\texttt{State.Accounts.restore\_reaches\_terminal} gives every obligation a
+finite path to a terminal forest node with resource agreement along the path.
+\texttt{Forest.suspended\_frontier\_realizes} connects a suspended parent to its
+node entry, rule descendants and descendant frontier budget. A retired or
+dormant name is therefore not a current leaf
 (\texttt{State.Accounts.retired\_not\_current},
 \texttt{State.Accounts.dormant\_not\_current}), and an appended obligation naming
 an unissued party breaks the predicate

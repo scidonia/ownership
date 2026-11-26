@@ -264,16 +264,22 @@ neither `LlvmBridge` module emits a warning.
   modified, and its axiom lines above are the ones recorded in the section
   before this one.
 
-## Toolchain limitation
+## Separate toolchain pins
 
-`Cap`'s modules are elaborated here by the bridge's Lean (4.35.0). The ownership
-repository pins `v4.35.0-rc3` in its own `lean-toolchain`, and the worker has no
-rc3 toolchain (`/nix/store` shows the 4.35.0 release builds only), so the
-repository's own pinned build of the changed `Cap/Integrated.lean` **was not
-run**. The added declarations use only the module's existing vocabulary
-(`unfold`, `split`, `cases`, `simp`, `rw`, `Subsingleton.elim`) and add no
-import; the pinned build must still be run separately. Nothing in this record
-is evidence about it.
+The bridge is built at the sibling's `leanprover/lean4:v4.35.0` pin. The
+ownership repository pins `v4.35.0-rc3`; after this record's bridge run, the
+pinned rc3 closure was copied to the worker and the changed `Cap` package was
+built separately under that pin:
+
+```
+nix develop . -c bash -c 'cd .../ownership && lake build Cap'
+```
+
+with `scidonia-lean: Lean (version 4.35.0-rc3, Release)`. The build, capability
+controls, axiom audit and 126-row docs census all passed. This rc3 result is
+evidence about `Cap` only; the composed theorem in this directory remains a
+4.35.0-release build. The two results are not treated as interchangeable, and
+the bridge's `Cap` oleans are not claimed to be an rc3 artifact.
 
 ## Scope of the theorem
 
