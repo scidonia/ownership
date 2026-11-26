@@ -13,6 +13,7 @@ import Cap.Certify
 import Cap.UFReuse
 import Cap.Reconstruction
 import Cap.ReconstructionSealed
+import Cap.Integrated
 
 open Cap
 
@@ -157,3 +158,35 @@ open Cap
 #print axioms Cap.Reconstruction.reuse_snapshot_of_ok
 #print axioms Cap.Reconstruction.reuse_authority_of_ok
 #print axioms Cap.Reconstruction.reuse_inv_of_ok
+
+/-! ### The integrated multi-allocation semantics -/
+
+#print axioms Cap.Integrated.wholeActiveB_iff
+#print axioms Cap.Integrated.State.initial_inv
+#print axioms Cap.Integrated.updateState_alloc_mem
+#print axioms Cap.Integrated.updateState_inv
+#print axioms Cap.Integrated.State.update_inv
+#print axioms Cap.Integrated.State.alloc_inv
+#print axioms Cap.Integrated.State.free_inv
+#print axioms Cap.Integrated.State.free_guard
+#print axioms Cap.Integrated.State.exec_inv
+#print axioms Cap.Integrated.State.run_inv
+#print axioms Cap.Integrated.State.exec_frames_other
+#print axioms Cap.Integrated.State.checkRun_sound
+#print axioms Cap.Integrated.Prog.never_refuses
+#print axioms Cap.Integrated.Prog.finish_inv
+#print axioms Cap.Integrated.Sealed.invariant
+#print axioms Cap.Integrated.lifecycle64_ok
+#print axioms Cap.Integrated.lifecycle64_snapshot
+#print axioms Cap.Integrated.lifecycle64_authority
+#print axioms Cap.Integrated.lifecycle64_retired
+#print axioms Cap.Integrated.lifecycle64_restores
+#print axioms Cap.Integrated.reuse64_ok
+#print axioms Cap.Integrated.reuse64_snapshot
+#print axioms Cap.Integrated.reuse64_authority
+#print axioms Cap.Integrated.reuse64_retired
+#print axioms Cap.Integrated.lifecycleThenAlloc_ok
+#print axioms Cap.Integrated.lifecycleThenAlloc_snapshot
+#print axioms Cap.Integrated.lifecycleThenAlloc_authority
+#print axioms Cap.Integrated.lifecycle64Prog_no_refusal
+#print axioms Cap.Integrated.lifecycle64Prog_finish_inv

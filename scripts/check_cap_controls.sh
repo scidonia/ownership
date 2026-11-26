@@ -54,6 +54,7 @@ check_ok CapChainRepair.lean
 check_ok CapDiscipline.lean
 check_ok CapReconstruction.lean
 check_ok CapReconstructionSealed.lean
+check_ok CapIntegrated.lean
 check_ok CapRealization.lean
 check_ok CapUnionFindReuse.lean
 check_ok CapSealAccept.lean
@@ -71,6 +72,7 @@ check_fail OwnedNoAccess.lean "is private"
 check_fail CapSealReject.lean "Cap.Sealed.mk"
 check_fail CapSealReject.lean "Cap.Sealed.ofRun"
 check_fail CapSealPeekReject.lean "is private"
+check_fail CapIntegratedPeekReject.lean "is private"
 
 if [ "$fail" -ne 0 ]; then
   echo "capability controls: FAILED" >&2

@@ -47,3 +47,4 @@ import Cap.Discipline
 import Cap.Sealed
 import Cap.Reconstruction
 import Cap.ReconstructionSealed
+import Cap.Integrated

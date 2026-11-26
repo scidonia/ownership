@@ -702,6 +702,31 @@ shows the certificate it would have to emit, not proof-producing elaboration.
   `Cap.Sealed` `UCmd` path keeps its allocation-wide split/join guard, and
   routing `World.splitAtChecked` through this forest is not claimed.
   `bench/CapReconstructionSealed.lean` exercises both cycles and the refusals.
+- `Cap/Integrated.lean` is the multi-allocation reconstruction state: `State` is
+  a list of `Reconstruction.State` keyed by `AllocId`, and `State.Inv` requires
+  distinct allocation identifiers and every component's `State.Inv`. `Cmd` is
+  the checked command language (`alloc`, `write`, `borrow`, `splitSpatial`,
+  `splitFraction`, `reconstruct`, `ret`, `free`); every command names its
+  allocation, and `State.exec` refuses an absent one. `State.exec_inv` and
+  `State.run_inv` preserve `State.Inv`; `State.exec_frames_other` shows that an
+  accepted command leaves every other allocation's lookup — and therefore its
+  snapshot — unchanged. `State.free` is accepted only for a single whole active
+  leaf with no outstanding return obligation, read structurally by
+  `wholeActiveB_iff`. `Prog` is the typed wrapper: a command list together with
+  the boolean check from an invariant start state, and `Prog.never_refuses`
+  derives an accepting run. `Sealed` is the private multi-allocation boundary
+  with snapshot, byte-read, fragment, retired-name and obligation observations;
+  `Sealed.lifecycle64` is the 64-byte borrow/split/write/reconstruct/return
+  cycle, `Sealed.reuseLifecycle` runs a second cycle on its output, and
+  `Sealed.alloc` adds a second allocation. `bench/CapIntegrated.lean` exercises
+  independent two-allocation borrowing, an independent sibling split while a
+  loan is outstanding, the return order and the free guard;
+  `bench/CapIntegratedPeekReject.lean` checks the sealed representation and
+  constructor are private. `Cap.Sealed` still wraps `World`/`UCmd`: this module
+  does not route it, and `World.splitAtChecked` keeps its allocation-wide loan
+  guard. A later migration needs the storage, ledger and history components of
+  `World.FullInv` in `State.Inv` and one `State` behind the `Cap.Sealed`
+  interface.
 - `Cap/Trace.lean` states trace properties of the checker language:
   `checkWorld_cons_ok` splits an accepted command list at its first command, and
   `checkWorld_write_guard` proves that a write at any position of an accepted
