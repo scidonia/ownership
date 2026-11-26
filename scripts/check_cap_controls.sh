@@ -57,6 +57,7 @@ check_ok CapIntegrated.lean
 check_ok CapRealization.lean
 check_ok CapUnionFindReuse.lean
 check_ok CapUFReuseRunner.lean
+check_ok CapUFIntegrated.lean
 check_ok CapSealAccept.lean
 check_ok CapFreshness.lean
 check_ok OwnedAccept.lean

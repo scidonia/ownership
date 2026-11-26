@@ -12,12 +12,17 @@
 #                     project wrapper needs the plain binary, e.g.
 #                     /nix/store/<lean4>/bin/lake.
 #   --llvm-lib <dir>  the LeanLLVM checkout to push (default: ../lean-llvm)
+#   --ownership <dir> the ownership package whose `Cap` the bridge imports
+#                     (or LLVM_BRIDGE_OWNERSHIP; default: this package's parent)
 #   --dir <path>      worker-side base directory, relative to the login home
 #                     (default: llvm, or LLVM_BRIDGE_REMOTE_ROOT)
 #
 # Nothing is built here.  The sibling checkout is copied to the worker, its
 # package definition replaced by scripts/worker-lean-llvm-lakefile.toml (a
-# projection with no Mathlib requirement), and the bridge is built against it.
+# projection with no Mathlib requirement); the ownership package's `Cap` sources
+# and `Cap.lean` are copied to the worker root with
+# scripts/worker-ownership-lakefile.toml as its package definition, so the
+# bridge's `..` requirement resolves there; and the bridge is built against both.
 set -euo pipefail
 
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
@@ -25,10 +30,11 @@ session=${LLVM_BRIDGE_SESSION:-}
 remote=${LLVM_BRIDGE_REMOTE:-}
 lake=${LLVM_BRIDGE_LAKE:-lake}
 llvm_lib=$(cd "$here/../../lean-llvm" 2>/dev/null && pwd || true)
+ownership=$(cd "$here/.." 2>/dev/null && pwd || true)
 root=${LLVM_BRIDGE_REMOTE_ROOT:-llvm}
 
 usage() {
-  sed -n '2,22p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+  sed -n '2,25p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
 }
 
 while [ $# -gt 0 ]; do
@@ -37,6 +43,7 @@ while [ $# -gt 0 ]; do
     --remote) remote=${2:?--remote needs a value}; shift 2 ;;
     --lake) lake=${2:?--lake needs a value}; shift 2 ;;
     --llvm-lib) llvm_lib=${2:?--llvm-lib needs a value}; shift 2 ;;
+    --ownership) ownership=${2:?--ownership needs a value}; shift 2 ;;
     --dir) root=${2:?--dir needs a value}; shift 2 ;;
     -h|--help) usage; exit 0 ;;
     *) echo "build-remote: unknown argument '$1'" >&2; usage >&2; exit 64 ;;
@@ -55,6 +62,10 @@ if [ -z "$llvm_lib" ] || [ ! -d "$llvm_lib/LeanLLVM" ]; then
   echo "build-remote: --llvm-lib must name a LeanLLVM checkout (looked at '${llvm_lib:-<unset>}')" >&2
   exit 64
 fi
+if [ -z "$ownership" ] || [ ! -d "$ownership/Cap" ] || [ ! -f "$ownership/Cap.lean" ]; then
+  echo "build-remote: --ownership must name the ownership package root with Cap/ and Cap.lean (looked at '${ownership:-<unset>}')" >&2
+  exit 64
+fi
 
 run() { "$remote" run --session "$session" -- "$1"; }
 copy_to() { "$remote" copy --session "$session" --to "$1" "$2" >/dev/null; }
@@ -64,6 +75,12 @@ run "mkdir -p '$root/lean-llvm'"
 copy_to "$llvm_lib/LeanLLVM" "$root/lean-llvm"
 copy_to "$llvm_lib/lean-toolchain" "$root/lean-llvm/lean-toolchain"
 copy_to "$here/scripts/worker-lean-llvm-lakefile.toml" "$root/lean-llvm/lakefile.toml"
+
+echo "== provisioning the ownership package on the worker =="
+run "mkdir -p '$root/Cap'"
+copy_to "$ownership/Cap/" "$root/Cap"
+copy_to "$ownership/Cap.lean" "$root/Cap.lean"
+copy_to "$here/scripts/worker-ownership-lakefile.toml" "$root/lakefile.toml"
 
 echo "== pushing the bridge =="
 copy_to "$here" "$root"

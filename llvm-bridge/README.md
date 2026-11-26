@@ -5,10 +5,13 @@ compiles a one-byte store kernel, `LeanLLVM.Parser` reads the emitted IR, and a
 kernel-checked theorem relates the emitted body's execution to a reference
 store semantics.
 
-It answers the first half of the review's F8 boundary requirement — *prove one
-useful kernel refinement through that boundary* — and nothing else. The
-ownership invariant is not related to this memory; the last section states
-exactly what would remain.
+It answers both halves of the review's F8 boundary requirement for one
+authorized write: *prove one useful kernel refinement through that boundary*,
+and *compose that refinement with an ownership state*. `LlvmBridge/Store8.lean`
+proves the kernel half against LeanLLVM's byte memory. `LlvmBridge/Ownership.lean`
+relates one `Cap.Integrated` allocation's heap bytes to that memory at an
+explicit address map and proves the composed statement; the last sections state
+exactly what the composition assumes and what remains.
 
 ## Files
 
@@ -19,11 +22,13 @@ exactly what would remain.
 | `ir/store8.ll` | the same emission projected onto the parser's accepted surface |
 | `scripts/project-ir.sed` | the projection, rule by rule |
 | `scripts/emit-ir.sh` | compiles `c/store8.c` **on the worker** and installs or checks `ir/` |
-| `scripts/build-remote.sh` | pushes the sibling and this package to the worker and builds |
-| `scripts/worker-lean-llvm-lakefile.toml` | the pushed copy's LeanLLVM package definition |
+| `scripts/build-remote.sh` | pushes the sibling, the ownership `Cap` projection and this package to the worker and builds |
+| `scripts/worker-lean-llvm-lakefile.toml` | the pushed LeanLLVM copy's package definition |
+| `scripts/worker-ownership-lakefile.toml` | the pushed `Cap` projection's package definition |
 | `scripts/check-axioms.lean` | prints the theorem footprints for the build log |
-| `LlvmBridge/Store8.lean` | the AST pin, the reference store, and every theorem |
-| `EVIDENCE.md` | the recorded remote build and the provenance of the IR |
+| `LlvmBridge/Store8.lean` | the AST pin, the reference store, and the kernel theorems |
+| `LlvmBridge/Ownership.lean` | the address map, the memory representation, and the composed ownership theorems |
+| `EVIDENCE.md` | the recorded remote builds and the provenance of the IR |
 
 ## Provenance of the IR
 
@@ -88,12 +93,47 @@ environment (`store8Calls`) writing the model store's byte. The inclusion is
 between the compiled body's behaviours (empty call environment) and that
 kernel's — the shape `Refines` compares, at the target's whole argument shape.
 
+## The composed ownership theorem
+
+`LlvmBridge/Ownership.lean` relates one `Cap.Integrated` allocation's heap bytes
+to `LeanLLVM`'s byte memory and composes that relation with the emitted body.
+
+The address map is the one a single live allocation admits: offset `off` of an
+allocation placed at `base` is the flat address `base + off` (`allocAddr`), and
+`allocAddr_injective` records that the window is injective. `MemRep m buf base`
+says the flat memory holds the allocation's buffer at that map. Nothing here
+assigns `base`: the caller supplies the window and the representation premise,
+and `MemRep.frame_write` states the disjointness a second allocation's window
+needs before the frame can be read for it.
+
+For one accepted integrated write — `Cap.Sealed.write`, which
+`Cap.Integrated.Sealed.write_ok_iff` identifies with the underlying
+`State.exec (.write …)` — the file proves:
+
+| Theorem | Statement |
+| --- | --- |
+| `write_authority` | the write consumed a current (`findLeaf?`), active, whole-share (`c.q = st.D`), read--write (`c.ceiling = .readWrite`) fragment covering the offset — derived from the command's guard, not assumed |
+| `component_write_parts`, `heap_write_lookup` | the component write behind it is a `Cap.Heap.write?` at that offset, so the post-heap is `List.set` and the offset was in range |
+| `runFuel_store8_at_mem` | from **any** flat memory the emitted body at `(base, off, bv)` completes at every positive budget with `writeByte` at `base + off` (the `getelementptr` adding case assumes `off < 2 ^ 63`) |
+| `store8IR_refines_model_at_mem`, `store8IR_completes_at_mem` | the run-level refinement and completion at that memory: every outcome is the reference store's, and it has one |
+| `store8_exec_write_comp` | the composition: completion, `MemRep` of the post-state's buffer at the same window, `AgreesOutsideMem` outside `base + off`, `s'.Inv`, the post-state's component holding `buf.set off (byteOf bv)`, the written byte on both sides, and every other allocation's state unchanged |
+| `exec_write_read_frame` | every other offset of the same allocation reads as it did |
+| `sealed_store8_write_comp` | the same conclusion at the sealed boundary, from an accepted `Cap.Sealed.write` |
+
+The kernel half is this package's existing work, reused rather than re-proved:
+`runFuel_store8IR_succ` for the step, `store8Model_read_at` for the byte and
+`store8Model_frame` for the frame. The ownership half is `Cap`'s:
+`State.exec_inv`, `State.find?_inv`/`find?_alloc`, `State.exec_frames_other` and
+`Heap.write_ne`.
+
 ## Build and run
 
-The sibling must be a `lean-llvm` checkout at Lean `v4.35.0` (the bridge's
-`lean-toolchain`); `EVIDENCE.md` records the commit its core modules were built
-from. The ownership package is at `v4.35.0-rc3`, which is why this is a separate
-package and why it cannot import `Cap`.
+The package requires two path dependencies: the sibling `lean-llvm` checkout at
+Lean `v4.35.0` (the bridge's `lean-toolchain`, the same release the sibling is
+pinned to), and the ownership package as `..` — this package lives inside it and
+the composed theorems import `Cap`. `Cap`'s modules are therefore elaborated by
+the bridge's Lean; the ownership repository's own pinned toolchain is a separate
+build, and `EVIDENCE.md` records which toolchain verified what.
 
 **On the worker** (the route this session used; nothing is built locally):
 
@@ -101,7 +141,8 @@ package and why it cannot import `Cap`.
 cd llvm-bridge
 LLVM_BRIDGE_REMOTE=/path/to/gcloud-remote.ts scripts/build-remote.sh \
   --session <worker-session> \
-  --lake /nix/store/<lean4-4.35.0>/bin/lake
+  --lake /nix/store/<lean4-4.35.0>/bin/lake \
+  --ownership /path/to/ownership-cap-snapshot
 ```
 
 A worker whose `lake` on `PATH` is a project wrapper injecting a package set
@@ -109,19 +150,20 @@ A worker whose `lake` on `PATH` is a project wrapper injecting a package set
 directory) needs `--lake` naming the plain binary. The script copies
 `../lean-llvm` and this package to the worker, replaces the pushed copy's
 `lakefile.toml` with `scripts/worker-lean-llvm-lakefile.toml` (no Mathlib
-requirement; the core modules are the roots), builds, and prints the axiom
-audit. The sibling checkout is never modified.
+requirement; the core modules are the roots), copies the ownership package's
+`Cap/` and `Cap.lean` to the worker root with
+`scripts/worker-ownership-lakefile.toml` as its package definition (only the
+`Cap` library), builds, and prints the axiom audit. The worker layout is what
+makes both path requirements resolve: the bridge is at the worker's
+`llvm-bridge`, the sibling at `lean-llvm`, and the `Cap` projection at the
+worker root, so `..` from the bridge is the `Cap` package. `--ownership`
+(default: this package's parent) chooses the sources to push; a pinned snapshot
+keeps a concurrent working-tree edit out of the record. Neither the sibling nor
+the ownership package is modified.
 
-**In the flake** (the sibling tree's own shell, same Lean):
-
-```bash
-cd llvm-bridge
-nix develop ../lean-llvm -c lake build
-nix develop ../lean-llvm -c lake env lean scripts/check-axioms.lean
-```
-
-This session ran no local build; the recorded build is the worker's
-(`EVIDENCE.md`).
+**Local builds.** The paths above are the worker layout; a local build would
+also need a `lean-llvm` checkout at `ownership/lean-llvm` beside this package.
+No local build was run for this record.
 
 **Reproduce the IR** (compiles on the worker, compares with `ir/`):
 
@@ -130,29 +172,60 @@ LLVM_BRIDGE_REMOTE=/path/to/gcloud-remote.ts scripts/emit-ir.sh \
   --session <worker-session> --check
 ```
 
+## What the composition assumes, and what remains
+
+Proved, for one accepted integrated write: the authorization
+(`write_authority`), the component write and its in-range offset, completion and
+the run-level refinement from any memory, the represented post-state, the frame,
+the byte on both sides, other allocations unchanged, and the integrated
+invariant (`store8_exec_write_comp`, `sealed_store8_write_comp`).
+
+Assumed, and stated rather than discharged:
+
+1. **The representation premise.** `MemRep m buf base` — the flat memory already
+   holds the window. `LeanLLVM` has no allocation bounds, so the C-level
+   in-bounds guarantee is the ownership guard plus `off < buf.length` (derived
+   from the accepted write), not a theorem about C. `off < 2 ^ 63` is the
+   pointer-width assumption the emitted `getelementptr` needs.
+2. **The address map's scope.** One allocation, one window, mapped by
+   `off ↦ base + off`. Two live allocations need the disjointness hypothesis of
+   `MemRep.frame_write`; that a loader assigns disjoint addresses is not proved,
+   and nothing here makes the map injective across allocations.
+3. **The projection.** The emitted IR is projected onto the parser's surface
+   (`scripts/project-ir.sed`, above). Parser/AST agreement is a guard on the
+   text, not a semantic justification of the abstraction; the projection is
+   assumed, exactly as `LlvmBridge/Store8.lean` states.
+4. **The capability route.** The write's authority is the integrated
+   reconstruction guard. The `Cap.World` `Writable`/`Rel` route is not the path
+   the sealed boundary runs, and nothing here relates the two.
+5. **The executable edge.** ABI, execution of the verified body, native
+   compilation, a live handle and the physical allocation remain trust or proof
+   obligations (`Cap.Sealed`'s `boundaryClaims`).
+
+Still not claimed: physical aliasing between two `Cap` values that reach one
+mutable allocation, the snapshot policy at the destructive runtime boundary, and
+replay of a copied live handle. `store8Model_replay_read` is idempotence of the
+*model* memory, not a statement about sealed-value copies. The kernel allocates
+and frees nothing (`alloca`-free; the reference environment returns `next`
+unchanged), so allocation failure and cleanup have no path in this body.
+
 ## What is not claimed
 
-The theorem is about LeanLLVM's byte memory. The ownership model's observable
-that corresponds is `Cap.State.read?` (via `Cap.Heap.read?` / `Cap.Backend.read`)
-at `(AllocId, offset)`; the byte update corresponds to `Cap.Backend.write`; the
-access obligation corresponds to the `Writable` guard of `Cap.World.write?` and
-the reachability state `Cap.World.Rel`; the frame corresponds to
-`Cap.Footprint.View.Within` and `Cap.Heap.write_ne`; snapshots correspond to
-`Cap.Heap.snapshot?` (unaffected by later writes, `Cap.Bytes.snapshot_independent`).
+The kernel refinement is about LeanLLVM's byte memory; the composition adds one
+ownership state at an explicit window (above). What neither proves:
 
-The exact remaining relation, none of it proved here:
+1. an address assignment by a loader. The map is caller-supplied; a live
+   allocation's base, and the disjointness of two allocations' windows, are
+   inputs (`MemRep.frame_write` states what the second one owes);
+2. a call-site `Writable` guard discharged through the `Cap.World` capability
+   path. The authority used is the integrated reconstruction guard; the two
+   routes are not related here;
+3. the physical boundary: two `Cap` values reaching one mutable allocation,
+   snapshots at the destructive runtime boundary, and replay of a copied live
+   handle.
 
-1. an address map from `AllocId × Nat` into the flat memory, with a proof that a
-   live allocation's bytes are its backend's buffer (the two ends are
-   `LeanLLVM.Globals` and `Cap.AllocId`);
-2. a call-site `Writable` guard discharged by an actual `Cap` run, including the
-   length/within-bounds fact that `LeanLLVM` does not model (an absent cell is
-   created by a write, so "in bounds" is an assumption here, not a theorem);
-3. preservation of `Cap.State.Inv` / `FullInv` across the call, and the
-   physical-aliasing, snapshot and replay policy for two `Cap` values reaching
-   one mutable allocation.
-
-The kernel allocates nothing (`alloca`-free; the reference environment returns
-`next` unchanged) and frees nothing, so allocation failure and cleanup have no
-path in this body. `store8Model_replay_read` is idempotence of the *model*
-memory, not a statement about sealed-value copies.
+The composed theorem does not restate `Cap.State.Inv`: it uses the sealed
+value's carried invariant (`Sealed.state_inv`) and `State.exec_inv` for the
+write, and it reads the post-state through `Sealed.state` — the read-only
+accessor added for this composition, which leaves the constructor and the
+invariant field private.

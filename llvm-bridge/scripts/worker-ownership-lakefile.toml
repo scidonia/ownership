@@ -1,0 +1,9 @@
+name = "Ownership"
+version = "0.1.0"
+
+# The worker-side projection of the ownership package: only `Cap` is built, and
+# only the modules the bridge imports (transitively).  The repository's own
+# lakefile also declares `Ownership`, `OwnershipTest` and `OwnershipLcnf`, whose
+# modules this package does not need.
+[[lean_lib]]
+name = "Cap"

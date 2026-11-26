@@ -14,6 +14,7 @@ import Cap.UFReuse
 import Cap.UFReuseRunner
 import Cap.Reconstruction
 import Cap.Integrated
+import Cap.UFIntegrated
 
 open Cap
 
@@ -207,3 +208,38 @@ open Cap
 #print axioms Cap.Integrated.lifecycleThenAlloc_authority
 #print axioms Cap.Integrated.lifecycle64Prog_no_refusal
 #print axioms Cap.Integrated.lifecycle64Prog_finish_inv
+
+/-! ### The two-call union-find through the integrated sealed boundary -/
+
+#print axioms Cap.UFIntegrated.Rep.fits
+#print axioms Cap.UFIntegrated.chase?_eq
+#print axioms Cap.UFIntegrated.sealedFind_chase
+#print axioms Cap.UFIntegrated.setup_ok
+#print axioms Cap.UFIntegrated.ufStart_snapshot
+#print axioms Cap.UFIntegrated.ufStart_rep
+#print axioms Cap.UFIntegrated.ufStart_reads
+#print axioms Cap.UFIntegrated.origin_steps
+#print axioms Cap.UFIntegrated.ufStart_chase
+#print axioms Cap.UFIntegrated.ufFirst_root
+#print axioms Cap.UFIntegrated.ufFirst_snapshot
+#print axioms Cap.UFIntegrated.ufFirst_root_spec
+#print axioms Cap.UFIntegrated.ufFirst_rep
+#print axioms Cap.UFIntegrated.ufFirst_matches_runner
+#print axioms Cap.UFIntegrated.ufFirstState_snapshot
+#print axioms Cap.UFIntegrated.ufFirstState_reads
+#print axioms Cap.UFIntegrated.ufSecond_run
+#print axioms Cap.UFIntegrated.ufSecond_root
+#print axioms Cap.UFIntegrated.ufSecond_snapshot
+#print axioms Cap.UFIntegrated.ufSecond_chase
+#print axioms Cap.UFIntegrated.ufSecond_root_spec
+#print axioms Cap.UFIntegrated.ufSecond_rep
+#print axioms Cap.UFIntegrated.ufSecond_matches_runner
+#print axioms Cap.UFIntegrated.ufSecond_invariant
+#print axioms Cap.UFIntegrated.ufFreshFour_snapshot_option
+#print axioms Cap.UFIntegrated.ufSecond_consumes
+#print axioms Cap.UFIntegrated.ufSecondOther_frames
+#print axioms Cap.UFIntegrated.ufSecondOther_authority
+#print axioms Cap.UFIntegrated.ufSecondOther_retired
+#print axioms Cap.UFIntegrated.ufSecondOther_restores
+#print axioms Cap.UFIntegrated.ufSecondOwnershipFrames_of_ok
+#print axioms Cap.UFIntegrated.ufSecondOther_invariant

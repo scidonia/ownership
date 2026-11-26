@@ -775,7 +775,8 @@ def State.restoresOf (s : State) (a : AllocId) : List Reconstruction.Restore :=
 /-! ### The sealed boundary -/
 
 /-- An integrated state reachable only through this module's checked operations,
-carrying the integrated invariant. -/
+carrying the integrated invariant. The pure state is exposed read-only for
+composed proofs; the constructor, invariant field and mutations remain sealed. -/
 structure Sealed where
   private mk ::
   private s : State
@@ -787,6 +788,23 @@ private def openSealed (s : Sealed) : State := s.s
 
 /-- Every sealed state, however obtained, satisfies the integrated invariant. -/
 theorem Sealed.invariant (s : Sealed) : s.s.Inv := s.inv
+
+/-- The integrated state a sealed value carries. Read-only: the constructor and
+the invariant field stay private, so a caller can inspect the state but cannot
+manufacture a sealed value or replace its proof. -/
+def Sealed.state (s : Sealed) : State := s.s
+
+/-- The state a sealed value carries satisfies the integrated invariant. -/
+theorem Sealed.state_inv (s : Sealed) : s.state.Inv := s.inv
+
+/-- Two sealed values whose states agree are equal; the invariant field is a
+proof and so carries no information. -/
+theorem Sealed.eq_of_state {s t : Sealed} (h : s.s = t.s) : s = t := by
+  obtain ⟨s0, hs⟩ := s
+  obtain ⟨t0, ht⟩ := t
+  have h0 : s0 = t0 := h
+  cases h0
+  exact congrArg (Sealed.mk _) (Subsingleton.elim _ _)
 
 /-- The sealed state's live allocations. -/
 def Sealed.allocations (s : Sealed) : List AllocId := (openSealed s).allocIds
@@ -820,6 +838,34 @@ def Sealed.write (s : Sealed) (a : AllocId) (id : CapId) (i : Nat) (v : UInt8) :
     Except String Sealed :=
   s.runCmd (.write a id i v)
     "write refused: not an active whole-share read--write fragment or offset out of range"
+
+/-- An accepted sealed write is exactly the underlying state's accepted write
+command: the sealed boundary runs `State.exec` and returns the state it
+produced, so a caller may reason about the write at either level. -/
+theorem Sealed.write_ok_iff (s : Sealed) (a : AllocId) (id : CapId) (i : Nat)
+    (v : UInt8) (s' : Sealed) :
+    Sealed.write s a id i v = .ok s' ↔ s.state.exec (.write a id i v) = some s'.state := by
+  unfold Sealed.write Sealed.runCmd
+  split
+  · rename_i s'' hexec
+    constructor
+    · intro h
+      cases h
+      simpa [Sealed.state, openSealed, mkSealed] using hexec
+    · intro h
+      have hst : s'' = s'.state := Option.some.inj (hexec.symm.trans h)
+      have hstate : s' = mkSealed s'' (State.exec_inv hexec s.inv) :=
+        Sealed.eq_of_state hst.symm
+      subst hstate
+      exact congrArg Except.ok (congrArg (mkSealed s'') (Subsingleton.elim _ _))
+  · rename_i hnone
+    constructor
+    · intro h
+      cases h
+    · intro h
+      simp only [Sealed.state, openSealed] at h hnone
+      rw [hnone] at h
+      simp at h
 
 /-- Borrow a current active fragment of one allocation. -/
 def Sealed.borrow (s : Sealed) (a : AllocId) (lender borrower : CapId) :

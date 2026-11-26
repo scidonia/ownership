@@ -14,8 +14,9 @@ The operations are `alloc`, `write`, `borrow`, `splitSpatial`, `splitFraction`,
 returns a sealed state with the integrated invariant rebuilt from its
 preservation theorem, and a refused call returns an error and no state. The
 observations are a per-allocation heap snapshot, a byte read, a fragment
-description, the retired access names, the outstanding return obligations and the
-live allocation list.
+description, the retired access names, the outstanding return obligations, the
+live allocation list, and a read-only integrated state projection for composed
+proofs; the constructor, invariant field and mutations remain sealed.
 
 What is proved is the bookkeeping boundary: every sealed state carries the
 integrated invariant, and a run reaches the outside only through accepted
@@ -129,19 +130,20 @@ are runtime contracts, not theorems of this model. -/
 def boundaryClaims : List (String × TrustLevel) :=
   [ ("the integrated checker's accepted command list is executed exactly", .proved),
     ("an accepted run preserves the integrated invariant", .proved),
-    ("the sealed interface observes only snapshots, reads, fragments, retired names and obligations", .proved),
+    ("the sealed interface observes only snapshots, reads, fragments, retired names, obligations and a read-only integrated state; its constructor, invariant field and mutations remain sealed", .proved),
     ("the C runtime performs the same store trace", .runtimeContract "A-perf"),
     ("counted references correspond to physical reference counts", .runtimeContract "A-count"),
     ("a copy of a program has physically independent storage", .runtimeContract "A-copy"),
     ("concurrent execution of copied programs", .excluded) ]
 
+set_option maxRecDepth 20000 in
 /-- No physical claim is asserted as proved: the boundary says which claims are
 runtime contracts and which are out of scope. -/
 theorem boundary_no_physical_proof :
     ∀ c ∈ boundaryClaims, c.2 = .proved → c.1 ∈
       ["the integrated checker's accepted command list is executed exactly",
        "an accepted run preserves the integrated invariant",
-       "the sealed interface observes only snapshots, reads, fragments, retired names and obligations"] := by
+       "the sealed interface observes only snapshots, reads, fragments, retired names, obligations and a read-only integrated state; its constructor, invariant field and mutations remain sealed"] := by
   decide
 
 end Cap

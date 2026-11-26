@@ -411,6 +411,27 @@
   The sealed `UFCertified.UFRunner`, which wraps a world and a representation
   predicate, is unchanged; this runner threads the functional `UF.Arr`. The
   controls are `bench/CapUFReuseRunner.lean`.
+- `Cap/UFIntegrated.lean` runs two full-path finds through the integrated sealed
+  boundary instead of the functional array. A parent array is held in one
+  allocation's bytes: `decode` reads a buffer as a `UF.Arr`, `Rep s a arr` says
+  the allocation's snapshot decodes to `arr`, and `Rep.fits` bounds every value by
+  a byte. `chase?` follows parent pointers with `Sealed.read?`, `compressPath`
+  writes the root at each path node with `Sealed.write` through the whole-share
+  capability, and `sealedFind` returns the root with the successor sealed state.
+  `chase?_eq` proves the sealed chase is `UF.findRootF`/`rootPath` whenever the
+  reads agree with the array, and `ufStart_reads`/`ufFirstState_reads` discharge
+  that for the two successive allocations. The first find from node 3 leaves
+  `[0,0,0,0,2]` and the second, run on the first call's returned state from node
+  4, leaves `[0,0,0,0,0]`, matching `reuseRunnerFirst`/`reuseRunnerSecond`; a fresh
+  find from node 4 on the start state instead leaves `[0,0,0,2,0]`
+  (`ufSecond_consumes`). `ufSecond_invariant`/`ufSecondOther_invariant` re-export
+  `Sealed.state_inv`, `ufSecondOwnershipFrames_of_ok` records that the whole-share
+  capabilities, retired names, return obligations, both heaps and both live
+  identities are unchanged, and `ufSecondOther_frames` covers a second
+  allocation. Not proved: a general per-write refinement or frame law over sealed
+  command lists — the final arrays are kernel-checked computations of the actual
+  run, not instances of a derived write lemma. The controls are
+  `bench/CapUFIntegrated.lean`.
 - `Cap/Marshal.lean` is the verified marshalling layer for the closed code
   universe. `Codec c` carries `encode : El c → List UInt8`, `decode`, and
   `decode_encode`; `codec` supplies one for every code (tagged products/sums,

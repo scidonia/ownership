@@ -4,10 +4,17 @@ defaultTargets = ["LlvmBridge"]
 
 # The bridge depends on the sibling LeanLLVM package by path; it does not modify
 # it.  `LeanLLVM` is pinned at Lean v4.35.0, so this package's toolchain is the
-# same release rather than the ownership repository's v4.35.0-rc3.
+# same release rather than the ownership repository's pinned toolchain.
 [[require]]
 name = "LeanLLVM"
 path = "../lean-llvm"
+
+# The ownership development is the bridge's parent package: one package can hold
+# both, and the composed ownership theorems import `Cap`.  The worker layout puts
+# this package's projection at the worker root, so `..` names it there too.
+[[require]]
+name = "Ownership"
+path = ".."
 
 [[lean_lib]]
 name = "LlvmBridge"
