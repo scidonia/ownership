@@ -1,0 +1,21 @@
+name = "LeanLLVM"
+version = "0.1.0"
+
+# Worker-local projection of the sibling LeanLLVM package.  The Mathlib-backed
+# ITree and the JSON demonstration are outside the bridge's import closure, so
+# this copy names the core modules the bridge imports as roots and drops the
+# Mathlib requirement the sibling's flake provides.  The bridge's own package
+# (`llvm-bridge/lakefile.toml`) requires LeanLLVM by path, so this file is only
+# ever the pushed copy's package definition; the sibling checkout is untouched.
+[[lean_lib]]
+name = "LeanLLVM"
+roots = [
+  "LeanLLVM.Basic",
+  "LeanLLVM.Binary64",
+  "LeanLLVM.Syntax",
+  "LeanLLVM.Semantics",
+  "LeanLLVM.Memory",
+  "LeanLLVM.Frames",
+  "LeanLLVM.Printer",
+  "LeanLLVM.Parser",
+]

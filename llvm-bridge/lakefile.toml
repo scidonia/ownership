@@ -1,0 +1,13 @@
+name = "LlvmBridge"
+version = "0.1.0"
+defaultTargets = ["LlvmBridge"]
+
+# The bridge depends on the sibling LeanLLVM package by path; it does not modify
+# it.  `LeanLLVM` is pinned at Lean v4.35.0, so this package's toolchain is the
+# same release rather than the ownership repository's v4.35.0-rc3.
+[[require]]
+name = "LeanLLVM"
+path = "../lean-llvm"
+
+[[lean_lib]]
+name = "LlvmBridge"

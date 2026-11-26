@@ -125,6 +125,7 @@ separately.
 | `OwnershipLcnf/` | Recognizer and AST execution of the pinned `execP` write prefix, and its correspondence to the model |
 | `scripts/` | Measurement CLI over the replayed impure LCNF |
 | `tests/` | Behavior contracts and sibling-checkout setup |
+| `llvm-bridge/` | `llvm-bridge/README.md`: one clang-emitted byte-store body, parsed and proved against a reference store in LeanLLVM |
 | `docs/` | Steering notes and captured LCNF artifacts |
 | `PLAN.md` | Research plan, claims and non-claims |
 | `AGENTS.md` | Build/test policy and repository notes |
@@ -147,6 +148,10 @@ separately.
   sibling runtime model.
 - Source interpreter correctness, source-to-target correspondence and the C
   backend are later, separate claims.
+- The `llvm-bridge/` refinement relates clang's emitted `store8` body to a
+  reference byte store in LeanLLVM's flat memory. It does not relate the
+  ownership invariant, the `Cap` heap or a physical allocation to that memory;
+  the exact remaining relation is listed in `llvm-bridge/README.md`.
 - No `sorry`, `admit` or new axioms; the proof hygiene policy is in `AGENTS.md`.
 
 ## License
