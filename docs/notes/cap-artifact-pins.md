@@ -1,7 +1,7 @@
 # Artifact pins and verification record
 
 Baseline: `aaf94d033a774ef5fc23e4410e560bacd85dc2d2`. Code source and
-verified build: `c020f3cd4931f97c8486b7820df14000b1501c2e`. This record is the
+verified build: `e4c5fd2e44cab92b1539bc69b2d204b2939c691e`. This record is the
 commit that adds this file and changes no code.
 
 ## Toolchains
@@ -28,7 +28,7 @@ lake build capuf
 Observed: `lake build Cap` completed (the committed-tree executable build reports 76 jobs
 for the package plus driver); `capability controls: OK`; the axiom audit exited
 `0` with no `sorryAx` and only the standard `propext`, `Classical.choice`,
-`Quot.sound` footprints; the docs census reported `OK (141 rows)`.
+`Quot.sound` footprints; the docs census reported `OK (147 rows)`.
 
 The compiled driver printed:
 
@@ -57,10 +57,13 @@ changed sources.
 
 - `Cap/UFGeneric.WriteFrame` now equates every unrelated allocation's full
   `Reconstruction.State`, with `component_other`, `storage_other` and
-  `rel_write`; the command-list frame and bridge connection remain open.
+  `rel_write`. The command-list frame follows from `State.run_frames_other` and
+  `Sealed.run_frames_other` (`Sealed.RunFrame`), with `Rel.run_other` carrying it
+  across a list for the address map; the bridge connection remains open.
 - `Cap/AddressMap.lean` is a finite logical window model with disjointness and
   alloc/free/write framing; it is not wired into the LLVM bridge or a loader.
 - The parent representation caps `n ≤ 256`.
 - The bridge covers one allocation and one caller-supplied window; the
   multi-allocation address map, ABI, native installation and copied-handle
-  replay remain outside the proved boundary.
+  replay remain outside the proved boundary. The trust split is recorded in
+  `docs/notes/executable-edge-contract.md`.
