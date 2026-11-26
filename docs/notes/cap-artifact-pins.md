@@ -1,7 +1,7 @@
 # Artifact pins and verification record
 
 Baseline: `aaf94d033a774ef5fc23e4410e560bacd85dc2d2`. Code source and
-verified build: `a98a4bb84e56ed65fc055e4938a1821ae3da0326`. This record is the
+verified build: `c020f3cd4931f97c8486b7820df14000b1501c2e`. This record is the
 commit that adds this file and changes no code.
 
 ## Toolchains
@@ -28,7 +28,7 @@ lake build capuf
 Observed: `lake build Cap` completed (the later executable build reports 74 jobs
 for the package plus driver); `capability controls: OK`; the axiom audit exited
 `0` with no `sorryAx` and only the standard `propext`, `Classical.choice`,
-`Quot.sound` footprints; the docs census reported `OK (126 rows)`.
+`Quot.sound` footprints; the docs census reported `OK (141 rows)`.
 
 The compiled driver printed:
 
@@ -49,14 +49,17 @@ not claimed as an rc3 artifact.
 
 ## Manuscript
 
-`paper/sealed-ownership.pdf` (16 pages) and `report/capability-report.pdf`
-(18 pages) were rebuilt with `latexmk -g -pdf -interaction=nonstopmode` from the
+`paper/sealed-ownership.pdf` (17 pages) and `report/capability-report.pdf`
+(20 pages) were rebuilt with `latexmk -g -pdf -interaction=nonstopmode` from the
 changed sources.
 
 ## Stated gaps
 
-- `Cap/UFGeneric.WriteFrame` frames observations, not a per-allocation
-  `Storage` component; no separate storage-frame lemma is claimed.
+- `Cap/UFGeneric.WriteFrame` now equates every unrelated allocation's full
+  `Reconstruction.State`, with `component_other`, `storage_other` and
+  `rel_write`; the command-list frame and bridge connection remain open.
+- `Cap/AddressMap.lean` is a finite logical window model with disjointness and
+  alloc/free/write framing; it is not wired into the LLVM bridge or a loader.
 - The parent representation caps `n ≤ 256`.
 - The bridge covers one allocation and one caller-supplied window; the
   multi-allocation address map, ABI, native installation and copied-handle
