@@ -98,6 +98,7 @@ The stack, bottom to top, each layer trusting only the ones below it:
 \begin{tabular}{ll}
 \toprule
 algorithms as clients & \file{Cap/UFRun.lean} \\
+integrated two-find client & \file{Cap/UFIntegrated.lean} \\
 sealed certificates & \file{Cap/Runner.lean} \\
 unified checker/interpreter & \file{Cap/Unified.lean} \\
 sealed execution & \file{Cap/Integrated.lean} \\
@@ -413,8 +414,17 @@ forest of obligations instead (\file{Cap/Reconstruction.lean}). A
 \lean{Reconstruction.State} pairs the reference heap with a forest whose
 interior nodes record the checked spatial or fractional rule that produced them,
 the issued and retired names, and the outstanding \lean{Restore} obligations.
-\lean{State.Inv} is frontier coverage plus forest validity: the budget at every
-byte is still $D$, and every recorded rule is checked.
+\lean{State.Inv} is frontier coverage, forest validity and the ownership account
+\lean{State.Accounts}: the budget at every byte is still $D$, every recorded rule
+is checked, and the account constrains current authority-node identities,
+issuance coverage, retirement, dormant lenders, restoration realization and
+resource agreement. The account is not a structural restatement of the forest: it
+relates the forest to \lean{issued}, \lean{retired} and \lean{restores}, so a
+retired or dormant name is not a current leaf
+(\lean{State.Accounts.retired\_not\_current},
+\lean{State.Accounts.dormant\_not\_current}), and an appended obligation naming an
+unissued party breaks the predicate
+(\lean{State.Accounts.cons\_restore\_not\_accounts}).
 
 \lean{State.borrow} retags a current fragment and records the dormant lender.
 \lean{State.splitSpatial} and \lean{State.splitFraction} subdivide a current
@@ -455,8 +465,18 @@ The sealed boundary is \file{Cap/Integrated.lean}, re-exported by
 \file{Cap/Sealed.lean}. It lifts the reconstruction state to a list of
 allocations, keeps the constructor and invariant proof private, and exposes the
 checked \lean{Cmd} operations plus a whole-run \lean{run}. \lean{State.Inv}
-includes each component's \lean{Reconstruction.State.Storage}, so a component
-whose heap does not hold its allocation with the recorded length is rejected.
+requires distinct live allocation identifiers, every component's
+\lean{State.Inv} (including the ownership account \lean{State.Accounts}) and
+\lean{State.Storage}, and it relates each component's issued names to a
+session-persistent capability history. The allocation and capability histories
+are append-only: an accepted command only adds names, and \lean{free} leaves
+them intact (\lean{State.free\_histories\_intact}). \lean{State.alloc} refuses an
+identifier in \lean{allocsIssued} and an initial capability name in
+\lean{issued}. A freed identifier therefore cannot be reissued
+(\lean{State.realloc\_after\_free\_refused}) and an old capability cannot
+authorize a replacement allocation
+(\lean{State.alloc\_reusing\_old\_capability\_refused}); a fresh identifier with
+fresh names is accepted (\lean{State.alloc\_fresh\_after\_free\_some}).
 Its observations are a heap snapshot, byte read, per-fragment authority, retired
 names, outstanding restoration obligations and the live allocation list.
 \lean{Sealed.lifecycle64} runs the 64-byte example and
@@ -553,12 +573,35 @@ the second operation's rank bound and reachability certificate, so the second
 input is the first output's certificate rather than a restated array. The second
 compression from node 4 is exactly \lean{[0,0,0,0,0]}
 (\lean{reuseSecond\_eq}), and the partition preservation composes back to the
-starting partition (\lean{reuseTwoFinds\_same\_iff}). The sealed \lean{UFRunner}
-is not threaded through this example: it stores its state privately and exposes
-only one find's observation, so a second call would need a successor-runner
-operation and a new rank certificate. The reuse is therefore proved for the
-functional path compression that the certified writes refine, not yet for two
-calls through the sealed runner.
+starting partition (\lean{reuseTwoFinds\_same\_iff}). The world-based sealed
+\lean{UFRunner} is not threaded through this example: it stores its state
+privately and exposes only one find's observation, so a second call would need a
+successor-runner operation and a new rank certificate.
+
+\file{Cap/UFIntegrated.lean} runs the two calls through the integrated sealed
+boundary instead. A parent array is held in one allocation's bytes: \lean{decode}
+reads a buffer as a \lean{UF.Arr}, \lean{Rep s a arr} says the allocation's
+snapshot decodes to \lean{arr}, and \lean{Rep.fits} bounds every value by a byte.
+\lean{chase?} follows parent pointers with \lean{Sealed.read?};
+\lean{compressPath} writes the root at every path node with \lean{Sealed.write}
+through the whole-share capability; and \lean{sealedFind} returns the root with
+the successor sealed state. \lean{chase?\_eq} proves the sealed chase is the
+functional \lean{UF.findRootF}/\lean{rootPath} whenever the reads agree with the
+array, and \lean{ufStart\_reads}/\lean{ufFirstState\_reads} discharge that for the
+two successive states. The first find from node 3 leaves \lean{[0,0,0,0,2]} and
+the second, run on the first call's returned state from node 4, leaves
+\lean{[0,0,0,0,0]} --- the functional certificate's exact arrays. A fresh find
+from node 4 on the start state instead leaves \lean{[0,0,0,2,0]}
+(\lean{ufSecond\_consumes}). \lean{ufSecond\_invariant} re-exports the sealed
+invariant (including each component's ownership account). A two-allocation
+variant is framed as well: \lean{ufSecondOther\_invariant} re-exports the
+invariant for the whole state, and \lean{ufSecondOwnershipFrames\_of\_ok} records
+that both allocations' current fragments are still whole active read--write
+fragments, no access name was retired, no return obligation was recorded, both
+heaps still hold their bytes, and both allocations are live and distinct. Not
+proved: a general per-write refinement or frame law over sealed command lists ---
+the final arrays are kernel-checked computations of the actual run, not instances
+of a derived write lemma.
 
 \section{Two backends, one model}
 
@@ -620,7 +663,21 @@ reference heap & 51{,}956 \\
 \item No in-place-update or compiled-performance claim anywhere in \file{Cap/}.
 \item Union-find correctness is the concrete five-node reuse instance and the
   four-node write-discipline instance, not the general theorem. The two-find
-  reuse is proved on the functional model, not through the sealed runner.
+  reuse is proved on the functional model and, on that instance, through the
+  integrated sealed boundary (\file{Cap/UFIntegrated.lean}). The world-based
+  sealed \lean{UFRunner} is still not threaded, and no general per-write
+  refinement or frame law over sealed command lists is proved.
+\item No C, ABI or physical ownership refinement. The separate \file{llvm-bridge}
+  package proves one compiled store kernel's exact bounded behaviour and composes
+  it with one authorized integrated byte write at a caller-supplied address
+  window (\lean{store8\_exec\_write\_comp},
+  \lean{sealed\_store8\_write\_comp}). The representation premise, a loader's
+  address assignment for more than one allocation, the IR projection, the ABI,
+  native execution and live-handle replay remain stated assumptions or trust
+  obligations.
+\item Reuse prevention is a session-persistent allocation and capability history,
+  not an allocation generation, a physical-slot check or a runtime reclamation
+  rule. Replaying an old immutable sealed state is outside the model.
 \item No claim that \lean{World.splitAtChecked} consults the reconstruction
   forest.
 \end{itemize}
@@ -648,6 +705,12 @@ reference heap & 51{,}956 \\
   reconstruction forest instead, and carrying one integrated
   world-and-restoration invariant through checked execution and the sealed world
   boundary.
+\item \textbf{A general low-level bridge} --- extending the single-kernel
+  composition of \file{llvm-bridge} to an address assignment for more than one
+  allocation, a semantic justification of the IR projection, the ABI and the
+  installation of the verified body. The present theorem is one authorized write
+  against a caller-supplied memory representation, not a C or physical ownership
+  refinement.
 \end{enumerate}
 
 \section{Reproduce everything}
@@ -659,5 +722,15 @@ nix develop -c lake env lean scripts/check_cap_axioms.lean -- borrowing/reconstr
 bash scripts/check_cap_docs.sh --rev WORKTREE -- live-documentation claim census
 lake env lean bench/CapBATiming.lean         -- the three-backend observation
 \end{lstlisting}
+
+The \file{llvm-bridge} composition is a separate package with a sibling
+\file{lean-llvm} dependency; \file{llvm-bridge/scripts/build-remote.sh} builds it
+on a worker and \file{llvm-bridge/EVIDENCE.md} records those builds. No local
+Lean build of it was run for this revision.
+
+The LaTeX outputs were not rebuilt at this revision because the worker image has
+no LaTeX installation: \file{report/capability-report.pdf},
+\file{report/cap-tutorial.pdf} and \file{paper/sealed-ownership.pdf} are older
+than their \file{.tex} sources. The sources are updated; the PDFs are not.
 
 \end{document}

@@ -6,6 +6,14 @@
   `nix develop -c lake build Ownership` builds the development,
   `nix develop -c lake build OwnershipTest` builds the tests, and
   `nix develop -c lake build OwnershipLcnf` builds the LCNF projection target.
+- `llvm-bridge/` is a separate Lake package and is not part of those targets: it
+  requires a sibling `lean-llvm` checkout at its own pinned Lean release and is
+  built on a worker (`llvm-bridge/scripts/build-remote.sh`; the builds and axiom
+  footprints are recorded in `llvm-bridge/EVIDENCE.md`).
+- LaTeX outputs are not rebuilt in this environment: the worker image has no
+  LaTeX installation, so `report/capability-report.pdf`,
+  `report/cap-tutorial.pdf` and `paper/sealed-ownership.pdf` can be older than
+  their `.tex` sources. The sources are what these notes describe.
 - Every module under `OwnershipTest/` belongs to the `OwnershipTest` Lean
   library, and `OwnershipTest.lean` imports each one, so
   `lake build OwnershipTest` elaborates the executable fixtures together with
@@ -432,6 +440,32 @@
   command lists — the final arrays are kernel-checked computations of the actual
   run, not instances of a derived write lemma. The controls are
   `bench/CapUFIntegrated.lean`.
+- `llvm-bridge/` is the compiled-C kernel package, outside the `Cap` library.
+  `c/store8.c` is `void store8(uint8_t *p, uint64_t i, uint8_t v) { p[i] = v; }`;
+  `scripts/emit-ir.sh` compiles it on a worker, and `ir/store8.ll` is clang's
+  emission projected onto the parser's surface. `LlvmBridge/Store8.lean` pins the
+  committed text to the AST with a `#guard`, proves the emitted body's behaviour
+  at the call site is exactly the reference store's single bounded outcome under
+  `x.toNat < 2 ^ 63` (`Beh_store8IR_iff`: no `ub` run and no divergent run), the
+  written byte and the frame (`store8IR_byte`, `store8IR_frame`), and a
+  refinement against a reference kernel (`store8IR_refines_store8Ref`). `LlvmBridge/Ownership.lean`
+  relates one integrated allocation's heap bytes to the bridge's byte memory:
+  `allocAddr` with `allocAddr_injective` for one window, `MemRep m buf base` with
+  `MemRep.set`/`MemRep.frame_write`, `write_authority` derived from the write
+  command's guard, and `store8_exec_write_comp`/`sealed_store8_write_comp` —
+  completion at every positive budget, the represented post-state, the frame,
+  the written byte on both sides, other allocations unchanged and the integrated
+  invariant. The assumptions are stated, not discharged: the caller supplies
+  `MemRep` and `base`; `off < 2 ^ 63` is the pointer-width premise; injectivity
+  is within one window, and two allocations' disjointness is the hypothesis of
+  `MemRep.frame_write`, not a loader theorem; the IR projection is assumed and
+  parser/AST agreement is textual; the capability route is the integrated
+  reconstruction guard, not `World.Writable`; and the ABI, native compilation,
+  installation, physical storage and replay of a copied live handle remain trust
+  or proof obligations (`Cap.Sealed.boundaryClaims`). No full C/ABI or physical
+  ownership refinement is claimed. It builds only on a worker against a sibling
+  `lean-llvm` checkout (`scripts/build-remote.sh`), and `EVIDENCE.md` records
+  those builds.
 - `Cap/Marshal.lean` is the verified marshalling layer for the closed code
   universe. `Codec c` carries `encode : El c → List UInt8`, `decode`, and
   `decode_encode`; `codec` supplies one for every code (tagged products/sums,
@@ -727,7 +761,13 @@ shows the certificate it would have to emit, not proof-producing elaboration.
   restoration realization and resource agreement, so a retired or dormant name
   is not a current leaf (`State.Accounts.retired_not_current`,
   `State.Accounts.dormant_not_current`) and an appended restoration naming an
-  unissued party breaks it (`State.Accounts.cons_restore_not_accounts`).
+  unissued party breaks it (`State.Accounts.cons_restore_not_accounts`). The
+  account is not a structural restatement of the forest: its fields
+  (`nodeIds_nodup`, `issue_covers`, `retired_absent`, `restores_issued`,
+  `borrowers_nodup`, `lenders_nodup`, `lender_ne_borrower`, `dormant_absent`,
+  `borrower_not_rule`, `restore_realized`, `node_agrees`, `nested_agrees`,
+  `rule_fragments_issued`) relate the forest to `issued`, `retired` and
+  `restores`, so changing only those histories can invalidate it.
   `State.write`,
   `borrow`, `splitSpatial`, `splitFraction`, `reconstruct` and `return` are
   checked, each preserving `State.Inv` (`State.*_inv`) and `State.Storage`

@@ -4,7 +4,8 @@ A tutorial on how the `Cap/` subsystem fits together: what problem it solves, ho
 each layer builds on the one below, what is proved at each step, and where the
 honest boundaries are. Every name in backticks is a declaration in the
 repository; `nix develop -c bash scripts/check_all.sh` rebuilds and re-checks
-everything described here.
+everything described here except the `llvm-bridge` composition, whose separate
+package is built on a worker (§16).
 
 ## 1. The problem
 
@@ -29,6 +30,7 @@ saying, at the moment of use, "this capability may write these bytes."
 
 ```
 algorithms as clients        Cap/UFRun.lean          union-find through the checked route
+integrated two-find client   Cap/UFIntegrated.lean   two sealed finds on the previous state's bytes
 sealed certificates          Cap/Runner.lean         Prog, ClosedProgram, composition
 unified checker/interpreter  Cap/Unified.lean        UCmd, checkWorld
 world (state)                Cap/World.lean          owners + backends + loans
@@ -219,8 +221,15 @@ The retag chain represents one unresolved path. Borrowed subdivision needs a
 forest of obligations instead. `Reconstruction.State` pairs the reference heap
 with a forest whose interior nodes record the checked spatial or fractional rule
 that produced them, the issued and retired names, and the outstanding `Restore`
-obligations. `State.Inv` is frontier coverage plus forest validity: the budget at
-every byte is still `D`, and every recorded rule is checked.
+obligations. `State.Inv` is frontier coverage, forest validity and the ownership
+account `State.Accounts`: the budget at every byte is still `D`, every recorded
+rule is checked, and the account constrains current authority-node identities,
+issuance coverage, retirement, dormant lenders, restoration realization and
+resource agreement. The account is not a structural restatement of the forest: it
+relates the forest to `issued`, `retired` and `restores`, so a retired or dormant
+name is not a current leaf (`State.Accounts.retired_not_current`,
+`State.Accounts.dormant_not_current`) and an appended obligation naming an
+unissued party breaks the predicate (`State.Accounts.cons_restore_not_accounts`).
 
 `State.borrow` retags a current fragment and records the dormant lender.
 `State.splitSpatial` and `State.splitFraction` subdivide a current fragment ---
@@ -247,8 +256,17 @@ The sealed boundary is `Cap/Integrated.lean`, re-exported as `Cap/Sealed.lean`:
 a private constructor and invariant proof over the multi-allocation state, with
 `alloc`, `write`, `borrow`, `splitSpatial`, `splitFraction`, `reconstruct`,
 `return`, `free`, and a whole-run `run` over the checked `Cmd` list. `State.Inv`
-includes each component's `Reconstruction.State.Storage`, so a component whose
-heap does not hold its allocation with the recorded `len` bytes is rejected.
+requires distinct live allocation identifiers, every component's `State.Inv`
+(including the ownership account `State.Accounts`) and `State.Storage`, and it
+relates each component's issued names to a session-persistent capability history.
+The allocation and capability histories are append-only: an accepted command
+only adds names, and `free` leaves them intact (`State.free_histories_intact`).
+`State.alloc` refuses an identifier in `allocsIssued` and an initial capability
+name in `issued`. A freed
+identifier therefore cannot be reissued (`State.realloc_after_free_refused`) and
+an old capability cannot authorize a replacement allocation
+(`State.alloc_reusing_old_capability_refused`); a fresh identifier with fresh
+names is accepted (`State.alloc_fresh_after_free_some`).
 Its observations are a heap snapshot, byte read, per-fragment authority, retired
 names, outstanding restoration obligations and the live allocation list.
 `Sealed.lifecycle64` runs the 64-byte example and `Sealed.reuseLifecycle` runs a
@@ -290,11 +308,34 @@ rank bound and reachability certificate, so the second input is the first
 output's certificate rather than a restated array. The second compression from
 node 4 is exactly `[0,0,0,0,0]` (`reuseSecond_eq`), and the partition
 preservation composes back to the starting partition (`reuseTwoFinds_same_iff`).
-The sealed `UFRunner` is not threaded through this example: it stores its world,
-representation and rank privately and exposes only one find's observation, so a
-second call would need a successor-runner operation and a new rank certificate.
-The reuse is therefore proved for the functional path compression that the
-certified writes refine, not yet for two calls through the sealed runner.
+The world-based sealed `UFRunner` is not threaded through this example: it
+stores its world, representation and rank privately and exposes only one find's
+observation, so a second call would need a successor-runner operation and a new
+rank certificate.
+
+`Cap/UFIntegrated.lean` runs the two calls through the integrated sealed
+boundary instead. A parent array is held in one allocation's bytes: `decode`
+reads a buffer as a `UF.Arr`, `Rep s a arr` says the allocation's snapshot
+decodes to `arr`, and `Rep.fits` bounds every value by a byte. `chase?` follows
+parent pointers with `Sealed.read?`; `compressPath` writes the root at every
+path node with `Sealed.write` through the whole-share capability; and
+`sealedFind` returns the root with the successor sealed state. `chase?_eq`
+proves the sealed chase is the functional `UF.findRootF`/`rootPath` whenever the
+reads agree with the array, and `ufStart_reads`/`ufFirstState_reads` discharge
+that for the two successive states. The first find from node 3 leaves
+`[0,0,0,0,2]` and the second, run on the first call's returned state from node
+4, leaves `[0,0,0,0,0]` — the functional certificate's exact arrays. A fresh
+find from node 4 on the start state instead leaves `[0,0,0,2,0]`
+(`ufSecond_consumes`). `ufSecond_invariant` re-exports the sealed invariant
+(including each component's ownership account). A two-allocation variant is
+framed as well: `ufSecondOther_invariant` re-exports the invariant for the whole
+state, and `ufSecondOwnershipFrames_of_ok` records that both allocations' current
+fragments are still whole active read--write fragments, no access name was
+retired, no return obligation was recorded, both heaps still hold their bytes, and
+both allocations are live and distinct. Not proved: a
+general per-write refinement or frame law over sealed command lists — the final
+arrays are kernel-checked computations of the actual run, not instances of a
+derived write lemma.
 
 ## 13. Backends: two implementations, one model (`Cap/Backend.lean`, `Cap/BackendArr.lean`)
 
@@ -329,7 +370,20 @@ same caveat.
 - No in-place-update or compiled-performance claim anywhere in `Cap/`.
 - Union-find correctness is the concrete five-node reuse instance and the
   four-node write-discipline instance, not the general theorem. The two-find
-  reuse is proved on the functional model, not through the sealed runner.
+  reuse is proved on the functional model and, on that instance, through the
+  integrated sealed boundary (`Cap/UFIntegrated.lean`). The world-based sealed
+  `UFRunner` is still not threaded, and no general per-write refinement or frame
+  law over sealed command lists is proved.
+- No C, ABI or physical ownership refinement. `llvm-bridge` proves one compiled
+  store kernel's exact bounded behaviour and composes it with one authorized
+  integrated byte write at a caller-supplied address window
+  (`store8_exec_write_comp`, `sealed_store8_write_comp`). The representation
+  premise, a loader's address assignment for more than one allocation, the IR
+  projection, the ABI, native execution and live-handle replay remain stated
+  assumptions or trust obligations.
+- Reuse prevention is a session-persistent allocation and capability history,
+  not an allocation generation, a physical-slot check or a runtime reclamation
+  rule. Replaying an old immutable sealed state is outside the model.
 - No claim that `World.splitAtChecked` consults the reconstruction forest.
 
 ## 15. The research-scale remainder
@@ -356,6 +410,12 @@ same caveat.
    through checked execution and the sealed world boundary. The reconstruction
    model and its sealed boundary exist; the `World.splitAtChecked` route does
    not yet use them.
+8. **A general low-level bridge** — extending the single-kernel composition of
+   `llvm-bridge` to an address assignment for more than one allocation, a
+   semantic justification of the IR projection, the ABI and the installation of
+   the verified body. The present theorem is one authorized write against a
+   caller-supplied memory representation, not a C or physical ownership
+   refinement.
 
 ## 16. Reproduce everything
 
@@ -371,3 +431,15 @@ The axiom audit (`scripts/check_axioms.lean`) is the hygiene gate: every
 headline theorem depends only on `propext`, `Classical.choice` and
 `Quot.sound` — Lean's standard three — with no `sorry`, no new axioms, no
 `native_decide`.
+
+The `llvm-bridge` package is separate: it needs a sibling `lean-llvm` checkout
+at its pinned Lean release and the `Cap` projection pushed beside it. It is
+built on a worker, not from this checkout
+(`llvm-bridge/scripts/build-remote.sh`; `llvm-bridge/README.md` states the
+layout and `llvm-bridge/EVIDENCE.md` records the builds). No local Lean build of
+that package was run for this revision.
+
+The LaTeX outputs were not rebuilt at this revision because the worker image
+has no LaTeX installation: `report/capability-report.pdf`,
+`report/cap-tutorial.pdf` and `paper/sealed-ownership.pdf` are older than their
+`.tex` sources. The sources are updated; the PDFs are not.

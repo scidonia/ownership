@@ -224,7 +224,33 @@ add|report/cap-tutorial.tex|Borrowed subdivision and reconstruction
 add|paper/sealed-ownership.tex|World-guard integration (open)
 add|paper/sealed-ownership.tex|the sealed path now executes the integrated multi-allocation reconstruction language
 add|paper/sealed-ownership.tex|reuseFirst\_accepts\_second
-add|paper/sealed-ownership.tex|its sealed boundary executes that integrated language
+add|paper/sealed-ownership.tex|The sealed boundary executes the reconstruction language
+# Ownership accounting, persistent histories, the sealed two-find client and the
+# composed compiled-store theorem. Each row is a claim introduced after the base
+# revision; the remaining assumptions are recorded beside the positive result.
+add|AGENTS.md|The account is not a structural restatement of the forest
+add|AGENTS.md|a freed identifier cannot be reissued
+add|AGENTS.md|No full C/ABI or physical ownership refinement is claimed
+add|AGENTS.md|store8_exec_write_comp
+add|docs/notes/cap-tutorial.md|The account is not a structural restatement of the forest
+add|docs/notes/cap-tutorial.md|not an allocation generation, a physical-slot check
+add|docs/notes/cap-tutorial.md|integrated sealed boundary instead
+add|docs/notes/cap-tutorial.md|store8_exec_write_comp
+add|docs/notes/cap-tutorial.md|The LaTeX outputs were not rebuilt at this revision
+add|report/cap-tutorial.tex|The account is not a structural restatement of the forest
+add|report/cap-tutorial.tex|A freed identifier therefore cannot be reissued
+add|report/cap-tutorial.tex|Cap/UFIntegrated.lean} runs the two calls
+add|report/cap-tutorial.tex|store8\_exec\_write\_comp
+add|report/cap-tutorial.tex|The LaTeX outputs were not rebuilt at this revision
+add|report/capability-report.tex|not a structural restatement of the forest
+add|report/capability-report.tex|Cap/UFIntegrated.lean} runs the two calls
+add|report/capability-report.tex|A compiled store composed with an authorized write
+add|report/capability-report.tex|The LaTeX outputs were not rebuilt at this revision
+add|paper/sealed-ownership.tex|its invariant includes an ownership account over issued
+add|paper/sealed-ownership.tex|Two full-path union-find finds run through that sealed boundary
+add|paper/sealed-ownership.tex|One instance of the schema is proved for a single authorized byte write
+add|paper/sealed-ownership.tex|The LaTeX outputs were not rebuilt
+add|paper/sealed-ownership.tex|No full C/ABI refinement and no physical ownership refinement is claimed
 ROWS
 
 if [ "$fail" -ne 0 ]; then
