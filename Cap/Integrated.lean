@@ -43,14 +43,20 @@ language rather than the `World`/`UCmd` checker. `Cap.ReconstructionSealed` has
 been retired; its lifecycle and controls live here, and the single-allocation
 `Reconstruction.State` is now only a component of this state.
 
-What `State.Inv` is: distinct allocations, each component's
-`Reconstruction.State.Inv`, and each component's `Reconstruction.State.Storage`
-— the component heap holds that allocation with exactly `len` bytes. Storage is
-part of the invariant, so a component whose heap is empty is rejected rather than
-observed as `none`. It is still not the combined `World.FullInv`: the ledger,
-global issuance history and world loan bookkeeping remain on the world path, and
-this module does not claim that `World.splitAtChecked` consults the
-reconstruction forest. It also does not turn a `World` into a component.
+What `State.Inv` is: distinct live allocations; a persistent allocation history
+`allocsIssued` that contains every live identifier and is never rewritten by
+`free`; a persistent capability history `issued` that contains every name any
+component has issued; each component's `Reconstruction.State.Inv`, whose
+accounting component constrains current authority, issuance, retirement, dormant
+lenders and outstanding restoration obligations; and each component's
+`Reconstruction.State.Storage` — the component heap holds that allocation with
+exactly `len` bytes. `State.alloc` refuses an allocation identifier that is in
+`allocsIssued` and either initial capability name that is in `issued`, so a
+disposed allocation cannot be reissued and an old capability cannot authorize a
+replacement allocation. It is still not the combined `World.FullInv`: the ledger
+and world loan bookkeeping remain on the world path, and this module does not
+claim that `World.splitAtChecked` consults the reconstruction forest. It also
+does not turn a `World` into a component.
 
 The private constructor is what prevents manufacture; the state is pure data, so
 a copied sealed value shares its representation. That is the same model boundary
@@ -65,28 +71,38 @@ namespace Integrated
 /-! ### The multi-allocation state -/
 
 /-- A multi-allocation reconstruction state: the live allocations, each with its
-own heap, forest, issuance history and return obligations. -/
+own heap, forest, issuance history and return obligations, together with the
+session's persistent allocation and capability histories. -/
 structure State where
   allocs : List Reconstruction.State
+  /-- Every allocation identifier ever allocated in the session. `free` does not
+  remove an entry, so an identifier cannot be reissued after disposal. -/
+  allocsIssued : List AllocId
+  /-- Every capability name ever issued in the session, across allocations. A
+  freed allocation leaves its names here. -/
+  issued : List CapId
 
 /-- The live allocation identifiers. -/
 def State.allocIds (s : State) : List AllocId :=
   s.allocs.map (fun st => st.alloc)
 
-/-- The integrated invariant: the allocations are distinct, every component is
-a valid reconstruction state, and every component's heap holds its allocation
-with the recorded `len`. -/
+/-- The integrated invariant: the live allocations are distinct; every component
+is a valid reconstruction state whose heap holds its allocation with the
+recorded `len`; the allocation identifiers in use belong to the persistent
+allocation history; every capability a component has issued belongs to the
+persistent capability history. -/
 def State.Inv (s : State) : Prop :=
-  s.allocIds.Nodup ∧ ∀ st ∈ s.allocs, st.Inv ∧ st.Storage
+  s.allocIds.Nodup ∧
+  s.allocsIssued.Nodup ∧
+  (∀ a ∈ s.allocIds, a ∈ s.allocsIssued) ∧
+  (∀ st ∈ s.allocs, st.Inv ∧ st.Storage) ∧
+  (∀ st ∈ s.allocs, ∀ id ∈ st.issued, id ∈ s.issued)
 
-/-- The empty state has no live allocation. -/
-def State.empty : State := { allocs := [] }
+/-- The empty state has no live allocation and empty histories. -/
+def State.empty : State := { allocs := [], allocsIssued := [], issued := [] }
 
 theorem State.empty_inv : State.empty.Inv := by
-  refine ⟨?_, ?_⟩
-  · simp [State.empty, State.allocIds]
-  · intro st hst
-    simp [State.empty] at hst
+  refine ⟨?_, ?_, ?_, ?_, ?_⟩ <;> simp [State.empty, State.allocIds]
 
 /-- One allocation's reconstruction state, keyed by its allocation identifier.
 The first entry for an allocation wins; `State.Inv` makes the components
@@ -115,10 +131,15 @@ def updateState : List Reconstruction.State → AllocId →
         | some rest' => some (st :: rest')
         | none => none
 
-/-- Apply a component operation to the named allocation. -/
+/-- Apply a component operation to the named allocation. The persistent
+capability history grows to cover every currently issued name; the allocation
+history is unchanged. -/
 def State.update (s : State) (a : AllocId)
     (f : Reconstruction.State → Option Reconstruction.State) : Option State :=
-  (updateState s.allocs a f).map (fun allocs => { s with allocs := allocs })
+  (updateState s.allocs a f).map (fun allocs =>
+    { allocs := allocs
+      allocsIssued := s.allocsIssued
+      issued := allocs.flatMap (fun st => st.issued) ++ s.issued })
 
 /-- Remove the component state of an allocation. -/
 def removeAlloc (a : AllocId) : List Reconstruction.State → List Reconstruction.State
@@ -158,25 +179,39 @@ def State.free (s : State) (a : AllocId) : Option State :=
   | none => none
   | some st =>
       if st.restores = [] ∧ wholeActiveB st = true then
-        some { s with allocs := removeAlloc a s.allocs }
+        some { allocs := removeAlloc a s.allocs
+               allocsIssued := s.allocsIssued
+               issued := s.issued }
       else none
 
 /-- The canonical one-allocation state: `n` zero bytes of share `D`, a root
 access name and a disposal name. -/
 def State.initial (a : AllocId) (n D : Nat) (pos : 0 < D)
     (rootId disposalId : CapId) : State :=
-  { allocs := [Reconstruction.State.initial a n D pos rootId disposalId] }
+  { allocs := [Reconstruction.State.initial a n D pos rootId disposalId]
+    allocsIssued := [a]
+    issued := [rootId, disposalId] }
 
 theorem State.initial_inv (a : AllocId) (n D : Nat) (pos : 0 < D)
     (rootId disposalId : CapId) :
     (State.initial a n D pos rootId disposalId).Inv := by
-  refine ⟨?_, ?_⟩
+  refine ⟨?_, ?_, ?_, ?_, ?_⟩
   · simp [State.initial, State.allocIds]
+  · simp [State.initial]
+  · intro a' ha'
+    simp [State.initial, State.allocIds] at ha'
+    subst ha'
+    simp [State.initial]
   · intro st hst
     simp [State.initial] at hst
     subst hst
     exact ⟨Reconstruction.State.initial_inv a n D pos rootId disposalId,
       Reconstruction.State.initial_storage a n D pos rootId disposalId⟩
+  · intro st hst id hid
+    simp [State.initial] at hst
+    subst hst
+    simp [Reconstruction.State.initial] at hid
+    rcases hid with rfl | rfl <;> simp [State.initial]
 
 /-- The 64-byte integrated fixture: allocation `⟨0⟩`, root `⟨1⟩`, disposal
 `⟨2⟩`. -/
@@ -186,12 +221,17 @@ def State.initial64 : State :=
 theorem State.initial64_inv : State.initial64.Inv :=
   State.initial_inv ⟨0⟩ 64 64 (by decide) ⟨1⟩ ⟨2⟩
 
-/-- Add a fresh allocation to the state. -/
+/-- Add a fresh allocation to the state. The allocation identifier and both
+initial capability names must be unused for the whole session, so a freed
+allocation identifier cannot be reissued and an old capability cannot authorize
+a replacement allocation. -/
 def State.alloc (s : State) (a : AllocId) (n D : Nat) (pos : 0 < D)
     (rootId disposalId : CapId) : Option State :=
-  if h : a ∉ s.allocIds then
-    some { s with
-      allocs := Reconstruction.State.initial a n D pos rootId disposalId :: s.allocs }
+  if h : a ∉ s.allocsIssued ∧ rootId ∉ s.issued ∧ disposalId ∉ s.issued then
+    some { allocs :=
+             Reconstruction.State.initial a n D pos rootId disposalId :: s.allocs
+           allocsIssued := a :: s.allocsIssued
+           issued := rootId :: disposalId :: s.issued }
   else none
 
 /-! ### Lookup facts -/
@@ -216,7 +256,7 @@ theorem State.find?_inv {s : State} (hinv : s.Inv) {a : AllocId}
     {st : Reconstruction.State} (h : s.find? a = some st) :
     st.Inv ∧ st.Storage := by
   obtain ⟨hmem, _⟩ := findState?_eq_some_mem h
-  exact hinv.2 st hmem
+  exact hinv.2.2.2.1 st hmem
 
 theorem State.find?_alloc {s : State} {a : AllocId}
     {st : Reconstruction.State} (h : s.find? a = some st) : st.alloc = a := by
@@ -262,6 +302,23 @@ theorem updateState_alloc_mem {l l' : List Reconstruction.State} {a : AllocId}
             · rcases ih hrec hx' with hmem | ha
               · exact Or.inl (List.mem_cons.mpr (Or.inr hmem))
               · exact Or.inr ha
+
+/-- A successful update names an allocation already present. -/
+theorem updateState_key_mem {l l' : List Reconstruction.State} {a : AllocId}
+    {f : Reconstruction.State → Option Reconstruction.State}
+    (h : updateState l a f = some l') :
+    a ∈ l.map (fun st => st.alloc) := by
+  induction l generalizing l' with
+  | nil => simp [updateState] at h
+  | cons head tail ih =>
+      simp only [updateState] at h
+      by_cases hkey : head.alloc = a
+      · exact List.mem_map.mpr ⟨head, by simp, hkey⟩
+      · rw [if_neg hkey] at h
+        cases hrec : updateState tail a f with
+        | none => simp [hrec] at h
+        | some tail' =>
+            exact List.mem_cons_of_mem head.alloc (ih hrec)
 
 theorem mem_removeAlloc {l : List Reconstruction.State} {a : AllocId}
     {st : Reconstruction.State} (h : st ∈ removeAlloc a l) : st ∈ l := by
@@ -375,43 +432,63 @@ theorem State.update_inv {s s' : State} {a : AllocId}
     (h : s.update a f = some s') (hinv : s.Inv)
     (hf : ∀ st st', st.Inv → st.Storage → f st = some st' → st'.Inv ∧ st'.Storage) :
     s'.Inv := by
-  obtain ⟨hnodup, hall⟩ := hinv
+  obtain ⟨hnodup, hIssNodup, hlive, hall, hids⟩ := hinv
   unfold State.update at h
   cases hupd : updateState s.allocs a f with
   | none => simp [hupd] at h
   | some l' =>
       simp only [hupd, Option.map_some, Option.some.injEq] at h
       subst s'
-      exact updateState_inv hupd hnodup hall hf
+      obtain ⟨hnodup', hall'⟩ := updateState_inv hupd hnodup hall hf
+      refine ⟨hnodup', hIssNodup, ?_, hall', ?_⟩
+      · intro x hx
+        rcases updateState_alloc_mem hupd hx with hx' | rfl
+        · exact hlive x hx'
+        · exact hlive x (updateState_key_mem hupd)
+      · intro st hst id hid
+        exact List.mem_append.mpr (Or.inl (List.mem_flatMap.mpr ⟨st, hst, hid⟩))
 
 theorem State.alloc_inv {s s' : State} {a : AllocId} {n D : Nat} {pos : 0 < D}
     {rootId disposalId : CapId}
     (h : s.alloc a n D pos rootId disposalId = some s') (hinv : s.Inv) : s'.Inv := by
-  obtain ⟨hnodup, hall⟩ := hinv
+  obtain ⟨hnodup, hIssNodup, hlive, hall, hids⟩ := hinv
   unfold State.alloc at h
   split at h
   · rename_i hfresh
+    obtain ⟨hfA, hfRoot, hfDisposal⟩ := hfresh
     simp only [Option.some.injEq] at h
     subst s'
-    refine ⟨?_, ?_⟩
-    · have hmap : ({ s with
-          allocs :=
-            Reconstruction.State.initial a n D pos rootId disposalId :: s.allocs } : State).allocIds
-            = a :: s.allocIds := by
-        simp [State.allocIds, Reconstruction.State.initial]
-      rw [hmap]
-      exact List.nodup_cons.mpr ⟨hfresh, hnodup⟩
+    have hliveA : a ∉ s.allocIds := fun hm => hfA (hlive a hm)
+    refine ⟨?_, ?_, ?_, ?_, ?_⟩
+    · simp only [State.allocIds, List.map_cons]
+      exact List.nodup_cons.mpr ⟨hliveA, hnodup⟩
+    · exact List.nodup_cons.mpr ⟨hfA, hIssNodup⟩
+    · intro x hx
+      simp only [State.allocIds, List.map_cons] at hx
+      rcases List.mem_cons.mp hx with rfl | hx
+      · exact List.mem_cons_self
+      · exact List.mem_cons_of_mem _ (hlive x hx)
     · intro st hst
       rw [List.mem_cons] at hst
       rcases hst with rfl | hst
       · exact ⟨Reconstruction.State.initial_inv a n D pos rootId disposalId,
           Reconstruction.State.initial_storage a n D pos rootId disposalId⟩
       · exact hall st hst
+    · intro st hst id hid
+      rw [List.mem_cons] at hst
+      rcases hst with rfl | hst
+      · simp only [Reconstruction.State.initial, List.mem_cons, List.mem_nil_iff,
+          or_false] at hid
+        rcases hid with rfl | rfl
+        · exact List.mem_cons_self
+        · exact List.mem_cons_of_mem _ List.mem_cons_self
+      · exact List.mem_cons_of_mem _
+          (List.mem_cons_of_mem _ (hids st hst id hid))
   · simp at h
 
 theorem State.free_inv {s s' : State} {a : AllocId}
     (h : s.free a = some s') (hinv : s.Inv) : s'.Inv := by
-  obtain ⟨hnodup, hall⟩ := hinv
+  obtain ⟨hnodup, hIssNodup, hlive, hall, hids⟩ := hinv
   unfold State.free at h
   cases hfind : s.find? a with
   | none => simp [hfind] at h
@@ -421,9 +498,101 @@ theorem State.free_inv {s s' : State} {a : AllocId}
       · rw [if_pos hcond] at h
         simp only [Option.some.injEq] at h
         subst s'
-        exact ⟨removeAlloc_nodup hnodup, fun x hx => hall x (mem_removeAlloc hx)⟩
+        refine ⟨removeAlloc_nodup hnodup, hIssNodup, ?_, ?_, ?_⟩
+        · intro x hx
+          exact hlive x (removeAlloc_alloc_mem hx)
+        · intro st' hst'
+          exact hall st' (mem_removeAlloc hst')
+        · intro st' hst' id hid
+          exact hids st' (mem_removeAlloc hst') id hid
       · rw [if_neg hcond] at h
         simp at h
+
+/-- Freeing an allocation leaves both persistent histories intact: a disposed
+allocation identifier and its capability names are never reissued. -/
+theorem State.free_histories_intact {s s' : State} {a : AllocId}
+    (h : s.free a = some s') :
+    s'.allocsIssued = s.allocsIssued ∧ s'.issued = s.issued := by
+  unfold State.free at h
+  cases hfind : s.find? a with
+  | none => simp [hfind] at h
+  | some st =>
+      simp only [hfind] at h
+      by_cases hcond : st.restores = [] ∧ wholeActiveB st = true
+      · rw [if_pos hcond] at h
+        simp only [Option.some.injEq] at h
+        subst s'
+        exact ⟨rfl, rfl⟩
+      · rw [if_neg hcond] at h
+        simp at h
+
+/-- Allocation refuses an identifier that was ever used in the session, not only
+one that is currently live. -/
+theorem State.alloc_refuses_issued_allocation {s : State} {a : AllocId} {n D : Nat}
+    {pos : 0 < D} {rootId disposalId : CapId} (h : a ∈ s.allocsIssued) :
+    s.alloc a n D pos rootId disposalId = none := by
+  unfold State.alloc
+  exact dif_neg (fun hc => hc.1 h)
+
+/-- Allocation refuses a capability name that was ever issued in the session. -/
+theorem State.alloc_refuses_issued_capability {s : State} {a : AllocId} {n D : Nat}
+    {pos : 0 < D} {rootId disposalId : CapId}
+    (h : rootId ∈ s.issued ∨ disposalId ∈ s.issued) :
+    s.alloc a n D pos rootId disposalId = none := by
+  unfold State.alloc
+  exact dif_neg (fun hc => by
+    rcases h with h | h
+    · exact hc.2.1 h
+    · exact hc.2.2 h)
+
+/-- Allocation succeeds when its identifier and both initial capability names are
+unused. -/
+theorem State.alloc_fresh_some {s : State} {a : AllocId} {n D : Nat}
+    {pos : 0 < D} {rootId disposalId : CapId}
+    (h1 : a ∉ s.allocsIssued) (h2 : rootId ∉ s.issued)
+    (h3 : disposalId ∉ s.issued) :
+    (s.alloc a n D pos rootId disposalId).isSome = true := by
+  unfold State.alloc
+  rw [dif_pos ⟨h1, h2, h3⟩]
+  rfl
+
+/-- Reallocating an identifier after free is refused because the identifier stays
+in the persistent allocation history. -/
+theorem State.reallocate_after_free_refused {s s' : State} {a : AllocId} {n D : Nat}
+    {pos : 0 < D} {rootId disposalId : CapId}
+    (hf : s.free a = some s') (hmem : a ∈ s.allocsIssued) :
+    s'.alloc a n D pos rootId disposalId = none := by
+  exact State.alloc_refuses_issued_allocation
+    (by rw [(State.free_histories_intact hf).1]; exact hmem)
+
+/-- A concrete stale-identity regression: after freeing allocation `⟨0⟩`, the
+canonical allocation identifier cannot be reissued. -/
+theorem State.realloc_initial64_refused {s' : State}
+    (hf : State.free State.initial64 ⟨0⟩ = some s') :
+    s'.alloc ⟨0⟩ 64 64 (by decide) ⟨1⟩ ⟨2⟩ = none := by
+  exact State.reallocate_after_free_refused hf (by simp [State.initial64, State.initial])
+
+/-- A fresh allocation identifier with fresh capability names is accepted after a
+free. -/
+theorem State.alloc_fresh_after_free_some {s' : State}
+    (hf : State.free State.initial64 ⟨0⟩ = some s') :
+    (s'.alloc ⟨1⟩ 64 64 (by decide) ⟨20⟩ ⟨21⟩).isSome = true := by
+  refine State.alloc_fresh_some ?_ ?_ ?_
+  · rw [(State.free_histories_intact hf).1]
+    simp [State.initial64, State.initial]
+  · rw [(State.free_histories_intact hf).2]
+    simp [State.initial64, State.initial]
+  · rw [(State.free_histories_intact hf).2]
+    simp [State.initial64, State.initial]
+
+/-- A capability issued by the freed allocation cannot be reused for a fresh
+allocation: free leaves the capability history intact. -/
+theorem State.alloc_reusing_old_capability_refused {s' : State}
+    (hf : State.free State.initial64 ⟨0⟩ = some s') :
+    s'.alloc ⟨1⟩ 64 64 (by decide) ⟨1⟩ ⟨21⟩ = none := by
+  apply State.alloc_refuses_issued_capability (h := Or.inl ?_)
+  rw [(State.free_histories_intact hf).2]
+  simp [State.initial64, State.initial]
 
 /-- An accepted free names a component that is a single whole active leaf with no
 outstanding return obligation. -/
@@ -830,7 +999,7 @@ private def Sealed.runCmd (s : Sealed) (c : Cmd) (msg : String) :
 def Sealed.alloc (s : Sealed) (a : AllocId) (n D : Nat) (pos : 0 < D)
     (rootId disposalId : CapId) : Except String Sealed :=
   s.runCmd (.alloc a n D pos rootId disposalId)
-    "alloc refused: the allocation identifier is already present"
+    "alloc refused: the allocation identifier or an initial capability name was already used"
 
 /-- Write one byte through a current active whole-share fragment of a
 read--write ceiling. -/

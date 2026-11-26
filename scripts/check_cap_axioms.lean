@@ -166,6 +166,16 @@ open Cap
 #print axioms Cap.Reconstruction.State.splitFraction_storage
 #print axioms Cap.Reconstruction.State.reconstruct_storage
 #print axioms Cap.Reconstruction.State.return_storage
+#print axioms Cap.Reconstruction.Forest.ids_mem_nodes_or_ruleIds
+#print axioms Cap.Reconstruction.Forest.splitSpatialAt_children_ne
+#print axioms Cap.Reconstruction.Forest.splitFractionAt_children_ne
+#print axioms Cap.Reconstruction.Forest.retagLeaf_nodes_cases
+#print axioms Cap.Reconstruction.Forest.retagLeaf_nodes_old_mem
+#print axioms Cap.Reconstruction.Forest.findLeaf?_mem_leaves
+#print axioms Cap.Reconstruction.Forest.eq_of_mem_of_map_nodup
+#print axioms Cap.Reconstruction.State.Accounts.dormant_not_current
+#print axioms Cap.Reconstruction.State.Accounts.retired_not_current
+#print axioms Cap.Reconstruction.State.Accounts.cons_restore_not_accounts
 #print axioms Cap.Reconstruction.World.splitAtChecked_refuses_with_loan
 
 /-! ### The sealed integrated boundary -/
@@ -184,6 +194,14 @@ open Cap
 #print axioms Cap.Integrated.State.update_inv
 #print axioms Cap.Integrated.State.alloc_inv
 #print axioms Cap.Integrated.State.free_inv
+#print axioms Cap.Integrated.State.free_histories_intact
+#print axioms Cap.Integrated.State.alloc_refuses_issued_allocation
+#print axioms Cap.Integrated.State.alloc_refuses_issued_capability
+#print axioms Cap.Integrated.State.alloc_fresh_some
+#print axioms Cap.Integrated.State.reallocate_after_free_refused
+#print axioms Cap.Integrated.State.realloc_initial64_refused
+#print axioms Cap.Integrated.State.alloc_fresh_after_free_some
+#print axioms Cap.Integrated.State.alloc_reusing_old_capability_refused
 #print axioms Cap.Integrated.State.free_guard
 #print axioms Cap.Integrated.State.exec_inv
 #print axioms Cap.Integrated.State.run_inv

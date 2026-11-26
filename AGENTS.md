@@ -720,8 +720,15 @@ shows the certificate it would have to emit, not proof-producing elaboration.
   and `reconstructAt` restores a suspended parent from two children matched to
   its recorded rule. `State` pairs the forest with the reference heap, the
   issued and retired names and the outstanding `Restore` obligations; `State.Inv`
-  is frontier coverage plus forest validity, and `State.Storage` separately says
-  the heap holds that allocation with exactly `len` bytes. `State.write`,
+  is frontier coverage, forest validity and the ownership accounting predicate
+  `State.Accounts`, and `State.Storage` separately says the heap holds that
+  allocation with exactly `len` bytes. `State.Accounts` constrains current
+  authority-node identities, issuance coverage, retirement, dormant lenders,
+  restoration realization and resource agreement, so a retired or dormant name
+  is not a current leaf (`State.Accounts.retired_not_current`,
+  `State.Accounts.dormant_not_current`) and an appended restoration naming an
+  unissued party breaks it (`State.Accounts.cons_restore_not_accounts`).
+  `State.write`,
   `borrow`, `splitSpatial`, `splitFraction`, `reconstruct` and `return` are
   checked, each preserving `State.Inv` (`State.*_inv`) and `State.Storage`
   (`State.*_storage`), with the obligation frames
@@ -735,16 +742,27 @@ shows the certificate it would have to emit, not proof-producing elaboration.
   `bench/CapReconstruction.lean` drives the 64-byte borrow/split/write/
   reconstruct/return lifecycle with each refusal paired to its affirmative case.
 - `Cap/Integrated.lean` is the one integrated sealed semantics: `State` is a
-  list of `Reconstruction.State` keyed by `AllocId`, and `State.Inv` requires
-  distinct allocation identifiers, every component's `State.Inv`, and every
-  component's `State.Storage`. `Cmd` is the checked command language (`alloc`,
+  list of `Reconstruction.State` keyed by `AllocId` together with the persistent
+  allocation history `allocsIssued` and capability history `issued`, and
+  `State.Inv` requires distinct allocation identifiers, a duplicate-free
+  persistent allocation history containing every live identifier, every
+  component's `State.Inv` (including `State.Accounts`) and `State.Storage`, and
+  the capability history covering every component-issued name. `Cmd` is the
+  checked command language (`alloc`,
   `write`, `borrow`, `splitSpatial`, `splitFraction`, `reconstruct`, `ret`,
   `free`); every command names its allocation, and `State.exec` refuses an
   absent one. `State.exec_inv` and `State.run_inv` preserve `State.Inv`;
   `State.exec_frames_other` shows that an accepted command leaves every other
   allocation's lookup — and therefore its snapshot — unchanged. `State.free` is
   accepted only for a single whole active leaf with no outstanding return
-  obligation, read structurally by `wholeActiveB_iff`. `Prog` is the typed
+  obligation, read structurally by `wholeActiveB_iff`, and it leaves both
+  histories intact (`State.free_histories_intact`). `State.alloc` refuses an
+  allocation identifier in `allocsIssued` and an initial capability name in
+  `issued`, so a freed identifier cannot be reissued
+  (`State.realloc_after_free_refused`, `State.realloc_initial64_refused`) and an
+  old capability cannot authorize a replacement
+  (`State.alloc_reusing_old_capability_refused`); a fresh allocation with fresh
+  names is accepted (`State.alloc_fresh_after_free_some`). `Prog` is the typed
   wrapper: a command list together with the boolean check from an invariant start
   state, and `Prog.never_refuses` derives an accepting run. `Sealed` is the
   private multi-allocation boundary with snapshot, byte-read, fragment,

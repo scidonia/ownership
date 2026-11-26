@@ -90,6 +90,11 @@ def Restore.SameResource (r r' : Restore) : Prop :=
   r.alloc = r'.alloc ∧ r.lo = r'.lo ∧ r.hi = r'.hi ∧ r.q = r'.q ∧
   r.ceiling = r'.ceiling
 
+/-- Resource agreement is symmetric. -/
+theorem Restore.SameResource.symm {r r' : Restore} (h : r.SameResource r') :
+    r'.SameResource r :=
+  ⟨h.1.symm, h.2.1.symm, h.2.2.1.symm, h.2.2.2.1.symm, h.2.2.2.2.symm⟩
+
 /-- Leaf agreement entails resource agreement. -/
 theorem Leaf.Agrees.sameResource {a b : Leaf} (h : a.Agrees b) : a.SameResource b :=
   ⟨h.2.1, h.2.2.1, h.2.2.2.1, h.2.2.2.2.1, h.2.2.2.2.2.1⟩
@@ -1438,6 +1443,460 @@ theorem reconstructAt_valid {f f' : Forest} {id : CapId} {a b : Leaf}
             exact ⟨hrule, hvl, ihr hr hvr⟩
           · simp at h
 
+/-- A successful reconstruction restores exactly the suspended parent. -/
+theorem reconstructHere_nodes {kind : RuleKind} {parent leftRule rightRule : Leaf}
+    {left right : Forest} {f' : Forest} {a b : Leaf}
+    (h : reconstructHere kind parent leftRule rightRule left right = some (f', a, b)) :
+    f' = .leaf parent := by
+  unfold reconstructHere at h
+  by_cases hrule : RuleValid kind parent leftRule rightRule
+  · rw [dif_pos hrule] at h
+    cases left with
+    | leaf lf =>
+      cases right with
+      | leaf rf =>
+        dsimp only at h
+        by_cases hag : lf.Agrees leftRule ∧ rf.Agrees rightRule
+        · rw [dif_pos hag] at h
+          simp only [Option.some.injEq, Prod.mk.injEq] at h
+          obtain ⟨rfl, _, _⟩ := h
+          rfl
+        · rw [dif_neg hag] at h
+          cases h
+      | split _ _ _ _ _ _ => cases h
+    | split _ _ _ _ _ _ => cases h
+  · rw [dif_neg hrule] at h
+    cases h
+
+/-- A successful reconstruction retires exactly the two rule fragments. -/
+theorem reconstructHere_child_ids {kind : RuleKind} {parent leftRule rightRule : Leaf}
+    {left right : Forest} {f' : Forest} {a b : Leaf}
+    (h : reconstructHere kind parent leftRule rightRule left right = some (f', a, b)) :
+    a.id = leftRule.id ∧ b.id = rightRule.id := by
+  unfold reconstructHere at h
+  by_cases hrule : RuleValid kind parent leftRule rightRule
+  · rw [dif_pos hrule] at h
+    cases left with
+    | leaf lf =>
+      cases right with
+      | leaf rf =>
+        dsimp only at h
+        by_cases hag : lf.Agrees leftRule ∧ rf.Agrees rightRule
+        · rw [dif_pos hag] at h
+          simp only [Option.some.injEq, Prod.mk.injEq] at h
+          obtain ⟨_, rfl, rfl⟩ := h
+          exact ⟨hag.1.1, hag.2.1⟩
+        · rw [dif_neg hag] at h
+          cases h
+      | split _ _ _ _ _ _ => cases h
+    | split _ _ _ _ _ _ => cases h
+  · rw [dif_neg hrule] at h
+    cases h
+
+/-- Each reconstructed-away fragment was an authority node of the old forest. -/
+theorem reconstructHere_removed_mem_nodes {kind : RuleKind} {parent leftRule rightRule : Leaf}
+    {left right : Forest} {f' : Forest} {a b : Leaf}
+    (h : reconstructHere kind parent leftRule rightRule left right = some (f', a, b)) :
+    a ∈ (Forest.split kind parent leftRule rightRule left right).nodes ∧
+      b ∈ (Forest.split kind parent leftRule rightRule left right).nodes := by
+  unfold reconstructHere at h
+  by_cases hrule : RuleValid kind parent leftRule rightRule
+  · rw [dif_pos hrule] at h
+    cases left with
+    | leaf lf =>
+      cases right with
+      | leaf rf =>
+        dsimp only at h
+        by_cases hag : lf.Agrees leftRule ∧ rf.Agrees rightRule
+        · rw [dif_pos hag] at h
+          simp only [Option.some.injEq, Prod.mk.injEq] at h
+          obtain ⟨_, rfl, rfl⟩ := h
+          constructor <;> simp [Forest.nodes]
+        · rw [dif_neg hag] at h
+          cases h
+      | split _ _ _ _ _ _ => cases h
+    | split _ _ _ _ _ _ => cases h
+  · rw [dif_neg hrule] at h
+    cases h
+
+/-- Each reconstructed-away fragment was an authority node of the old forest. -/
+theorem reconstructAt_removed_mem_nodes {f f' : Forest} {id : CapId} {a b : Leaf}
+    (h : f.reconstructAt id = some (f', a, b)) :
+    a ∈ f.nodes ∧ b ∈ f.nodes := by
+  induction f generalizing f' a b with
+  | leaf c => simp [Forest.reconstructAt] at h
+  | split k p lr rr l r ihl ihr =>
+      simp only [Forest.reconstructAt] at h
+      split at h
+      · rename_i hp
+        exact reconstructHere_removed_mem_nodes h
+      · rename_i hp
+        split at h
+        · rename_i l' a' b' hl
+          simp only [Option.some.injEq, Prod.mk.injEq] at h
+          obtain ⟨rfl, rfl, rfl⟩ := h
+          obtain ⟨ha, hb⟩ := ihl hl
+          constructor
+          · simp only [Forest.nodes]
+            exact List.mem_cons_of_mem p (List.mem_append.mpr (Or.inl ha))
+          · simp only [Forest.nodes]
+            exact List.mem_cons_of_mem p (List.mem_append.mpr (Or.inl hb))
+        · rename_i hl
+          split at h
+          · rename_i r' a' b' hr
+            simp only [Option.some.injEq, Prod.mk.injEq] at h
+            obtain ⟨rfl, rfl, rfl⟩ := h
+            obtain ⟨ha, hb⟩ := ihr hr
+            constructor
+            · simp only [Forest.nodes]
+              exact List.mem_cons_of_mem p (List.mem_append.mpr (Or.inr ha))
+            · simp only [Forest.nodes]
+              exact List.mem_cons_of_mem p (List.mem_append.mpr (Or.inr hb))
+          · simp at h
+
+/-- Reconstruction only removes authority nodes; it never introduces one. -/
+theorem reconstructAt_nodes_sub {f f' : Forest} {id : CapId} {a b : Leaf}
+    (h : f.reconstructAt id = some (f', a, b)) {c : Leaf} (hc : c ∈ f'.nodes) :
+    c ∈ f.nodes := by
+  induction f generalizing f' a b with
+  | leaf c0 => simp [Forest.reconstructAt] at h
+  | split k p lr rr l r ihl ihr =>
+      simp only [Forest.reconstructAt] at h
+      split at h
+      · rename_i hp
+        have hf' : f' = .leaf p := reconstructHere_nodes h
+        subst hf'
+        simp only [Forest.nodes, List.mem_singleton] at hc
+        subst hc
+        simp [Forest.nodes]
+      · rename_i hp
+        split at h
+        · rename_i l' a' b' hl
+          simp only [Option.some.injEq, Prod.mk.injEq] at h
+          obtain ⟨rfl, rfl, rfl⟩ := h
+          simp only [Forest.nodes] at hc ⊢
+          rcases List.mem_cons.mp hc with rfl | hc
+          · exact List.mem_cons_self
+          · rcases List.mem_append.mp hc with hc | hc
+            · exact List.mem_cons_of_mem _ (List.mem_append.mpr (Or.inl (ihl hl hc)))
+            · exact List.mem_cons_of_mem _ (List.mem_append.mpr (Or.inr hc))
+        · rename_i hl
+          split at h
+          · rename_i r' a' b' hr
+            simp only [Option.some.injEq, Prod.mk.injEq] at h
+            obtain ⟨rfl, rfl, rfl⟩ := h
+            simp only [Forest.nodes] at hc ⊢
+            rcases List.mem_cons.mp hc with rfl | hc
+            · exact List.mem_cons_self
+            · rcases List.mem_append.mp hc with hc | hc
+              · exact List.mem_cons_of_mem _ (List.mem_append.mpr (Or.inl hc))
+              · exact List.mem_cons_of_mem _ (List.mem_append.mpr (Or.inr (ihr hr hc)))
+          · simp at h
+
+/-- Reconstruction preserves distinct authority identities. -/
+theorem reconstructAt_nodes_nodup {f f' : Forest} {id : CapId} {a b : Leaf}
+    (h : f.reconstructAt id = some (f', a, b))
+    (hn : (f.nodes.map Leaf.id).Nodup) :
+    (f'.nodes.map Leaf.id).Nodup := by
+  induction f generalizing f' a b with
+  | leaf c => simp [Forest.reconstructAt] at h
+  | split k p lr rr l r ihl ihr =>
+      simp only [Forest.nodes, List.map_cons, List.map_append] at hn
+      rw [List.nodup_cons] at hn
+      obtain ⟨hp, hnd⟩ := hn
+      rw [List.nodup_append] at hnd
+      obtain ⟨hln, hrn, hdisj⟩ := hnd
+      simp only [Forest.reconstructAt] at h
+      split at h
+      · rename_i hp'
+        have hf' : f' = .leaf p := reconstructHere_nodes h
+        subst hf'
+        simp [Forest.nodes]
+      · rename_i hp'
+        split at h
+        · rename_i l' a' b' hl
+          simp only [Option.some.injEq, Prod.mk.injEq] at h
+          obtain ⟨rfl, rfl, rfl⟩ := h
+          have hl' := ihl hl hln
+          have hp_l : p.id ∉ l'.nodes.map Leaf.id := by
+            intro hm
+            obtain ⟨c, hc, hcid⟩ := List.mem_map.mp hm
+            exact hp (List.mem_append.mpr (Or.inl
+              (List.mem_map.mpr ⟨c, reconstructAt_nodes_sub hl hc, hcid⟩)))
+          have hp_r : p.id ∉ r.nodes.map Leaf.id := by
+            intro hm; exact hp (List.mem_append.mpr (Or.inr hm))
+          have hdisj' : ∀ x ∈ l'.nodes.map Leaf.id, x ∉ r.nodes.map Leaf.id := by
+            intro x hx hy
+            obtain ⟨c, hc, hcid⟩ := List.mem_map.mp hx
+            have hcold : c ∈ l.nodes := reconstructAt_nodes_sub hl hc
+            exact not_mem_of_disjoint hdisj (List.mem_map.mpr ⟨c, hcold, hcid⟩) hy
+          simp only [Forest.nodes, List.map_cons, List.map_append]
+          rw [List.nodup_cons, List.nodup_append]
+          refine ⟨?_, hl', hrn, disjoint_of_not_mem hdisj'⟩
+          intro hm
+          rcases List.mem_append.mp hm with hm | hm
+          · exact hp_l hm
+          · exact hp_r hm
+        · rename_i hl
+          split at h
+          · rename_i r' a' b' hr
+            simp only [Option.some.injEq, Prod.mk.injEq] at h
+            obtain ⟨rfl, rfl, rfl⟩ := h
+            have hr' := ihr hr hrn
+            have hp_r : p.id ∉ r'.nodes.map Leaf.id := by
+              intro hm
+              obtain ⟨c, hc, hcid⟩ := List.mem_map.mp hm
+              exact hp (List.mem_append.mpr (Or.inr
+                (List.mem_map.mpr ⟨c, reconstructAt_nodes_sub hr hc, hcid⟩)))
+            have hp_l : p.id ∉ l.nodes.map Leaf.id := by
+              intro hm; exact hp (List.mem_append.mpr (Or.inl hm))
+            have hdisj' : ∀ x ∈ l.nodes.map Leaf.id, x ∉ r'.nodes.map Leaf.id := by
+              intro x hx hy
+              obtain ⟨c, hc, hcid⟩ := List.mem_map.mp hy
+              have hcold : c ∈ r.nodes := reconstructAt_nodes_sub hr hc
+              exact not_mem_of_disjoint hdisj hx (List.mem_map.mpr ⟨c, hcold, hcid⟩)
+            simp only [Forest.nodes, List.map_cons, List.map_append]
+            rw [List.nodup_cons, List.nodup_append]
+            refine ⟨?_, hln, hr', disjoint_of_not_mem hdisj'⟩
+            intro hm
+            rcases List.mem_append.mp hm with hm | hm
+            · exact hp_l hm
+            · exact hp_r hm
+          · simp at h
+
+/-- A successful reconstruction carries its checked rule. -/
+theorem reconstructHere_ruleValid {kind : RuleKind} {parent leftRule rightRule : Leaf}
+    {left right : Forest} {f' : Forest} {a b : Leaf}
+    (h : reconstructHere kind parent leftRule rightRule left right = some (f', a, b)) :
+    RuleValid kind parent leftRule rightRule := by
+  unfold reconstructHere at h
+  by_cases hrule : RuleValid kind parent leftRule rightRule
+  · exact hrule
+  · rw [dif_neg hrule] at h
+    cases h
+
+/-- The only old authority nodes a successful reconstruction removes are the two
+reconstructed-away fragments. -/
+theorem reconstructHere_nodes_removed {kind : RuleKind} {parent leftRule rightRule : Leaf}
+    {left right : Forest} {f' : Forest} {a b : Leaf}
+    (h : reconstructHere kind parent leftRule rightRule left right = some (f', a, b))
+    {c : Leaf} (hc : c ∈ (Forest.split kind parent leftRule rightRule left right).nodes)
+    (hnc : c ∉ f'.nodes) : c = a ∨ c = b := by
+  unfold reconstructHere at h
+  by_cases hrule : RuleValid kind parent leftRule rightRule
+  · rw [dif_pos hrule] at h
+    cases left with
+    | leaf lf =>
+      cases right with
+      | leaf rf =>
+        dsimp only at h
+        by_cases hag : lf.Agrees leftRule ∧ rf.Agrees rightRule
+        · rw [dif_pos hag] at h
+          simp only [Option.some.injEq, Prod.mk.injEq] at h
+          obtain ⟨rfl, rfl, rfl⟩ := h
+          simp only [Forest.nodes, List.mem_cons, List.mem_append, List.mem_singleton,
+            List.mem_nil_iff, or_false] at hc hnc
+          rcases hc with rfl | rfl | rfl
+          · exact absurd rfl hnc
+          · exact Or.inl rfl
+          · exact Or.inr rfl
+        · rw [dif_neg hag] at h
+          cases h
+      | split _ _ _ _ _ _ => cases h
+    | split _ _ _ _ _ _ => cases h
+  · rw [dif_neg hrule] at h
+    cases h
+
+/-- A removed authority node was a rule fragment of the reconstructed
+suspension. -/
+theorem reconstructAt_nodes_removed_rule {f f' : Forest} {id : CapId} {a b : Leaf}
+    (h : f.reconstructAt id = some (f', a, b)) {c : Leaf}
+    (hc : c ∈ f.nodes) (hnc : c ∉ f'.nodes) :
+    c.id ∈ f.ruleIds := by
+  induction f generalizing f' a b with
+  | leaf c0 => simp [Forest.reconstructAt] at h
+  | split k p lr rr l r ihl ihr =>
+      simp only [Forest.reconstructAt] at h
+      split at h
+      · rename_i hp
+        have hf' : f' = .leaf p := reconstructHere_nodes h
+        obtain ⟨ha, hb⟩ := reconstructHere_child_ids h
+        subst hf'
+        rcases reconstructHere_nodes_removed h hc hnc with rfl | rfl
+        · simp only [Forest.ruleIds, List.mem_cons]
+          exact Or.inl ha
+        · simp only [Forest.ruleIds, List.mem_cons]
+          exact Or.inr (Or.inl hb)
+      · rename_i hp
+        split at h
+        · rename_i l' a' b' hl
+          simp only [Option.some.injEq, Prod.mk.injEq] at h
+          obtain ⟨rfl, rfl, rfl⟩ := h
+          simp only [Forest.nodes] at hc
+          simp only [Forest.nodes] at hnc
+          rcases List.mem_cons.mp hc with rfl | hc
+          · exact absurd List.mem_cons_self hnc
+          · rcases List.mem_append.mp hc with hc | hc
+            · have hnc_l : c ∉ l'.nodes := by
+                intro hm
+                exact hnc (List.mem_cons_of_mem _ (List.mem_append.mpr (Or.inl hm)))
+              have hmem := ihl hl hc hnc_l
+              simp only [Forest.ruleIds]
+              exact List.mem_cons_of_mem _ (List.mem_cons_of_mem _
+                (List.mem_append.mpr (Or.inl hmem)))
+            · exact absurd (List.mem_cons_of_mem _ (List.mem_append.mpr (Or.inr hc))) hnc
+        · rename_i hl
+          split at h
+          · rename_i r' a' b' hr
+            simp only [Option.some.injEq, Prod.mk.injEq] at h
+            obtain ⟨rfl, rfl, rfl⟩ := h
+            simp only [Forest.nodes] at hc
+            simp only [Forest.nodes] at hnc
+            rcases List.mem_cons.mp hc with rfl | hc
+            · exact absurd List.mem_cons_self hnc
+            · rcases List.mem_append.mp hc with hc | hc
+              · exact absurd (List.mem_cons_of_mem _ (List.mem_append.mpr (Or.inl hc))) hnc
+              · have hnc_r : c ∉ r'.nodes := by
+                  intro hm
+                  exact hnc (List.mem_cons_of_mem _ (List.mem_append.mpr (Or.inr hm)))
+                have hmem := ihr hr hc hnc_r
+                simp only [Forest.ruleIds]
+                exact List.mem_cons_of_mem _ (List.mem_cons_of_mem _
+                  (List.mem_append.mpr (Or.inr hmem)))
+          · simp at h
+
+/-- The reconstructed-away fragments are absent from the new authority nodes. -/
+theorem reconstructAt_removed_not_nodes {f f' : Forest} {id : CapId} {a b : Leaf}
+    (h : f.reconstructAt id = some (f', a, b))
+    (hn : (f.nodes.map Leaf.id).Nodup) :
+    a.id ∉ f'.nodes.map Leaf.id ∧ b.id ∉ f'.nodes.map Leaf.id := by
+  induction f generalizing f' a b with
+  | leaf c => simp [Forest.reconstructAt] at h
+  | split k p lr rr l r ihl ihr =>
+      simp only [Forest.nodes, List.map_cons, List.map_append] at hn
+      rw [List.nodup_cons] at hn
+      obtain ⟨hp, hnd⟩ := hn
+      rw [List.nodup_append] at hnd
+      obtain ⟨hln, hrn, hdisj⟩ := hnd
+      simp only [Forest.reconstructAt] at h
+      split at h
+      · rename_i hp'
+        have hf' : f' = .leaf p := reconstructHere_nodes h
+        obtain ⟨ha, hb⟩ := reconstructHere_child_ids h
+        subst hf'
+        have hrule := reconstructHere_ruleValid h
+        obtain ⟨-, -, -, -, -, -, -, -, hlr, hrr, -⟩ := hrule
+        simp only [Forest.nodes, List.map_cons, List.map_nil, List.mem_cons,
+          List.not_mem_nil, or_false]
+        constructor
+        · rw [ha]; exact hlr
+        · rw [hb]; exact hrr
+      · rename_i hp'
+        split at h
+        · rename_i l' a' b' hl
+          simp only [Option.some.injEq, Prod.mk.injEq] at h
+          obtain ⟨rfl, rfl, rfl⟩ := h
+          obtain ⟨ha', hb'⟩ := ihl hl hln
+          have ha_mem := (reconstructAt_removed_mem_nodes hl).1
+          have hb_mem := (reconstructAt_removed_mem_nodes hl).2
+          have ha_l : a' ∈ l.nodes := ha_mem
+          have hb_l : b' ∈ l.nodes := hb_mem
+          simp only [Forest.nodes, List.map_cons, List.map_append]
+          constructor
+          · intro hm
+            rcases List.mem_cons.mp hm with hm | hm
+            · -- a'.id = p.id, contradict hp
+              exact hp (List.mem_append.mpr (Or.inl
+                (List.mem_map.mpr ⟨a', ha_l, hm⟩)))
+            · rcases List.mem_append.mp hm with hm | hm
+              · exact ha' hm
+              · exact not_mem_of_disjoint hdisj
+                  (List.mem_map.mpr ⟨a', ha_l, rfl⟩) hm
+          · intro hm
+            rcases List.mem_cons.mp hm with hm | hm
+            · exact hp (List.mem_append.mpr (Or.inl
+                (List.mem_map.mpr ⟨b', hb_l, hm⟩)))
+            · rcases List.mem_append.mp hm with hm | hm
+              · exact hb' hm
+              · exact not_mem_of_disjoint hdisj
+                  (List.mem_map.mpr ⟨b', hb_l, rfl⟩) hm
+        · rename_i hl
+          split at h
+          · rename_i r' a' b' hr
+            simp only [Option.some.injEq, Prod.mk.injEq] at h
+            obtain ⟨rfl, rfl, rfl⟩ := h
+            obtain ⟨ha', hb'⟩ := ihr hr hrn
+            have ha_mem := (reconstructAt_removed_mem_nodes hr).1
+            have hb_mem := (reconstructAt_removed_mem_nodes hr).2
+            have ha_r : a' ∈ r.nodes := ha_mem
+            have hb_r : b' ∈ r.nodes := hb_mem
+            have hdisj_symm : ∀ x ∈ r.nodes.map Leaf.id,
+                ∀ y ∈ l.nodes.map Leaf.id, x ≠ y := by
+              intro x hx y hy
+              exact Ne.symm (hdisj y hy x hx)
+            simp only [Forest.nodes, List.map_cons, List.map_append]
+            constructor
+            · intro hm
+              rcases List.mem_cons.mp hm with hm | hm
+              · exact hp (List.mem_append.mpr (Or.inr
+                  (List.mem_map.mpr ⟨a', ha_r, hm⟩)))
+              · rcases List.mem_append.mp hm with hm | hm
+                · exact not_mem_of_disjoint hdisj_symm
+                    (List.mem_map.mpr ⟨a', ha_r, rfl⟩) hm
+                · exact ha' hm
+            · intro hm
+              rcases List.mem_cons.mp hm with hm | hm
+              · exact hp (List.mem_append.mpr (Or.inr
+                  (List.mem_map.mpr ⟨b', hb_r, hm⟩)))
+              · rcases List.mem_append.mp hm with hm | hm
+                · exact not_mem_of_disjoint hdisj_symm
+                    (List.mem_map.mpr ⟨b', hb_r, rfl⟩) hm
+                · exact hb' hm
+          · simp at h
+
+/-- Reconstruction only removes rule fragments. -/
+theorem reconstructAt_ruleIds_mem {f f' : Forest} {id : CapId} {a b : Leaf}
+    (h : f.reconstructAt id = some (f', a, b)) {y : CapId}
+    (hy : y ∈ f'.ruleIds) : y ∈ f.ruleIds := by
+  induction f generalizing f' a b with
+  | leaf c => simp [Forest.reconstructAt] at h
+  | split k p lr rr l r ihl ihr =>
+      simp only [Forest.reconstructAt] at h
+      split at h
+      · rename_i hp
+        have hf' : f' = .leaf p := reconstructHere_nodes h
+        subst hf'
+        simp [Forest.ruleIds] at hy
+      · rename_i hp
+        split at h
+        · rename_i l' a' b' hl
+          simp only [Option.some.injEq, Prod.mk.injEq] at h
+          obtain ⟨rfl, rfl, rfl⟩ := h
+          simp only [Forest.ruleIds] at ⊢
+          simp only [Forest.ruleIds, List.mem_cons, List.mem_append] at hy
+          rcases hy with rfl | rfl | hy | hy
+          · exact List.mem_cons_self
+          · exact List.mem_cons_of_mem _ List.mem_cons_self
+          · exact List.mem_cons_of_mem _ (List.mem_cons_of_mem _
+              (List.mem_append.mpr (Or.inl (ihl hl hy))))
+          · exact List.mem_cons_of_mem _ (List.mem_cons_of_mem _
+              (List.mem_append.mpr (Or.inr hy)))
+        · rename_i hl
+          split at h
+          · rename_i r' a' b' hr
+            simp only [Option.some.injEq, Prod.mk.injEq] at h
+            obtain ⟨rfl, rfl, rfl⟩ := h
+            simp only [Forest.ruleIds] at ⊢
+            simp only [Forest.ruleIds, List.mem_cons, List.mem_append] at hy
+            rcases hy with rfl | rfl | hy | hy
+            · exact List.mem_cons_self
+            · exact List.mem_cons_of_mem _ List.mem_cons_self
+            · exact List.mem_cons_of_mem _ (List.mem_cons_of_mem _
+                (List.mem_append.mpr (Or.inl hy)))
+            · exact List.mem_cons_of_mem _ (List.mem_cons_of_mem _
+                (List.mem_append.mpr (Or.inr (ihr hr hy))))
+          · simp at h
+
 /-- Retag a current active leaf, keeping its resource description. -/
 def retagLeafAt (newId : CapId) (c : Leaf) : Option (Forest × Leaf) :=
   if c.state = .active then some (.leaf { c with id := newId }, c) else none
@@ -2141,13 +2600,8 @@ theorem findLeaf?_mem_leaves {f : Forest} {id : CapId} {c : Leaf}
         obtain ⟨hm, hid⟩ := ihl hc
         exact ⟨by simp only [Forest.leaves, List.mem_append]; exact Or.inl hm, hid⟩
       · rename_i hc
-        split at h
-        · rename_i hc2
-          simp only [Option.some.injEq] at h
-          subst h
-          obtain ⟨hm, hid⟩ := ihr hc2
-          exact ⟨by simp only [Forest.leaves, List.mem_append]; exact Or.inr hm, hid⟩
-        · simp at h
+        obtain ⟨hm, hid⟩ := ihr h
+        exact ⟨by simp only [Forest.leaves, List.mem_append]; exact Or.inr hm, hid⟩
 
 /-- Distinct identity lists mean two elements with the same mapped identity are
 the same element. -/
@@ -2158,13 +2612,15 @@ theorem eq_of_mem_of_map_nodup {l : List Leaf} (hn : (l.map Leaf.id).Nodup)
   | cons x xs ih =>
       rw [List.map_cons, List.nodup_cons] at hn
       obtain ⟨hx, hxs⟩ := hn
-      rcases List.mem_cons.mp ha with rfl | ha
-      · rcases List.mem_cons.mp hb with rfl | hb
-        · rfl
-        · exact absurd (hid.symm ▸ List.mem_map.mpr ⟨b, hb, rfl⟩) hx
-      · rcases List.mem_cons.mp hb with rfl | hb
-        · exact absurd (hid ▸ List.mem_map.mpr ⟨a, ha, rfl⟩) hx
-        · exact ih hxs ha hb
+      rcases List.mem_cons.mp ha with hhead | htail
+      · cases hhead
+        rcases List.mem_cons.mp hb with hhead | htailb
+        · cases hhead; rfl
+        · exact absurd (hid.symm ▸ List.mem_map.mpr ⟨b, htailb, rfl⟩) hx
+      · rcases List.mem_cons.mp hb with hhead | htailb
+        · cases hhead
+          exact absurd (hid ▸ List.mem_map.mpr ⟨a, htail, rfl⟩) hx
+        · exact ih hxs htail htailb
 
 /-- A list whose mapped identities are distinct has distinct mapped values for
 distinct elements. -/
@@ -2176,15 +2632,18 @@ theorem ne_of_map_nodup {α β : Type} {l : List α} {f : α → β}
   | cons x xs ih =>
       rw [List.map_cons, List.nodup_cons] at hn
       obtain ⟨hx, hxs⟩ := hn
-      rcases List.mem_cons.mp ha with rfl | ha
-      · rcases List.mem_cons.mp hb with rfl | hb
-        · exact absurd rfl hne
+      rcases List.mem_cons.mp ha with hhead | htail
+      · cases hhead
+        rcases List.mem_cons.mp hb with hhead | htailb
+        · cases hhead
+          exact fun _ => hne rfl
         · intro heq
-          exact hx (heq ▸ List.mem_map.mpr ⟨b, hb, rfl⟩)
-      · rcases List.mem_cons.mp hb with rfl | hb
-        · intro heq
-          exact hx (heq ▸ List.mem_map.mpr ⟨a, ha, rfl⟩)
-        · exact ih hxs ha hb
+          exact hx (heq ▸ List.mem_map.mpr ⟨b, htailb, rfl⟩)
+      · rcases List.mem_cons.mp hb with hhead | htailb
+        · cases hhead
+          intro heq
+          exact hx (heq ▸ List.mem_map.mpr ⟨a, htail, rfl⟩)
+        · exact ih hxs htail htailb
 
 /-- An old node whose identity is not retagged survives the retagging. -/
 theorem retag_modify_nodes_old_mem {f f' : Forest} {id newId : CapId} {p c : Leaf}
@@ -2201,12 +2660,13 @@ theorem retag_modify_nodes_old_mem {f f' : Forest} {id newId : CapId} {p c : Lea
       · rw [if_neg hc0] at h
         cases h
   | split k p0 lr rr l r ihl ihr =>
-      simp only [Forest.nodes, List.mem_cons, List.mem_append] at hc
+      simp only [Forest.nodes] at hc
       simp only [Forest.modifyLeafAt] at h
       split at h
       · rename_i l' p' hl
         simp only [Option.some.injEq, Prod.mk.injEq] at h
-        simp only [Forest.nodes] at hc
+        obtain ⟨hf', _⟩ := h
+        rw [← hf']
         simp only [Forest.nodes]
         rcases List.mem_cons.mp hc with rfl | hc
         · exact List.mem_cons_self
@@ -2217,8 +2677,8 @@ theorem retag_modify_nodes_old_mem {f f' : Forest} {id newId : CapId} {p c : Lea
         split at h
         · rename_i r' p' hr
           simp only [Option.some.injEq, Prod.mk.injEq] at h
-          obtain ⟨rfl, rfl⟩ := h
-          simp only [Forest.nodes] at hc
+          obtain ⟨hf', _⟩ := h
+          rw [← hf']
           simp only [Forest.nodes]
           rcases List.mem_cons.mp hc with rfl | hc
           · exact List.mem_cons_self
@@ -2457,7 +2917,21 @@ theorem State.write_inv {s s' : State} {id : CapId} {i : Nat} {v : UInt8}
       · rename_i hw
         simp only [Option.some.injEq] at h
         subst s'
-        simpa using hinv
+        refine ⟨hinv.1, hinv.2.1, ?_⟩
+        exact
+          { nodeIds_nodup := hinv.2.2.nodeIds_nodup
+            issue_covers := hinv.2.2.issue_covers
+            retired_absent := hinv.2.2.retired_absent
+            restores_issued := hinv.2.2.restores_issued
+            borrowers_nodup := hinv.2.2.borrowers_nodup
+            lenders_nodup := hinv.2.2.lenders_nodup
+            lender_ne_borrower := hinv.2.2.lender_ne_borrower
+            dormant_absent := hinv.2.2.dormant_absent
+            borrower_not_rule := hinv.2.2.borrower_not_rule
+            restore_realized := hinv.2.2.restore_realized
+            node_agrees := hinv.2.2.node_agrees
+            nested_agrees := hinv.2.2.nested_agrees
+            rule_fragments_issued := hinv.2.2.rule_fragments_issued }
       · simp at h
     · simp at h
 
@@ -2569,7 +3043,16 @@ theorem State.splitSpatial_inv {s s' : State} {parentId c1 c2 : CapId}
     · rename_i hfresh
       simp only [Option.some.injEq] at h
       subst h
-      refine ⟨?_, ?_⟩
+      have hchildren := Forest.splitSpatialAt_children_ne hsplit
+      have hnf1 : c1 ∉ s.forest.nodes.map Leaf.id := by
+        intro hm
+        obtain ⟨c', hc', hid⟩ := List.mem_map.mp hm
+        exact hfresh.1 (hid ▸ hacct.issue_covers c'.id (Forest.node_id_mem_ids hc'))
+      have hnf2 : c2 ∉ s.forest.nodes.map Leaf.id := by
+        intro hm
+        obtain ⟨c', hc', hid⟩ := List.mem_map.mp hm
+        exact hfresh.2.1 (hid ▸ hacct.issue_covers c'.id (Forest.node_id_mem_ids hc'))
+      refine ⟨?_, ?_, ?_⟩
       · intro x hx
         change f'.budget x = s.D
         rw [Forest.splitSpatialAt_budget hsplit x]
@@ -2670,7 +3153,16 @@ theorem State.splitFraction_inv {s s' : State} {parentId c1 c2 : CapId}
     · rename_i hfresh
       simp only [Option.some.injEq] at h
       subst h
-      refine ⟨?_, ?_⟩
+      have hchildren := Forest.splitFractionAt_children_ne hsplit
+      have hnf1 : c1 ∉ s.forest.nodes.map Leaf.id := by
+        intro hm
+        obtain ⟨c', hc', hid⟩ := List.mem_map.mp hm
+        exact hfresh.1 (hid ▸ hacct.issue_covers c'.id (Forest.node_id_mem_ids hc'))
+      have hnf2 : c2 ∉ s.forest.nodes.map Leaf.id := by
+        intro hm
+        obtain ⟨c', hc', hid⟩ := List.mem_map.mp hm
+        exact hfresh.2.1 (hid ▸ hacct.issue_covers c'.id (Forest.node_id_mem_ids hc'))
+      refine ⟨?_, ?_, ?_⟩
       · intro x hx
         change f'.budget x = s.D
         rw [Forest.splitFractionAt_budget hsplit x]
@@ -2871,7 +3363,7 @@ theorem State.reconstruct_inv {s s' : State} {parentId : CapId}
         exact hacct.nested_agrees r hr r' hr' hrel
       · intro id hid
         exact hacct.rule_fragments_issued id
-          (Forest.rule_id_mem_ids (Forest.reconstructAt_ruleIds_mem hrec hid))
+          (Forest.reconstructAt_ruleIds_mem hrec hid)
 
 /-- Beginning a borrow preserves the reconstruction invariant. -/
 theorem State.borrow_inv {s s' : State} {lender borrower : CapId}
@@ -2889,7 +3381,17 @@ theorem State.borrow_inv {s s' : State} {lender borrower : CapId}
       · rename_i f' p hretag
         simp only [Option.some.injEq] at h
         subst h
-        refine ⟨?_, ?_⟩
+        have hnf : borrower ∉ s.forest.nodes.map Leaf.id := by
+          intro hm
+          obtain ⟨c', hc', hid⟩ := List.mem_map.mp hm
+          exact hok.2.1 (hid ▸ hacct.issue_covers c'.id (Forest.node_id_mem_ids hc'))
+        have hLenderNode : lender ∈ s.forest.nodes.map Leaf.id :=
+          hcid ▸ List.mem_map.mpr ⟨c, Forest.mem_nodes_of_mem_leaves hcleaf, rfl⟩
+        have hLenderIssued : lender ∈ s.issued :=
+          hacct.issue_covers lender
+            (hcid ▸ Forest.node_id_mem_ids (Forest.mem_nodes_of_mem_leaves hcleaf))
+        have hne : borrower ≠ lender := hok.2.2.2
+        refine ⟨?_, ?_, ?_⟩
         · intro x hx
           change f'.budget x = s.D
           rw [Forest.retagLeaf_budget hretag x]
@@ -2928,23 +3430,23 @@ theorem State.borrow_inv {s s' : State} {lender borrower : CapId}
           · refine List.nodup_cons.mpr ⟨?_, hacct.borrowers_nodup⟩
             intro hm
             obtain ⟨r', hr', hbr⟩ := List.mem_map.mp hm
-            exact hok.2.1 (hbr ▸ (hacct.restores_issued r' hr').2)
+            have hbr' : r'.borrower = borrower := by simpa using hbr
+            exact hok.2.1 (hbr' ▸ (hacct.restores_issued r' hr').2)
           · refine List.nodup_cons.mpr ⟨?_, hacct.lenders_nodup⟩
             intro hm
             obtain ⟨r', hr', hlr⟩ := List.mem_map.mp hm
             exact hacct.dormant_absent r' hr' (hlr ▸ hLenderNode)
           · intro r hr
             rcases List.mem_cons.mp hr with rfl | hr
-            · exact Ne.symm hne
+            · intro heq; exact hne heq.symm
             · exact hacct.lender_ne_borrower r hr
           · intro r hr hm
             rcases List.mem_cons.mp hr with rfl | hr
-            · exact Forest.retagLeaf_nodes_id_absent hretag hacct.nodeIds_nodup
-                (Ne.symm hne) hm
+            · exact Forest.retagLeaf_nodes_id_absent hretag hacct.nodeIds_nodup hne hm
             · obtain ⟨c', hc', hcid'⟩ := List.mem_map.mp hm
               rcases Forest.retagLeaf_nodes_cases hretag hc' with ho | ho
               · exact hacct.dormant_absent r hr (List.mem_map.mpr ⟨c', ho, hcid'⟩)
-              · have hc'id : c'.id = borrower := by rw [ho]; rfl
+              · have hc'id : c'.id = borrower := by rw [ho]
                 have hlend : r.lender = borrower := hcid'.symm.trans hc'id
                 exact hok.2.1 (by rw [← hlend]; exact (hacct.restores_issued r hr).1)
           · intro r hr hm
@@ -2967,20 +3469,23 @@ theorem State.borrow_inv {s s' : State} {lender borrower : CapId}
           · intro r hr c' hc' hcid'
             rcases List.mem_cons.mp hr with rfl | hr
             · rcases Forest.retagLeaf_nodes_cases hretag hc' with ho | ho
-              · exact absurd (by rw [← hcid']; exact
+              · have hcid'' : c'.id = borrower := by simpa using hcid'
+                exact absurd (by rw [← hcid'']; exact
                   hacct.issue_covers c'.id (Forest.node_id_mem_ids ho)) hok.2.1
               · rw [ho]; exact ⟨rfl, rfl, rfl, rfl, rfl⟩
             · rcases Forest.retagLeaf_nodes_cases hretag hc' with ho | ho
               · exact hacct.node_agrees r hr c' ho hcid'
-              · have hc'id : c'.id = borrower := by rw [ho]; rfl
-                have hrb : r.borrower = borrower := hcid'.symm.trans hc'id
+              · have hc'id : c'.id = borrower := by rw [ho]
+                have hrb : r.borrower = borrower := by
+                  have := hcid'.symm.trans hc'id; simpa using this
                 exact absurd (by rw [← hrb]; exact (hacct.restores_issued r hr).2)
                   hok.2.1
           · intro r hr r' hr' hrel
             rcases List.mem_cons.mp hr with rfl | hr
             · rcases List.mem_cons.mp hr' with rfl | hr'
-              · exact absurd hrel (Ne.symm hne)
-              · exact absurd (hrel ▸ (hacct.restores_issued r' hr').1) hok.2.1
+              · exact absurd (by simpa using hrel) (Ne.symm hne)
+              · have hrel' : r'.lender = borrower := by simpa using hrel
+                exact absurd (hrel' ▸ (hacct.restores_issued r' hr').1) hok.2.1
             · rcases List.mem_cons.mp hr' with rfl | hr'
               · obtain ⟨hp_id, hpnode⟩ := Forest.retagLeaf_found hretag
                 have hcnode : c ∈ s.forest.nodes :=
@@ -3018,8 +3523,9 @@ theorem State.return_inv {s s' : State} {borrower : CapId}
           simp only [Option.some.injEq] at h
           subst h
           have hrmem : r ∈ s.restores := List.mem_of_find?_eq_some hrestore
-          have hrb : (fun x => x.borrower = borrower) r = true := List.find?_some hrestore
-          have hrb' : r.borrower = borrower := by simpa using hrb
+          have hrb' : r.borrower = borrower := by
+            have := List.find?_some hrestore
+            simpa using this
           have hne : r.lender ≠ borrower := hok.2.2.2.2.2.2.2 r hrmem
           have hnf : r.lender ∉ s.forest.nodes.map Leaf.id :=
             hacct.dormant_absent r hrmem
@@ -3084,7 +3590,7 @@ theorem State.return_inv {s s' : State} {borrower : CapId}
               obtain ⟨c', hc', hcid'⟩ := List.mem_map.mp hm
               rcases Forest.retagLeaf_nodes_cases hretag hc' with ho | ho
               · exact hacct.dormant_absent r' hr'_old (List.mem_map.mpr ⟨c', ho, hcid'⟩)
-              · have hc'id : c'.id = r.lender := by rw [ho]; rfl
+              · have hc'id : c'.id = r.lender := by rw [ho]
                 have hr'lend : r'.lender = r.lender := hcid'.symm.trans hc'id
                 have hne' : r' ≠ r := fun heq => hnb' (by rw [heq]; exact hrb')
                 exact absurd hr'lend
@@ -3099,21 +3605,21 @@ theorem State.return_inv {s s' : State} {borrower : CapId}
               rcases hacct.restore_realized r' hr'_old with ho | ho
               · obtain ⟨c'', hc'', hcid'', hag⟩ := ho
                 exact Or.inl ⟨c'', Forest.retagLeaf_nodes_old_mem hretag hc''
-                  (fun heq => hnb' (hcid''.trans heq)), hcid'', hag⟩
+                  (fun heq => hnb' (hcid''.symm.trans heq)), hcid'', hag⟩
               · obtain ⟨r'', hr'', hrel⟩ := ho
                 by_cases hr''r : r'' = r
-                · subst hr''r
-                  have hs : r'.SameResource r :=
-                    hacct.nested_agrees r' hr'_old r hrmem hrel
+                · have hs : r'.SameResource r :=
+                    hacct.nested_agrees r' hr'_old r hrmem (by rw [← hr''r]; exact hrel)
                   obtain ⟨hp_id, hpnode⟩ := Forest.retagLeaf_found hretag
                   have hpc : p = c := Forest.eq_of_mem_of_map_nodup hacct.nodeIds_nodup
                     hpnode hcnode (hp_id.trans hcid.symm)
+                  have hrc'' : r''.Agrees c := by rw [hr''r]; exact hrc
                   refine Or.inl ⟨{ p with id := r.lender },
                     Forest.retagLeaf_newnode_mem hretag, ?_, ?_⟩
                   · show r.lender = r'.borrower
-                    exact hrel
+                    rw [← hr''r]; exact hrel
                   · rw [hpc]
-                    exact Restore.Agrees.of_sameResource hs hrc
+                    exact Restore.Agrees.of_sameResource (by rw [hr''r]; exact hs.symm) hrc''
                 · have hnb'' : r''.borrower ≠ borrower := by
                     have hneq : r''.borrower ≠ r.borrower :=
                       Forest.ne_of_map_nodup hacct.borrowers_nodup hr'' hrmem
@@ -3126,7 +3632,7 @@ theorem State.return_inv {s s' : State} {borrower : CapId}
               have hnb' : r'.borrower ≠ borrower := by simpa using hnb
               rcases Forest.retagLeaf_nodes_cases hretag hc' with ho | ho
               · exact hacct.node_agrees r' hr'_old c' ho hcid'
-              · have hc'id : c'.id = r.lender := by rw [ho]; rfl
+              · have hc'id : c'.id = r.lender := by rw [ho]
                 have hrel : r.lender = r'.borrower := hc'id.symm.trans hcid'
                 have hs : r'.SameResource r :=
                   hacct.nested_agrees r' hr'_old r hrmem hrel
@@ -3134,7 +3640,7 @@ theorem State.return_inv {s s' : State} {borrower : CapId}
                 have hpc : p = c := Forest.eq_of_mem_of_map_nodup hacct.nodeIds_nodup
                   hpnode hcnode (hp_id.trans hcid.symm)
                 rw [ho, hpc]
-                exact Restore.Agrees.of_sameResource hs hrc
+                exact Restore.Agrees.of_sameResource hs.symm hrc
             · intro r' hr' r'' hr'' hrel
               exact hacct.nested_agrees r' (List.mem_filter.mp hr').1 r''
                 (List.mem_filter.mp hr'').1 hrel
@@ -3288,6 +3794,40 @@ theorem World.splitAtChecked_refuses_with_loan {w : World} {a : AllocId}
       exact (hforall l hmem) halloc
     simp only [hnot, if_false]
     rfl
+
+/-- A dormant lender is not a current leaf: an authority name awaiting return
+cannot be used to access the resource. -/
+theorem State.Accounts.dormant_not_current {s : State} (h : s.Accounts)
+    {r : Restore} (hr : r ∈ s.restores) : s.forest.findLeaf? r.lender = none := by
+  cases hf : s.forest.findLeaf? r.lender with
+  | none => rfl
+  | some c =>
+      obtain ⟨hc, hcid⟩ := Forest.findLeaf?_mem_leaves hf
+      exact absurd hcid.symm (State.Accounts.dormant_not_leaves h hr hc)
+
+/-- A retired name is not a current leaf: retirement cannot be undone by using an
+old handle. -/
+theorem State.Accounts.retired_not_current {s : State} (h : s.Accounts)
+    {id : CapId} (hid : id ∈ s.retired) : s.forest.findLeaf? id = none := by
+  cases hf : s.forest.findLeaf? id with
+  | none => rfl
+  | some c =>
+      obtain ⟨hc, hcid⟩ := Forest.findLeaf?_mem_leaves hf
+      exact absurd (hcid.symm ▸ hid) (State.Accounts.retired_not_leaves h hc)
+
+/-- Appending a restoration record that names an unissued party, or whose
+borrower is a live rule fragment, breaks the accounting invariant. -/
+theorem State.Accounts.cons_restore_not_accounts {s : State} (h : s.Accounts)
+    {r : Restore}
+    (hnot : r.lender ∉ s.issued ∨ r.borrower ∉ s.issued ∨
+      r.borrower ∈ s.forest.ruleIds) :
+    ¬ ({ s with restores := r :: s.restores } : State).Accounts := by
+  intro hc
+  have hr : r ∈ ({ s with restores := r :: s.restores } : State).restores := by simp
+  rcases hnot with hnot | hnot | hnot
+  · exact hnot (hc.restores_issued r hr).1
+  · exact hnot (hc.restores_issued r hr).2
+  · exact (hc.borrower_not_rule r hr) hnot
 
 end Reconstruction
 
