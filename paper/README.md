@@ -1,8 +1,12 @@
 # Building the manuscript
 
-`ownership-skeleton.tex` is the single canonical source. It uses the official
-LIPIcs article class, `lipics-v2021`, and builds with pdfLaTeX (no shell
-escape).
+There are two intentional ITP/LIPIcs manuscripts:
+
+- `ownership-skeleton.tex` — the ownership and LCNF model paper.
+- `sealed-ownership.tex` — the capability, delegation and sealed-execution paper.
+
+Both use the official LIPIcs article class, `lipics-v2021`, and build with
+pdfLaTeX (no shell escape). `scripts/check_all.sh` builds both.
 
 ## Template provenance
 
@@ -29,7 +33,9 @@ escape).
 ```bash
 cd paper
 latexmk -pdf -interaction=nonstopmode ownership-skeleton.tex
+latexmk -pdf -interaction=nonstopmode sealed-ownership.tex
 pdfinfo ownership-skeleton.pdf
+pdfinfo sealed-ownership.pdf
 ```
 
 Observed on 3 November 2026 with pdfTeX 3.141592653-2.6-1.40.25 (TeX Live

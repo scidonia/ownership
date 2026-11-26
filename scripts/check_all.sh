@@ -31,11 +31,12 @@ run nix develop -c lake build OwnershipLcnf
 run nix develop -c lake build OwnershipTest
 run nix develop -c lake build Cap
 echo "== capability controls =="
-if ! bash scripts/check_cap_controls.sh; then
+if ! nix develop -c bash scripts/check_cap_controls.sh; then
   echo "FAILED: capability controls" >&2
   fail=1
 fi
 run nix develop -c lake env lean scripts/check_axioms.lean
+run nix develop -c lake env lean scripts/check_cap_axioms.lean
 run nix develop -c bash scripts/check_claims.sh
 run nix develop -c bash scripts/check_claims.sh --self-test
 
@@ -51,9 +52,14 @@ else
   [ "$require_sibling" -eq 1 ] && fail=1
 fi
 
-echo "== paper =="
+echo "== paper (ownership model) =="
 if ! ( cd paper && latexmk -pdf -interaction=nonstopmode ownership-skeleton.tex ); then
-  echo "FAILED: paper build" >&2
+  echo "FAILED: ownership-skeleton paper build" >&2
+  fail=1
+fi
+echo "== paper (capability discipline) =="
+if ! ( cd paper && latexmk -pdf -interaction=nonstopmode sealed-ownership.tex ); then
+  echo "FAILED: sealed-ownership paper build" >&2
   fail=1
 fi
 

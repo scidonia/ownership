@@ -516,6 +516,16 @@ def State.OK (s : State) : Prop :=
       c.alloc = s.chain.alloc ∧ c.lo = s.chain.lo ∧ c.hi = s.chain.hi ∧
       c.q = s.chain.q ∧ c.ceiling = s.chain.ceiling
 
+theorem State.OK.world_top {s : State} (h : s.OK) : s.world.TopInv := h.1.1
+
+theorem State.OK.world_wf {s : State} (h : s.OK) : s.world.WellFormed := h.1.1.1
+
+theorem State.OK.world_history {s : State} (h : s.OK) : Ctx.HistoryOK s.world.ctx :=
+  h.1.1.2
+
+theorem State.OK.world_storage {s : State} (h : s.OK) : s.world.StorageMatches :=
+  h.world_wf.2.2
+
 private def initialLeaf : Leaf :=
   { id := ⟨1⟩, alloc := ⟨0⟩, lo := 0, hi := 64, ordered := by decide,
     q := 64, pos := by decide, ceiling := .readWrite, state := .active }

@@ -184,4 +184,24 @@ succeeds, restoring `⟨1⟩`. -/
 #guard (fullyReturned.world.ctx.loans.loans.length == 0)
 #guard (fullyReturned.chain.toLoans.length == 0)
 
+/-! ### The missing-storage diagnostic -/
+
+/-- The 64-byte context with the chain unchanged, but no backing heap. -/
+def noStorageWorld : World := { uWorld with heaps := fun _ => none }
+
+def noStorageState : Discipline.State :=
+  { Discipline.initialState with world := noStorageWorld }
+
+/-- `State.OK` rejects the context-without-storage state: the integrated
+invariant includes `World.WellFormed`, hence storage agreement. -/
+example : ¬ Discipline.State.OK noStorageState := by
+  intro h
+  have hfind : noStorageWorld.ctx.findOwner? ⟨0⟩ = some Cap.uOwner := by
+    change uWorld.ctx.findOwner? ⟨0⟩ = some Cap.uOwner
+    simp [uWorld, uOwner, Ctx.findOwner?, Owner.init]
+  obtain ⟨b, hb, _⟩ := h.world_storage ⟨0⟩ Cap.uOwner hfind
+  have hb' : (none : Option Backend) = some b := by
+    simpa [noStorageState, noStorageWorld] using hb
+  cases hb'
+
 end CapRealization
