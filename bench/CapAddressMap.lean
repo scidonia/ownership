@@ -37,3 +37,12 @@ live window and an out-of-window offset.
       m.lookup? ⟨9⟩ == some { base := 16384, len := 8 } &&
         m.lookup? ⟨0⟩ == some window0 && m.lookup? ⟨3⟩ == some window3
   | none => false
+
+/-! ### A command list that targets one allocation -/
+
+#guard (Integrated.State.run twoAllocState exampleRun).isSome
+#guard (match Integrated.State.run twoAllocState exampleRun with
+  | some s' =>
+      s'.read? ⟨0⟩ 0 == some 11 && s'.read? ⟨0⟩ 63 == some 12 &&
+        s'.snapshot ⟨3⟩ == some (List.replicate 32 0)
+  | none => false)

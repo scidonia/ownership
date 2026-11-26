@@ -19,10 +19,11 @@ live allocation list, and a read-only integrated state projection for composed
 proofs; the constructor, invariant field and mutations remain sealed.
 
 What is proved is the bookkeeping boundary: every sealed state carries the
-integrated invariant, and a run reaches the outside only through accepted
-commands. The state is pure data, so a copied sealed value shares its
-representation; the execution-edge claims are listed with their status in
-`boundaryClaims` rather than asserted.
+integrated invariant, a run reaches the outside only through accepted
+commands, and an accepted run frames every allocation it does not target. The
+state is pure data, so a copied sealed value shares its representation; the
+execution-edge claims are listed with their status in `boundaryClaims` rather
+than asserted.
 -/
 import Cap.Integrated
 
@@ -47,6 +48,17 @@ abbrev run (s : Sealed) (cmds : List Integrated.Cmd) : Except String Sealed :=
 
 /-- Every sealed state carries the integrated invariant. -/
 abbrev invariant := Integrated.Sealed.invariant
+
+/-- What an accepted sealed run leaves alone for an allocation no command
+targets: the same component, bytes and `Storage` certificate. -/
+abbrev RunFrame (s s' : Sealed) (b : AllocId) : Prop :=
+  Integrated.Sealed.RunFrame s s' b
+
+/-- An accepted sealed run frames every allocation no command targets. -/
+abbrev run_frames_other {s s' : Sealed} {cmds : List Integrated.Cmd}
+    (h : s.run cmds = .ok s') {b : AllocId}
+    (hmiss : ∀ c ∈ cmds, c.allocId ≠ b) : RunFrame s s' b :=
+  Integrated.Sealed.run_frames_other h hmiss
 
 /-- The live allocation identifiers. -/
 abbrev allocations (s : Sealed) : List AllocId := Integrated.Sealed.allocations s
@@ -130,6 +142,7 @@ are runtime contracts, not theorems of this model. -/
 def boundaryClaims : List (String × TrustLevel) :=
   [ ("the integrated checker's accepted command list is executed exactly", .proved),
     ("an accepted run preserves the integrated invariant", .proved),
+    ("an accepted run frames every allocation no command targets", .proved),
     ("the sealed interface observes only snapshots, reads, fragments, retired names, obligations and a read-only integrated state; its constructor, invariant field and mutations remain sealed", .proved),
     ("the C runtime performs the same store trace", .runtimeContract "A-perf"),
     ("counted references correspond to physical reference counts", .runtimeContract "A-count"),
@@ -143,6 +156,7 @@ theorem boundary_no_physical_proof :
     ∀ c ∈ boundaryClaims, c.2 = .proved → c.1 ∈
       ["the integrated checker's accepted command list is executed exactly",
        "an accepted run preserves the integrated invariant",
+       "an accepted run frames every allocation no command targets",
        "the sealed interface observes only snapshots, reads, fragments, retired names, obligations and a read-only integrated state; its constructor, invariant field and mutations remain sealed"] := by
   decide
 

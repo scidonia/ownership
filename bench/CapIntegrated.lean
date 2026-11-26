@@ -343,3 +343,34 @@ private def lifecycleFrac : Sealed :=
 #guard lifecycleFrac.authority? ⟨0⟩ ⟨5⟩ |>.isSome
 #guard (lifecycleFrac.write ⟨0⟩ ⟨4⟩ 0 7).isOk = false
 #guard (lifecycleFrac.reconstruct ⟨0⟩ ⟨3⟩).isOk
+
+/-! ### A command list that targets one allocation -/
+
+/-- The two-allocation fixture: the lifecycle's output plus the second 32-byte
+allocation written through its root. -/
+private def twoAllocRunStart : Sealed :=
+  match lifecycle64ThenAlloc with
+  | .ok s => s
+  | .error _ => Sealed.initial64
+
+/-- A command list that writes only the second allocation. -/
+private def secondAllocRunCmds : List Cmd := [.write ⟨1⟩ ⟨10⟩ 31 21]
+
+#guard (twoAllocRunStart.run secondAllocRunCmds).isOk
+#guard (match twoAllocRunStart.run secondAllocRunCmds with
+  | .ok s =>
+      s.snapshot ⟨0⟩ == some Reconstruction.firstSnapshot &&
+        s.read? ⟨1⟩ 31 == some 21 && s.read? ⟨1⟩ 0 == some 5 &&
+        decide (s.allocations = [⟨1⟩, ⟨0⟩])
+  | .error _ => false)
+
+/- The frame is not vacuous: a list that targets the first allocation does
+change it, so the untargeted hypothesis is what carries the frame. -/
+private def firstAllocRunCmds : List Cmd := [.write ⟨0⟩ ⟨1⟩ 0 33]
+
+#guard (twoAllocRunStart.run firstAllocRunCmds).isOk
+#guard (match twoAllocRunStart.run firstAllocRunCmds with
+  | .ok s => s.read? ⟨0⟩ 0 == some 33
+  | .error _ => false)
+#guard (twoAllocRunStart.run firstAllocRunCmds).toOption.map
+  (fun s => s.snapshot ⟨0⟩) != some (some Reconstruction.firstSnapshot)

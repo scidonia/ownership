@@ -1211,9 +1211,11 @@ every other allocation's full component and \texttt{Storage} certificate
 (\texttt{WriteFrame}, with \texttt{WriteFrame.rel\_write} adding an address map's
 windows), and the integrated invariant; \texttt{findRanked\_twice}
 returns a successor satisfying the same preconditions, so the two calls compose
-without manual precondition reconstruction. What remains is the world-based
-sealed runner, a compiled demonstration, and a frame law over arbitrary sealed
-command lists.
+without manual precondition reconstruction. The command-list frame is proved at
+the integrated boundary as well (\texttt{Sealed.run\_frames\_other}): any
+allocation no command of the list targets keeps its component, bytes and
+\texttt{Storage} certificate. What remains is the world-based sealed runner and a
+compiled demonstration.
 
 \section{A compiled store composed with an authorized write}\label{sec:kernel}
 
@@ -1322,8 +1324,8 @@ allocation and does not consult it, so there is no single integrated
 world-and-restoration execution path; threading the world-based sealed
 \texttt{UFRunner} through the two-find sequence; one uniform disposal rule as a
 predicate with a checked free that is not yet wired into the unified language
-(R4); the complete certified 64-byte trace (R5); a frame law over arbitrary
-sealed command lists; kernel-level address assignment across multiple
+(R4); the complete certified 64-byte trace (R5); kernel-level address assignment
+across multiple
 allocations (the state-level \file{Cap/AddressMap.lean} model is separate and not
 connected to the bridge), a semantic justification of the IR projection, and the
 ABI and installation of the verified kernel; hidden-index elaboration for

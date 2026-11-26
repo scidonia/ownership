@@ -897,6 +897,21 @@ theorem Rel.write {m : Map} {s s' : Integrated.State} {a : AllocId}
     have hfind := Integrated.State.exec_frames_other h hb
     exact ⟨hfind, by rw [Integrated.State.snapshot, Integrated.State.snapshot, hfind]⟩
 
+/-- A command list that targets no window of an unrelated allocation preserves
+the map's coverage of it and its bytes: the state still holds a component of the
+window's recorded length, and its snapshot is unchanged. -/
+theorem Rel.run_other {m : Map} {s s' : Integrated.State}
+    {cmds : List Integrated.Cmd} (hrel : Rel m s)
+    (h : Integrated.State.run s cmds = some s') {b : AllocId}
+    (hmiss : ∀ c ∈ cmds, c.allocId ≠ b) :
+    (∀ w, m.lookup? b = some w →
+        ∃ st, s'.find? b = some st ∧ st.len = w.len) ∧
+      s'.snapshot b = s.snapshot b := by
+  refine ⟨?_, Integrated.State.run_snapshot_other h hmiss⟩
+  intro w hw
+  obtain ⟨st, hst, hlen⟩ := hrel.2.2.1 b w hw
+  exact ⟨st, by rw [Integrated.State.run_frames_other h hmiss]; exact hst, hlen⟩
+
 /-! ### The two-allocation fixture -/
 
 def window0 : Window := { base := 4096, len := 64 }
@@ -1017,6 +1032,45 @@ theorem example_window_addr :
     twoAllocMap.addr? ⟨0⟩ 5 = some 4101 := by
   rw [Map.addr?_some_of_within twoAllocMap_lookup0 (by simp [window0])]
   simp [window0]
+
+/-- The `⟨3⟩` component of the two-allocation fixture is a fresh whole
+allocation. -/
+theorem twoAlloc_find3 :
+    twoAllocState.find? ⟨3⟩ =
+      some (Reconstruction.State.initial ⟨3⟩ 32 32 (by decide) ⟨4⟩ ⟨5⟩) := by
+  simp [twoAllocState, Integrated.State.find?, Integrated.findState?,
+    Reconstruction.State.initial]
+
+/-- A command list that targets only allocation `⟨0⟩`: two writes through its
+root capability. -/
+def exampleRun : List Integrated.Cmd :=
+  [ .write ⟨0⟩ ⟨1⟩ 0 11,
+    .write ⟨0⟩ ⟨1⟩ 63 12 ]
+
+/-- No command of the list targets allocation `⟨3⟩`. -/
+theorem exampleRun_untargeted :
+    ∀ c ∈ exampleRun, c.allocId ≠ (⟨3⟩ : AllocId) := by
+  intro c hc
+  simp only [exampleRun, List.mem_cons, List.not_mem_nil, or_false] at hc
+  rcases hc with rfl | rfl <;> decide
+
+/-- A command list that targets only `⟨0⟩` frames `⟨3⟩` across the whole run: its
+component, bytes and `Storage` certificate are unchanged, and the map still gives
+it a window of its recorded length. -/
+theorem example_run_other {s' : Integrated.State}
+    (h : Integrated.State.run twoAllocState exampleRun = some s') :
+    s'.find? ⟨3⟩ = twoAllocState.find? ⟨3⟩ ∧
+      s'.snapshot ⟨3⟩ = twoAllocState.snapshot ⟨3⟩ ∧
+      (∃ st, s'.find? ⟨3⟩ = some st ∧ st.Storage) ∧
+      (∀ w, twoAllocMap.lookup? ⟨3⟩ = some w →
+        ∃ st, s'.find? ⟨3⟩ = some st ∧ st.len = w.len) := by
+  have hframe := Integrated.State.run_frames_other h exampleRun_untargeted
+  have hrel := Rel.run_other twoAlloc_rel h exampleRun_untargeted
+  refine ⟨hframe, hrel.2, ?_, hrel.1⟩
+  have hstorage :
+      (Reconstruction.State.initial ⟨3⟩ 32 32 (by decide) ⟨4⟩ ⟨5⟩).Storage :=
+    Reconstruction.State.initial_storage ⟨3⟩ 32 32 (by decide) ⟨4⟩ ⟨5⟩
+  exact ⟨_, by rw [hframe, twoAlloc_find3], hstorage⟩
 
 theorem example_addr_lt :
     ∀ {a : AllocId} {off x : Nat}, twoAllocMap.addr? a off = some x → x < 2 ^ 64 :=

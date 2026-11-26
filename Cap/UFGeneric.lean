@@ -62,10 +62,12 @@ A single accepted write frames an unrelated allocation's full component, so that
 allocation's `Reconstruction.State` and its `Storage` certificate are exactly
 what they were, and where an address map relates to the state the map still
 covers the successor and the other allocation's window and bytes are unchanged.
-What remains is the *command-list* form of that frame — one law for a whole
-`State.run`, not a single write — and the compiled-bridge connection: the
+The command-list form of that frame is proved at the integrated boundary
+(`State.run_frames_other`, and `Sealed.run_frames_other` with its
+`Sealed.RunFrame`). What remains is the compiled-bridge connection: the
 address-map relation here is a logical window assignment, not a loader's
-assignment for the compiled kernel, and nothing in the bridge imports it.
+assignment for the compiled kernel, and nothing in the bridge imports it; the
+ABI, a loader and native execution are not claimed.
 -/
 import Cap.Sealed
 import Cap.AddressMap

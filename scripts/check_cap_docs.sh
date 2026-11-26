@@ -269,6 +269,15 @@ add|report/capability-report.tex|the frame of every other allocation's full comp
 add|report/capability-report.tex|are framed (\texttt{WriteFrame}
 add|paper/sealed-ownership.tex|frames every other allocation's full
 add|paper/sealed-ownership.tex|WriteFrame.rel\_write
+# The command-list frame: a whole accepted run leaves an untargeted allocation's
+# component, bytes and `Storage` certificate unchanged, and the address-map
+# relation carries that frame across a list. The compiled boundary stays open.
+add|AGENTS.md|State.run_frames_other
+add|AGENTS.md|Sealed.run_frames_other
+add|AGENTS.md|Rel.run_other
+add|docs/notes/cap-tutorial.md|State.run_frames_other
+add|docs/notes/cap-tutorial.md|Sealed.run_frames_other
+add|docs/notes/cap-tutorial.md|Rel.run_other
 ROWS
 
 if [ "$fail" -ne 0 ]; then

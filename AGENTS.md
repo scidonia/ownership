@@ -453,10 +453,11 @@
   successor `Precondition` and `findRanked_twice` runs two calls on an arbitrary
   forest without reconstructing preconditions. The byte representation caps
   `n ≤ 256` (`Precondition.fits`), and no large-scale performance is claimed.
-  What this layer does not supply is the *command-list* form of the frame — one
-  law for a whole `State.run`, not a single write — and the compiled-bridge
-  connection: the address-map relation is a logical window assignment, not a
-  loader's assignment for the compiled kernel.
+  The command-list form of that frame is supplied at the integrated boundary, so
+  an accepted run frames an untargeted allocation there as well. What this layer
+  does not supply is the compiled-bridge connection: the address-map relation is
+  a logical window assignment, not a loader's assignment for the compiled kernel,
+  and the ABI, a loader and native execution stay outside the model.
 - `Cap/UFIntegrated.lean` instantiates the general theorems on the five-node
   forest `[0,0,1,2,2]`. `ufStart_precondition` supplies the general
   preconditions; `ufFirst_spec` is `findRanked_spec` on the fixture, and
@@ -843,7 +844,11 @@ shows the certificate it would have to emit, not proof-producing elaboration.
   `free`); every command names its allocation, and `State.exec` refuses an
   absent one. `State.exec_inv` and `State.run_inv` preserve `State.Inv`;
   `State.exec_frames_other` shows that an accepted command leaves every other
-  allocation's lookup — and therefore its snapshot — unchanged. `State.free` is
+  allocation's lookup — and therefore its snapshot — unchanged, and
+  `State.run_frames_other` lifts that frame over a whole command list: a run
+  whose commands all avoid an allocation leaves its component lookup unchanged,
+  with `State.run_snapshot_other` and `State.run_storage_other` giving the bytes
+  and the `Storage` certificate directly. `State.free` is
   accepted only for a single whole active leaf with no outstanding return
   obligation, read structurally by `wholeActiveB_iff`, and it leaves both
   histories intact (`State.free_histories_intact`). `State.alloc` refuses an
@@ -861,8 +866,12 @@ shows the certificate it would have to emit, not proof-producing elaboration.
   command the state accepts produces a sealed successor
   (`Sealed.write_exists_of_exec`), which is what a capability-derived write uses.
   `Sealed.run` executes a whole command
-  list, `Sealed.lifecycle64` is the 64-byte borrow/split/write/reconstruct/return
-  cycle, `Sealed.reuseLifecycle` runs a second cycle on its output, and
+  list; `Sealed.run_ok_iff` identifies an accepted sealed run with the underlying
+  accepted `State.run`, and `Sealed.run_frames_other` returns a `Sealed.RunFrame`
+  for an allocation no command targets, so that allocation's component, bytes and
+  `Storage` certificate are unchanged. `Sealed.lifecycle64` is the 64-byte
+  borrow/split/write/reconstruct/return cycle, `Sealed.reuseLifecycle` runs a
+  second cycle on its output, and
   `Sealed.alloc` adds a second allocation. `bench/CapIntegrated.lean` exercises
   independent two-allocation borrowing, an independent sibling split while a
   loan is outstanding, the return order, the free guard and the refusal controls
@@ -882,8 +891,12 @@ shows the certificate it would have to emit, not proof-producing elaboration.
   preserve the relation; `Rel.write` frames every other allocation's lookup and
   snapshot, and `WriteFrame.rel_write` lifts that to a sealed write: an accepted
   `Sealed.write` preserves `Rel` and leaves an unrelated allocation's window and
-  bytes unchanged. The two-allocation fixture proves writing `⟨0⟩` leaves `⟨3⟩`'s
-  window and bytes unchanged, and `alloc_refuses_overlap` plus the fixture checks
+  bytes unchanged. `Rel.run_other` carries that frame across a whole command
+  list, and the fixture runs a two-command list (`exampleRun`) that targets only
+  `⟨0⟩`: `example_run_other` keeps `⟨3⟩`'s component, bytes and `Storage`
+  certificate and its window as they were. The two-allocation fixture proves
+  writing `⟨0⟩` leaves `⟨3⟩`'s window and bytes unchanged, and
+  `alloc_refuses_overlap` plus the fixture checks
   refuse overlapping, missing and out-of-window addresses. This is a logical
   window model only: it is not a loader's address assignment and is not wired
   into `llvm-bridge`.

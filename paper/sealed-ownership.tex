@@ -781,7 +781,7 @@ Checked language & Whole-run \lean{FullInv} preservation; per-write authority; b
 Indexed programs & Post-context and no-refusal theorems & Representation-sensitive operational client type \\
 Delegation & Retag budget lemma; rooted chain with derived holder and checked begin/end; world/chain correspondence; combined-invariant preservation & A single sealed world path carrying the reconstruction invariant \\
 Reconstruction & Checked spatial and fractional rules; reconstruction and restoration invariant with an ownership account over issued, retired and outstanding names; well-founded restoration dependency order with finite terminal realization; integrated sealed 64-byte lifecycle with a second cycle; persistent allocation and capability histories with reuse refusal & Consultation by the world split/join guard; concrete implementation \\
-Union-find & General sealed theorem (\lean{sealedFind\_spec}, \lean{findRanked\_twice}) over represented ranked forests, its two-find instance through the integrated sealed boundary, functional successor runner (\lean{PathRunner}), constructible forests (\lean{UFForest}), computable full-path certificates, exact write traces & World-based sealed runner; frame law over arbitrary sealed command lists; compiled demonstration \\
+Union-find & General sealed theorem (\lean{sealedFind\_spec}, \lean{findRanked\_twice}) over represented ranked forests, its two-find instance through the integrated sealed boundary, functional successor runner (\lean{PathRunner}), constructible forests (\lean{UFForest}), computable full-path certificates, exact write traces & World-based sealed runner; compiled demonstration \\
 Compiled kernel & clang-emitted \lean{store8} body with a bounded exact behaviour theorem; composed theorem for one authorized integrated write at one caller-supplied address window, with frame and post-state representation & Kernel-level address assignment across multiple allocations (\lean{Cap/AddressMap.lean} is a separate state-level model not connected to the bridge), semantic justification of the IR projection, ABI and installation of the verified body \\
 Marshalling & Round trips, range guards, representation and exact write trace & Concrete layout and ABI relation \\
 \bottomrule
@@ -991,8 +991,11 @@ same preconditions, so two finds compose without reconstructing premises.
 \lean{Cap/UFIntegrated.lean} is an instance of this theorem, running the two finds
 on the first call's returned state; \lean{Cap/UFReuseRunner.lean} supplies the
 functional successor runner and \lean{Cap/UFForest.lean} the ranked construction
-witness for built forests. What remains is the world-based sealed runner, a
-compiled demonstration, and a frame law over arbitrary sealed command lists.
+witness for built forests. The command-list frame is proved at the integrated
+boundary as well (\lean{Sealed.run\_frames\_other}, \lean{State.run\_frames\_other}):
+any allocation no command of the list targets keeps its component, bytes and
+\texttt{Storage} certificate. What remains is the world-based sealed runner and a
+compiled demonstration.
 
 \emph{World-guard integration (open).} The checked world's split, fractional
 split and join still test the allocation-wide loan exclusion. They therefore
@@ -1008,8 +1011,9 @@ representation-sensitive algorithms to authorized execution. Particular exact
 trace theorems already establish that connection for compression writes and
 marshalling. They do not justify arbitrary inhabitants of \lean{Cert}. The
 two-find certificate is a derived instance of the general sealed find, which
-lifts the single-write law over the compression path; a frame law over arbitrary
-sealed command lists is not proved.
+lifts the single-write law over the compression path; the frame law over
+arbitrary sealed command lists is proved separately at the integrated boundary,
+and the compiled boundary stays outside the model.
 
 \emph{Reusable clients.} The general sealed find returns a successor state that
 satisfies the same preconditions, so a second call reads the first call's state;

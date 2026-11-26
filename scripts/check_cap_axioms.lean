@@ -191,6 +191,8 @@ open Cap
 
 #print axioms Cap.Sealed.invariant
 #print axioms Cap.Sealed.run
+#print axioms Cap.Sealed.run_frames_other
+#print axioms Cap.boundary_no_physical_proof
 #print axioms Cap.Integrated.Sealed.run_invariant
 #print axioms Cap.Integrated.lifecycle64_snapshot_of_ok
 
@@ -215,6 +217,9 @@ open Cap
 #print axioms Cap.Integrated.State.exec_inv
 #print axioms Cap.Integrated.State.run_inv
 #print axioms Cap.Integrated.State.exec_frames_other
+#print axioms Cap.Integrated.State.run_frames_other
+#print axioms Cap.Integrated.State.run_snapshot_other
+#print axioms Cap.Integrated.State.run_storage_other
 #print axioms Cap.Integrated.State.checkRun_sound
 #print axioms Cap.Integrated.Prog.never_refuses
 #print axioms Cap.Integrated.Prog.finish_inv
@@ -222,6 +227,8 @@ open Cap
 #print axioms Cap.Integrated.Sealed.run
 #print axioms Cap.Integrated.Sealed.run_invariant
 #print axioms Cap.Integrated.lifecycle64_ok
+#print axioms Cap.Integrated.Sealed.run_ok_iff
+#print axioms Cap.Integrated.Sealed.run_frames_other
 #print axioms Cap.Integrated.lifecycle64_snapshot
 #print axioms Cap.Integrated.lifecycle64_authority
 #print axioms Cap.Integrated.lifecycle64_retired
@@ -233,6 +240,9 @@ open Cap
 #print axioms Cap.Integrated.lifecycleThenAlloc_ok
 #print axioms Cap.Integrated.lifecycleThenAlloc_snapshot
 #print axioms Cap.Integrated.lifecycleThenAlloc_authority
+#print axioms Cap.Integrated.secondAllocRun_ok
+#print axioms Cap.Integrated.secondAllocRun_frames
+#print axioms Cap.Integrated.secondAllocRun_observes
 #print axioms Cap.Integrated.lifecycle64Prog_no_refusal
 #print axioms Cap.Integrated.lifecycle64Prog_finish_inv
 
@@ -331,6 +341,8 @@ open Cap
 #print axioms Cap.AddressMap.Rel.alloc
 #print axioms Cap.AddressMap.Rel.free
 #print axioms Cap.AddressMap.Rel.write
+#print axioms Cap.AddressMap.Rel.run_other
+#print axioms Cap.AddressMap.example_run_other
 #print axioms Cap.AddressMap.twoAlloc_rel
 #print axioms Cap.AddressMap.example_write_other
 #print axioms Cap.AddressMap.example_window_addr

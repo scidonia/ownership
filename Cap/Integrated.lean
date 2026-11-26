@@ -823,6 +823,36 @@ def State.run : State → List Cmd → Option State
       | some s' => State.run s' cs
       | none => none
 
+/-- An accepted command list frames every allocation no command targets: the
+component lookup is unchanged across the whole run. -/
+theorem State.run_frames_other {s s' : State} {cmds : List Cmd}
+    (h : State.run s cmds = some s') {b : AllocId}
+    (hmiss : ∀ c ∈ cmds, c.allocId ≠ b) :
+    s'.find? b = s.find? b := by
+  have H : ∀ (s s' : State), (∀ c ∈ cmds, c.allocId ≠ b) →
+      State.run s cmds = some s' → s'.find? b = s.find? b := by
+    clear h hmiss s s'
+    induction cmds with
+    | nil =>
+        intro s s' hmiss h
+        simp only [State.run, Option.some.injEq] at h
+        subst s'
+        rfl
+    | cons c cs ih =>
+        intro s s' hmiss h
+        cases hexec : s.exec c with
+        | none =>
+            simp only [State.run, hexec] at h
+            simp at h
+        | some mid =>
+            simp only [State.run, hexec] at h
+            have hstep : mid.find? b = s.find? b :=
+              State.exec_frames_other hexec (Ne.symm (hmiss c (by simp)))
+            have hrest : ∀ d ∈ cs, d.allocId ≠ b :=
+              fun d hd => hmiss d (List.mem_cons_of_mem c hd)
+            exact (ih mid s' hrest h).trans hstep
+  exact H s s' hmiss h
+
 /-- An accepted run preserves the integrated invariant. -/
 theorem State.run_inv {s s' : State} {cmds : List Cmd}
     (h : State.run s cmds = some s') (hinv : s.Inv) : s'.Inv := by
@@ -940,6 +970,24 @@ def State.restoresOf (s : State) (a : AllocId) : List Reconstruction.Restore :=
   match s.find? a with
   | some st => st.restores
   | none => []
+
+/-- An accepted run frames every allocation no command targets: its bytes are
+unchanged. -/
+theorem State.run_snapshot_other {s s' : State} {cmds : List Cmd}
+    (h : State.run s cmds = some s') {b : AllocId}
+    (hmiss : ∀ c ∈ cmds, c.allocId ≠ b) :
+    s'.snapshot b = s.snapshot b := by
+  rw [State.snapshot, State.snapshot, State.run_frames_other h hmiss]
+
+/-- An accepted run leaves every allocation no command targets with exactly the
+`Storage` certificate it had: one exists in the successor precisely when one
+existed in the predecessor. -/
+theorem State.run_storage_other {s s' : State} {cmds : List Cmd}
+    (h : State.run s cmds = some s') {b : AllocId}
+    (hmiss : ∀ c ∈ cmds, c.allocId ≠ b) :
+    (∃ st, s'.find? b = some st ∧ st.Storage) ↔
+      (∃ st, s.find? b = some st ∧ st.Storage) := by
+  rw [State.run_frames_other h hmiss]
 
 /-! ### The sealed boundary -/
 
@@ -1093,6 +1141,33 @@ def Sealed.run (s : Sealed) (cmds : List Cmd) : Except String Sealed :=
   | some s' => .ok (mkSealed s' (State.run_inv h s.inv))
   | none => .error "run refused: a command was rejected by the checker"
 
+/-- An accepted sealed run is exactly the underlying state's accepted run: the
+sealed boundary runs `State.run` and returns the state it produced, so a caller
+may reason about a command list at either level. -/
+theorem Sealed.run_ok_iff (s : Sealed) (cmds : List Cmd) (s' : Sealed) :
+    s.run cmds = .ok s' ↔ State.run s.state cmds = some s'.state := by
+  unfold Sealed.run
+  split
+  · rename_i s0 hrun
+    constructor
+    · intro h
+      cases h
+      simpa [Sealed.state, openSealed, mkSealed] using hrun
+    · intro h
+      have hst : s0 = s'.state := Option.some.inj (hrun.symm.trans h)
+      have hstate : s' = mkSealed s0 (State.run_inv hrun s.inv) :=
+        Sealed.eq_of_state hst.symm
+      subst hstate
+      exact congrArg Except.ok (congrArg (mkSealed s0) (Subsingleton.elim _ _))
+  · rename_i hnone
+    constructor
+    · intro h
+      cases h
+    · intro h
+      simp only [Sealed.state, openSealed] at h hnone
+      rw [hnone] at h
+      simp at h
+
 /-- An accepted run's sealed result carries the integrated invariant. -/
 theorem Sealed.run_invariant {s s' : Sealed} {cmds : List Cmd}
     (h : s.run cmds = .ok s') : s'.s.Inv := s'.inv
@@ -1117,6 +1192,29 @@ def Sealed.retiredOf (s : Sealed) (a : AllocId) : List CapId :=
 /-- The outstanding return obligations of one allocation, most recent first. -/
 def Sealed.restoresOf (s : Sealed) (a : AllocId) : List Reconstruction.Restore :=
   (openSealed s).restoresOf a
+
+/-- What an accepted sealed command list leaves alone for an allocation no
+command targets: its component is the same `Reconstruction.State`, so its bytes
+and its `Storage` certificate are unchanged too. -/
+structure Sealed.RunFrame (s s' : Sealed) (b : AllocId) : Prop where
+  /-- The allocation's component is the same `Reconstruction.State`. -/
+  component : s'.state.find? b = s.state.find? b
+  /-- Its bytes are unchanged. -/
+  snapshot : s'.snapshot b = s.snapshot b
+  /-- Its `Storage` certificate holds exactly when it did before. -/
+  storage : (∃ st, s'.state.find? b = some st ∧ st.Storage) ↔
+    (∃ st, s.state.find? b = some st ∧ st.Storage)
+
+/-- An accepted sealed run frames every allocation no command targets. -/
+theorem Sealed.run_frames_other {s s' : Sealed} {cmds : List Cmd}
+    (h : s.run cmds = .ok s') {b : AllocId}
+    (hmiss : ∀ c ∈ cmds, c.allocId ≠ b) : Sealed.RunFrame s s' b := by
+  have hrun : State.run s.state cmds = some s'.state :=
+    (Sealed.run_ok_iff s cmds s').mp h
+  refine ⟨State.run_frames_other hrun hmiss, ?_, ?_⟩
+  · show s'.state.snapshot b = s.state.snapshot b
+    exact State.run_snapshot_other hrun hmiss
+  · exact State.run_storage_other hrun hmiss
 
 /-! ### The 64-byte lifecycle -/
 
@@ -1314,6 +1412,51 @@ theorem lifecycleThenAlloc_authority :
 /-- An accepted run carries the integrated invariant. -/
 theorem lifecycleThenAlloc_inv_of_ok {s' : Sealed}
     (_h : lifecycle64ThenAlloc = .ok s') : s'.s.Inv := s'.inv
+
+/-! ### A command list over two allocations -/
+
+/-- The two-allocation sealed state: the 64-byte lifecycle's output with the
+second 32-byte allocation added and its root written. -/
+def twoAllocSealed : Sealed :=
+  match lifecycle64ThenAlloc with
+  | .ok s => s
+  | .error _ => Sealed.initial64
+
+/-- A command list that writes only the second allocation. -/
+def secondAllocRun : List Cmd :=
+  [ .write ⟨1⟩ ⟨10⟩ 31 21 ]
+
+/-- No command of the list targets the first allocation. -/
+theorem secondAllocRun_untargeted :
+    ∀ c ∈ secondAllocRun, c.allocId ≠ (⟨0⟩ : AllocId) := by
+  intro c hc
+  simp only [secondAllocRun, List.mem_cons, List.not_mem_nil, or_false] at hc
+  rcases hc with rfl
+  decide
+
+/-- The two-command run on the second allocation is accepted. -/
+theorem secondAllocRun_ok : (twoAllocSealed.run secondAllocRun).isOk = true := by
+  decide
+
+/-- The run frames the first allocation: its component, bytes and `Storage`
+certificate are unchanged. -/
+theorem secondAllocRun_frames {s' : Sealed}
+    (h : twoAllocSealed.run secondAllocRun = .ok s') :
+    s'.state.find? ⟨0⟩ = twoAllocSealed.state.find? ⟨0⟩ ∧
+      s'.snapshot ⟨0⟩ = twoAllocSealed.snapshot ⟨0⟩ ∧
+      ((∃ st, s'.state.find? ⟨0⟩ = some st ∧ st.Storage) ↔
+        (∃ st, twoAllocSealed.state.find? ⟨0⟩ = some st ∧ st.Storage)) := by
+  have hf := Sealed.run_frames_other h secondAllocRun_untargeted
+  exact ⟨hf.component, hf.snapshot, hf.storage⟩
+
+/-- The first allocation still holds the lifecycle's bytes, the second holds the
+byte the list wrote and the byte it had, and both allocations are live. -/
+theorem secondAllocRun_observes :
+    (twoAllocSealed.run secondAllocRun).toOption.map
+        (fun s => (s.snapshot ⟨0⟩, s.read? ⟨1⟩ 31, s.read? ⟨1⟩ 0,
+          s.allocations)) =
+      some (some Reconstruction.firstSnapshot, some 21, some 5, [⟨1⟩, ⟨0⟩]) := by
+  decide
 
 /-! ### The typed lifecycle -/
 

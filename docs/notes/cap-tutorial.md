@@ -349,10 +349,13 @@ both allocations are live and distinct. The single-write frame is general:
 `WriteFrame` carries every other allocation's full `Reconstruction.State`, so
 `selfWrite_frames` shows a write to `⟨0⟩` changes its own bytes while leaving
 `⟨1⟩`'s component, bytes and `Storage` certificate exactly as they were, and
-`WriteFrame.rel_write` extends the same frame to an address map's windows. Not
-proved: the same frame over a whole sealed command list — the final arrays are
-kernel-checked computations of the actual run, not instances of a list-level
-derived write lemma.
+`WriteFrame.rel_write` extends the same frame to an address map's windows. The
+frame is general over a whole command list as well: `Sealed.run_frames_other`
+returns a `RunFrame` for any allocation no command targets, and
+`State.run_frames_other` is its state-level form, so an accepted run leaves that
+allocation's component, bytes and `Storage` certificate unchanged. The compiled
+boundary — the ABI, a loader's assignment and native execution — remains outside
+this model.
 
 ## 13. Backends: two implementations, one model (`Cap/Backend.lean`, `Cap/BackendArr.lean`)
 
@@ -388,18 +391,21 @@ same caveat.
   `(base, len)` windows, with disjointness, in-window address lookup and a
   `base + off < 2 ^ 64` bound. It relates to the integrated state, and
   allocation, free and write preserve that relation; a write frames every other
-  allocation's window and bytes, and `WriteFrame.rel_write` lifts that frame to
-  a sealed write. This is a logical model: no loader assigns these
+  allocation's window and bytes, `WriteFrame.rel_write` lifts that frame to a
+  sealed write, and `Rel.run_other` carries it across a whole command list. This
+  is a logical model: no loader assigns these
   windows and the map is not wired into `llvm-bridge`.
 - No in-place-update or compiled-performance claim anywhere in `Cap/`.
 - Union-find correctness is the general sealed theorem (`Cap/UFGeneric.lean`)
   instantiated on the five-node reuse fixture and the four-node write-discipline
   instance. The two-find reuse is proved on the functional model and, on that
   instance, through the integrated sealed boundary (`Cap/UFIntegrated.lean`). The
-  world-based sealed `UFRunner` is still not threaded, and no frame law over
-  sealed command lists is proved; a single accepted write is framed by
-  `WriteFrame`, including every unrelated allocation's full component and
-  `Storage` certificate.
+  world-based sealed `UFRunner` is still not threaded. A single accepted write is
+  framed by `WriteFrame`, including every unrelated allocation's full component
+  and `Storage` certificate, and a whole accepted command list is framed at the
+  integrated and sealed boundary for any allocation no command targets. The
+  compiled bridge, the ABI, a loader's assignment and native execution remain
+  unclaimed.
 - No C, ABI or physical ownership refinement. `llvm-bridge` proves one compiled
   store kernel's exact bounded behaviour and composes it with one authorized
   integrated byte write at a caller-supplied address window
