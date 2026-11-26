@@ -39,6 +39,7 @@ delegation invariant         Cap/Borrow.lean         chain base, detachment, ter
 delegation chain             Cap/Delegation.lean     rooted path, checked begin/end
 coupled chain state          Cap/Discipline.lean     world/chain correspondence
 sealed execution             Cap/Integrated.lean     checked multi-allocation commands
+address map                  Cap/AddressMap.lean     live allocations to concrete windows
 reconstruction forest        Cap/Reconstruction.lean subdivision rules, restoration obligations
 context                      Cap/Context.lean        many owners, allocation, disposal
 invariants                   Cap/Invariant.lean      leaves-within, well-formedness
@@ -344,9 +345,13 @@ framed as well: `ufSecondOther_invariant` re-exports the invariant for the whole
 state, and `ufSecondOwnershipFrames_of_ok` records that both allocations' current
 fragments are still whole active read--write fragments, no access name was
 retired, no return obligation was recorded, both heaps still hold their bytes, and
-both allocations are live and distinct. Not proved: a
-general per-write refinement or frame law over sealed command lists — the final
-arrays are kernel-checked computations of the actual run, not instances of a
+both allocations are live and distinct. The single-write frame is general:
+`WriteFrame` carries every other allocation's full `Reconstruction.State`, so
+`selfWrite_frames` shows a write to `⟨0⟩` changes its own bytes while leaving
+`⟨1⟩`'s component, bytes and `Storage` certificate exactly as they were, and
+`WriteFrame.rel_write` extends the same frame to an address map's windows. Not
+proved: the same frame over a whole sealed command list — the final arrays are
+kernel-checked computations of the actual run, not instances of a list-level
 derived write lemma.
 
 ## 13. Backends: two implementations, one model (`Cap/Backend.lean`, `Cap/BackendArr.lean`)
@@ -379,20 +384,31 @@ same caveat.
 - The sealed boundary is not module-enforced. The sealed path is the integrated
   multi-allocation reconstruction state; the world `UCmd` path is a separate
   theorem surface and is not routed through the forest.
+- `Cap/AddressMap.lean` is a finite map of live allocations to concrete
+  `(base, len)` windows, with disjointness, in-window address lookup and a
+  `base + off < 2 ^ 64` bound. It relates to the integrated state, and
+  allocation, free and write preserve that relation; a write frames every other
+  allocation's window and bytes, and `WriteFrame.rel_write` lifts that frame to
+  a sealed write. This is a logical model: no loader assigns these
+  windows and the map is not wired into `llvm-bridge`.
 - No in-place-update or compiled-performance claim anywhere in `Cap/`.
-- Union-find correctness is the concrete five-node reuse instance and the
-  four-node write-discipline instance, not the general theorem. The two-find
-  reuse is proved on the functional model and, on that instance, through the
-  integrated sealed boundary (`Cap/UFIntegrated.lean`). The world-based sealed
-  `UFRunner` is still not threaded, and no general per-write refinement or frame
-  law over sealed command lists is proved.
+- Union-find correctness is the general sealed theorem (`Cap/UFGeneric.lean`)
+  instantiated on the five-node reuse fixture and the four-node write-discipline
+  instance. The two-find reuse is proved on the functional model and, on that
+  instance, through the integrated sealed boundary (`Cap/UFIntegrated.lean`). The
+  world-based sealed `UFRunner` is still not threaded, and no frame law over
+  sealed command lists is proved; a single accepted write is framed by
+  `WriteFrame`, including every unrelated allocation's full component and
+  `Storage` certificate.
 - No C, ABI or physical ownership refinement. `llvm-bridge` proves one compiled
   store kernel's exact bounded behaviour and composes it with one authorized
   integrated byte write at a caller-supplied address window
   (`store8_exec_write_comp`, `sealed_store8_write_comp`). The representation
-  premise, a loader's address assignment for more than one allocation, the IR
-  projection, the ABI, native execution and live-handle replay remain stated
-  assumptions or trust obligations.
+  premise, a loader's address assignment for more than one allocation (the
+  finite map in `Cap/AddressMap.lean` relates live allocations to chosen windows;
+  it is not a loader and is not wired into the bridge), the IR projection, the
+  ABI, native execution and live-handle replay remain stated assumptions or trust
+  obligations.
 - Reuse prevention is a session-persistent allocation and capability history,
   not an allocation generation, a physical-slot check or a runtime reclamation
   rule. Replaying an old immutable sealed state is outside the model.

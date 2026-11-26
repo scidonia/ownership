@@ -435,22 +435,28 @@
   completes at `rank x + 1`, so an exhausted chase cannot masquerade as a root
   find. The single-write laws are `sealed_write_component`,
   `sealed_write_snapshot_self` and `sealed_write_frames`; the last preserves
-  `WriteFrame` — every other allocation's snapshot, and every allocation's
-  authority, retired names, return obligations and the live list.
-  `compressPath_spec` lifts the write law over the compression path, and
-  `sealedFind_spec` proves for an arbitrary represented ranked forest that the
-  find completes, the root is the functional root and a fixed point, the
-  post-buffer represents exactly `UF.compressAll p r (rootPath p fuel x)`, the
-  array stays ranked, acyclic and in range, `UF.Same` is preserved in both
-  directions, the successor keeps `Writable` and satisfies `State.Inv`, and the
-  unrelated observations are framed. `findRanked` is the wrapper whose fuel is
+  `WriteFrame`, whose `component` field says every other allocation's full
+  `Reconstruction.State` is unchanged, so its bytes, `Storage` certificate and
+  ownership observations all survive. `WriteFrame.component_other` exposes that
+  component equality through a lookup witness and `WriteFrame.storage_other` the
+  `Storage` equivalence; `WriteFrame.rel_write` adds that, where an address map
+  relates to the state, the relation survives the write and another allocation's
+  window and bytes are unchanged. `compressPath_spec` lifts the write law over
+  the compression path, and `sealedFind_spec` proves for an arbitrary represented
+  ranked forest that the find completes, the root is the functional root and a
+  fixed point, the post-buffer represents exactly
+  `UF.compressAll p r (rootPath p fuel x)`, the array stays ranked, acyclic and
+  in range, `UF.Same` is preserved in both directions, the successor keeps
+  `Writable` and satisfies `State.Inv`, and every unrelated allocation's full
+  component is framed. `findRanked` is the wrapper whose fuel is
   the rank bound rather than a caller choice; `findRanked_spec` returns the
   successor `Precondition` and `findRanked_twice` runs two calls on an arbitrary
   forest without reconstructing preconditions. The byte representation caps
   `n ≤ 256` (`Precondition.fits`), and no large-scale performance is claimed.
-  The one frame lemma this layer does not supply is the storage one: `WriteFrame`
-  frames observations, not a per-allocation `Storage` component, because the
-  sealed state exposes only the global `State.Inv`.
+  What this layer does not supply is the *command-list* form of the frame — one
+  law for a whole `State.run`, not a single write — and the compiled-bridge
+  connection: the address-map relation is a logical window assignment, not a
+  loader's assignment for the compiled kernel.
 - `Cap/UFIntegrated.lean` instantiates the general theorems on the five-node
   forest `[0,0,1,2,2]`. `ufStart_precondition` supplies the general
   preconditions; `ufFirst_spec` is `findRanked_spec` on the fixture, and
@@ -866,6 +872,21 @@ shows the certificate it would have to emit, not proof-producing elaboration.
   remain as separate theorems on their own state, and `World.splitAtChecked`
   keeps its allocation-wide loan guard. The sealed path is the integrated
   reconstruction language; it does not claim to route `World` through the forest.
+- `Cap/AddressMap.lean` is the finite address assignment for that integrated
+  state: `Window` is `[base, base + len)`, `Map` maps live `AllocId`s to windows,
+  and `Map.WellFormed` requires distinct keys, pairwise-disjoint windows and
+  `base + len ≤ 2 ^ 64`. `Rel`/`Covers` relate every live allocation to
+  exactly one window of its recorded length, `Map.within`/`addr?` produce an
+  address only for an in-window offset, and `Map.addr?_lt` bounds a produced
+  address by `2 ^ 64` without wraparound. `Rel.alloc`, `Rel.free` and `Rel.write`
+  preserve the relation; `Rel.write` frames every other allocation's lookup and
+  snapshot, and `WriteFrame.rel_write` lifts that to a sealed write: an accepted
+  `Sealed.write` preserves `Rel` and leaves an unrelated allocation's window and
+  bytes unchanged. The two-allocation fixture proves writing `⟨0⟩` leaves `⟨3⟩`'s
+  window and bytes unchanged, and `alloc_refuses_overlap` plus the fixture checks
+  refuse overlapping, missing and out-of-window addresses. This is a logical
+  window model only: it is not a loader's address assignment and is not wired
+  into `llvm-bridge`.
 - `Cap/Trace.lean` states trace properties of the checker language:
   `checkWorld_cons_ok` splits an accepted command list at its first command, and
   `checkWorld_write_guard` proves that a write at any position of an accepted

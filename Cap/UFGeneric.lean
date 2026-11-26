@@ -35,7 +35,9 @@ derives acceptance from it.
 `sealed_write_component`, `sealed_write_snapshot_self` and `sealed_write_frames`
 are the general single-write laws: an accepted `Sealed.write` replaces exactly
 that allocation's buffer with the byte update, keeps its length and every
-ownership record, and frames every other allocation's observations.
+ownership record, and frames every other allocation's full component state, so
+its bytes, authority, retired names and outstanding obligations are unchanged
+too, while every allocation's authority, retired names and obligations survive.
 `compressPath_spec` lifts the law over the whole compression path by induction,
 and `sealedFind_spec` combines it with the chase correspondence to establish, for
 an arbitrary represented ranked forest:
@@ -46,19 +48,27 @@ an arbitrary represented ranked forest:
   preserved in both directions;
 * the successor state satisfies `State.Inv` and `Writable`, so a second call's
   preconditions are the first call's conclusions (`findRanked_twice`);
-* every unrelated allocation's snapshot and every allocation's authority,
-  retired names and return obligations are framed (`WriteFrame`).
+* every unrelated allocation's full `Reconstruction.State` — hence its bytes,
+  `Storage` certificate and, where an address map relates to the state, its
+  window — and every allocation's authority, retired names and return
+  obligations are framed (`WriteFrame`, `WriteFrame.rel_write`).
 
 ### What is not claimed
 
 The representation is one byte per parent, so it needs `n ≤ 256`; the size limit
 is explicit in `Precondition.fits` and no large-scale union-find performance is
-claimed. The read interface permits unrestricted observation, as said above, and
-the ownership framing is per allocation observation: there is no theorem that a
-command list preserves an untouched allocation's `State.Storage` as a *separate*
-reusable invariant, because the sealed state only exposes the global invariant.
+claimed. The read interface permits unrestricted observation, as said above.
+A single accepted write frames an unrelated allocation's full component, so that
+allocation's `Reconstruction.State` and its `Storage` certificate are exactly
+what they were, and where an address map relates to the state the map still
+covers the successor and the other allocation's window and bytes are unchanged.
+What remains is the *command-list* form of that frame — one law for a whole
+`State.run`, not a single write — and the compiled-bridge connection: the
+address-map relation here is a logical window assignment, not a loader's
+assignment for the compiled kernel, and nothing in the bridge imports it.
 -/
 import Cap.Sealed
+import Cap.AddressMap
 import Cap.UFReuseRunner
 
 namespace Cap
@@ -374,14 +384,44 @@ theorem sealed_write_snapshot_self {s s' : Sealed} {a : AllocId} {id : CapId}
     rw [heap_write_lookup hheapw]
   rwa [sealed_snapshot_state, sealed_snapshot_state]
 
-/-- What one accepted sealed write leaves alone: every observation except the
-written allocation's bytes. -/
+/-- What one accepted sealed write leaves alone: every other allocation's full
+component state, every allocation's ownership observations, and the live list. -/
 structure WriteFrame (s s' : Sealed) (a : AllocId) : Prop where
-  snapshot_other : ∀ b : AllocId, b ≠ a → s'.snapshot b = s.snapshot b
+  /-- Every other allocation's component is unchanged: its byte heap, forest,
+  histories and outstanding obligations are the same `Reconstruction.State`. -/
+  component : ∀ b : AllocId, b ≠ a → s'.state.find? b = s.state.find? b
   authority : ∀ (b : AllocId) (id' : CapId), s'.authority? b id' = s.authority? b id'
   retired : ∀ b : AllocId, s'.retiredOf b = s.retiredOf b
   restores : ∀ b : AllocId, s'.restoresOf b = s.restoresOf b
   allocations : s'.allocations = s.allocations
+
+/-- The component frame fixes every other allocation's bytes: a snapshot is a
+projection of that allocation's component state. -/
+theorem WriteFrame.snapshot_other {s s' : Sealed} {a : AllocId}
+    (h : WriteFrame s s' a) (b : AllocId) (hb : b ≠ a) :
+    s'.snapshot b = s.snapshot b := by
+  rw [sealed_snapshot_state, sealed_snapshot_state]
+  simp only [Integrated.State.snapshot]
+  rw [h.component b hb]
+
+/-- An unrelated allocation's component, if present, is the same component after
+the write: its full `Reconstruction.State` is unchanged. -/
+theorem WriteFrame.component_other {s s' : Sealed} {a b : AllocId}
+    (h : WriteFrame s s' a) (hb : b ≠ a) {st : Reconstruction.State}
+    (hst : s.state.find? b = some st) : s'.state.find? b = some st := by
+  rw [h.component b hb, hst]
+
+/-- An unrelated allocation's `Storage` certificate is unchanged: the successor
+holds a component with `Storage` exactly when the predecessor does. -/
+theorem WriteFrame.storage_other {s s' : Sealed} {a b : AllocId}
+    (h : WriteFrame s s' a) (hb : b ≠ a) :
+    (∃ st, s'.state.find? b = some st ∧ st.Storage) ↔
+      (∃ st, s.state.find? b = some st ∧ st.Storage) := by
+  constructor
+  · rintro ⟨st, hst, hstorage⟩
+    exact ⟨st, by rw [← h.component b hb]; exact hst, hstorage⟩
+  · rintro ⟨st, hst, hstorage⟩
+    exact ⟨st, by rw [h.component b hb, hst], hstorage⟩
 
 /-- The identity frame. -/
 theorem WriteFrame.refl (s : Sealed) (a : AllocId) : WriteFrame s s a :=
@@ -391,19 +431,19 @@ theorem WriteFrame.refl (s : Sealed) (a : AllocId) : WriteFrame s s a :=
 theorem WriteFrame.trans {s₁ s₂ s₃ : Sealed} {a : AllocId}
     (h₁ : WriteFrame s₁ s₂ a) (h₂ : WriteFrame s₂ s₃ a) :
     WriteFrame s₁ s₃ a :=
-  ⟨fun b hb => (h₂.snapshot_other b hb).trans (h₁.snapshot_other b hb),
+  ⟨fun b hb => (h₂.component b hb).trans (h₁.component b hb),
    fun b id' => (h₂.authority b id').trans (h₁.authority b id'),
    fun b => (h₂.retired b).trans (h₁.retired b),
    fun b => (h₂.restores b).trans (h₁.restores b),
    h₂.allocations.trans h₁.allocations⟩
 
-/-- An accepted sealed write frames every other allocation's snapshot and every
-allocation's ownership observations. -/
+/-- An accepted sealed write frames every other allocation's full component
+state and every allocation's ownership observations. -/
 theorem sealed_write_frames {s s' : Sealed} {a : AllocId} {id : CapId}
     {i : Nat} {v : UInt8} (h : Sealed.write s a id i v = .ok s') :
     WriteFrame s s' a := by
   obtain ⟨st, st', hfa, hw, hfind'⟩ := sealed_write_component h
-  obtain ⟨c, h', -, -, -, -, -, -, hheapw, hst'⟩ :=
+  obtain ⟨_, _, _, _, _, _, _, _, _, hst'⟩ :=
     Reconstruction.State.write_component hw
   subst hst'
   have hexec : s.state.exec (.write a id i v) = some s'.state :=
@@ -412,9 +452,6 @@ theorem sealed_write_frames {s s' : Sealed} {a : AllocId} {id : CapId}
     simpa [Integrated.State.exec] using hexec
   have hframe : ∀ b, b ≠ a → s'.state.find? b = s.state.find? b :=
     fun b hb => Integrated.State.update_frames_other hupd hb
-  have hsnap : ∀ b, b ≠ a → s'.state.snapshot b = s.state.snapshot b := by
-    intro b hb
-    simp only [Integrated.State.snapshot, hframe b hb]
   have hauth : ∀ b id', s'.state.authority? b id' = s.state.authority? b id' := by
     intro b id'
     by_cases hb : b = a
@@ -434,10 +471,7 @@ theorem sealed_write_frames {s s' : Sealed} {a : AllocId} {id : CapId}
     · subst hb
       simp only [Integrated.State.restoresOf, hfind', hfa]
     · simp only [Integrated.State.restoresOf, hframe b hb]
-  refine ⟨?_, ?_, ?_, ?_, ?_⟩
-  · intro b hb
-    rw [sealed_snapshot_state, sealed_snapshot_state]
-    exact hsnap b hb
+  refine ⟨hframe, ?_, ?_, ?_, ?_⟩
   · intro b id'
     rw [sealed_authority_state, sealed_authority_state]
     exact hauth b id'
@@ -449,6 +483,28 @@ theorem sealed_write_frames {s s' : Sealed} {a : AllocId} {id : CapId}
     exact hres b
   · rw [sealed_allocations_state, sealed_allocations_state]
     exact Integrated.State.update_allocIds hupd
+
+/-- An accepted sealed write preserves the address map's relation to the state
+and leaves an unrelated allocation's window and bytes unchanged: the map still
+names a window of that allocation's length, and its snapshot is the same. -/
+theorem WriteFrame.rel_write {m : AddressMap.Map} {s s' : Sealed} {a : AllocId}
+    {id : CapId} {i : Nat} {v : UInt8} (h : Sealed.write s a id i v = .ok s')
+    (hrel : AddressMap.Rel m s.state) :
+    AddressMap.Rel m s'.state ∧ WriteFrame s s' a ∧
+      ∀ (b : AllocId) (w : AddressMap.Window), b ≠ a → m.lookup? b = some w →
+        (∃ st, s'.state.find? b = some st ∧ st.len = w.len) ∧
+          s'.snapshot b = s.snapshot b := by
+  have hexec : s.state.exec (.write a id i v) = some s'.state :=
+    (Integrated.Sealed.write_ok_iff s a id i v s').mp h
+  have hrelw := AddressMap.Rel.write hrel hexec
+  have hrel' : AddressMap.Rel m s'.state := hrelw.1
+  have hcovLen : ∀ (x : AllocId) (w : AddressMap.Window), m.lookup? x = some w →
+      ∃ st, s'.state.find? x = some st ∧ st.len = w.len := hrel'.2.2.1
+  have hframe : WriteFrame s s' a := sealed_write_frames h
+  refine ⟨hrel', hframe, ?_⟩
+  intro b w hb hw
+  obtain ⟨st, hst, hlen⟩ := hcovLen b w hw
+  exact ⟨⟨st, hst, hlen⟩, hframe.snapshot_other b hb⟩
 
 namespace UFGeneric
 
@@ -796,8 +852,8 @@ theorem decode_set {bs : List UInt8} {i v : Nat} (hiv : i < bs.length)
   rw [List.map_set, hto]
 
 /-- Each sealed compression step updates exactly one represented byte and frames
-everything else, so the whole path compression is the functional
-`UF.compressAll`. -/
+every other allocation's full component state, so the whole path compression is
+the functional `UF.compressAll`. -/
 theorem compressPath_spec {a : AllocId} {id : CapId} (root : Nat) :
     ∀ (ys : List Nat) (s : Sealed) (p : UF.Arr), Rep s a p →
       Writable s a id p.length → root < 256 →
@@ -908,8 +964,9 @@ theorem sealedFind_error_of_no_stops {s : Sealed} {a : AllocId} {id : CapId}
 whole-fragment write authority, a find at the rank-derived fuel completes and: the
 root is the functional root, the post-buffer is exactly the full-path
 compression, the represented array stays ranked, acyclic and within bounds, the
-partition is preserved, the successor keeps the write authority, the unrelated
-allocations are framed, and the returned state carries the integrated invariant. -/
+partition is preserved, the successor keeps the write authority, every unrelated
+allocation's full component state is framed, and the returned state carries the
+integrated invariant. -/
 theorem sealedFind_spec {s : Sealed} {a : AllocId} {id : CapId} {p : UF.Arr}
     {n : Nat} {rank : Nat → Nat} {x : Nat}
     (hrep : Rep s a p) (hlen : p.length = n) (hr : Ranked p n rank)
@@ -977,8 +1034,8 @@ theorem findRanked_eq (s : Sealed) (a : AllocId) (id : CapId) (rank : Nat → Na
     (x : Nat) : findRanked s a id rank x = sealedFind s a id (rank x + 1) x := rfl
 
 /-- One verified find returns the correct root, the functional compression, the
-preserved forest certificates and a successor that satisfies the same
-preconditions. -/
+preserved forest certificates, a `WriteFrame` for every unrelated allocation, and
+a successor that satisfies the same preconditions. -/
 theorem findRanked_spec {s : Sealed} {a : AllocId} {id : CapId} {p : UF.Arr}
     {n : Nat} {rank : Nat → Nat} {x : Nat}
     (hpre : Precondition s a id p n rank) (hx : x < n) :
@@ -996,7 +1053,8 @@ theorem findRanked_spec {s : Sealed} {a : AllocId} {id : CapId} {p : UF.Arr}
     ⟨hrep, hlen, hranked, hpre.fits, hauth⟩, hsame, hacyc, hinv, hframe⟩
 
 /-- Two verified finds on one arbitrary represented forest, the second consuming
-the first call's successor state with no manual precondition reconstruction. -/
+the first call's successor state with no manual precondition reconstruction; the
+composed frame covers every unrelated allocation across both calls. -/
 theorem findRanked_twice {s : Sealed} {a : AllocId} {id : CapId} {p : UF.Arr}
     {n : Nat} {rank : Nat → Nat} {x₁ x₂ : Nat}
     (hpre : Precondition s a id p n rank) (hx₁ : x₁ < n) (hx₂ : x₂ < n) :

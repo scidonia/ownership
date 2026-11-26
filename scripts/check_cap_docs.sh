@@ -245,12 +245,30 @@ add|report/cap-tutorial.tex|The LaTeX outputs were not rebuilt at this revision
 add|report/capability-report.tex|not a structural restatement of the forest
 add|report/capability-report.tex|Cap/UFIntegrated.lean} runs the two calls
 add|report/capability-report.tex|A compiled store composed with an authorized write
-add|report/capability-report.tex|The LaTeX outputs were not rebuilt at this revision
+add|report/capability-report.tex|The LaTeX outputs are rebuilt from these sources at this revision
 add|paper/sealed-ownership.tex|its invariant includes an ownership account over issued
-add|paper/sealed-ownership.tex|Two full-path union-find finds run through that sealed boundary
+add|paper/sealed-ownership.tex|general sealed union-find theorem with its two-find instance
 add|paper/sealed-ownership.tex|One instance of the schema is proved for a single authorized byte write
-add|paper/sealed-ownership.tex|The LaTeX outputs were not rebuilt
+add|paper/sealed-ownership.tex|The LaTeX outputs are rebuilt from these sources
 add|paper/sealed-ownership.tex|No full C/ABI refinement and no physical ownership refinement is claimed
+# The finite address-map relation is a model layer, not a loader assignment.
+add|AGENTS.md|Cap/AddressMap.lean
+add|AGENTS.md|finite address assignment for that integrated
+add|docs/notes/cap-tutorial.md|with disjointness, in-window address lookup
+add|docs/notes/cap-tutorial.md|live allocations to concrete windows
+# An accepted sealed write frames the unrelated allocation's full component,
+# its storage certificate and any address-map window, not only its snapshot.
+add|AGENTS.md|WriteFrame.component_other
+add|AGENTS.md|lifts that to a sealed write
+add|docs/notes/cap-tutorial.md|single-write frame
+add|docs/notes/cap-tutorial.md|every unrelated allocation's full component
+add|docs/notes/cap-tutorial.md|lifts that frame to a sealed write
+add|report/cap-tutorial.tex|single-write frame
+add|report/cap-tutorial.tex|WriteFrame.rel\_write
+add|report/capability-report.tex|the frame of every other allocation's full component
+add|report/capability-report.tex|are framed (\texttt{WriteFrame}
+add|paper/sealed-ownership.tex|frames every other allocation's full
+add|paper/sealed-ownership.tex|WriteFrame.rel\_write
 ROWS
 
 if [ "$fail" -ne 0 ]; then

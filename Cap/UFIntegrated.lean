@@ -21,10 +21,12 @@ second call is not a rebuild from the origin.
 
 Read evidence here is existence and bounds only: `Sealed.read?` is the heap's
 index read. Write evidence is the whole-share fragment (`UFGeneric.Writable`), which is
-what makes each sealed write accepted. Framing is per allocation observation:
-`WriteFrame` preserves the unrelated allocation's snapshot and every allocation's
-authority, retired names and return obligations; the global `State.Inv` is
-re-exported by the boundary rather than derived per untouched allocation.
+what makes each sealed write accepted. `WriteFrame` preserves every unrelated
+allocation's full component state — hence its `Storage` certificate, bytes and
+any address-map window — and every allocation's authority, retired names and
+return obligations; the global `State.Inv` is re-exported by the boundary, and
+the per-write component frame is what carries the untouched allocation's storage
+across a call.
 -/
 import Cap.UFGeneric
 
@@ -380,6 +382,51 @@ theorem ufSecondOther_frames :
     ufSecondOther.toOption.map (fun p =>
       (p.2.snapshot ⟨0⟩, p.2.snapshot ⟨1⟩, p.2.allocations)) =
       some (some [0, 0, 0, 0, 0], some [5, 0, 0], [⟨1⟩, ⟨0⟩]) := by decide
+
+/-! ### The single-write frame, concretely -/
+
+/-- One write to allocation `⟨0⟩` of the two-allocation state, for the frame
+control. -/
+def selfWrite : Except String Sealed := ufStartWithOther.write ⟨0⟩ ⟨1⟩ 4 0
+
+/-- The starting state's bytes: the parent allocation is `[0,0,1,2,2]` and the
+unrelated allocation is `[5,0,0]`. -/
+theorem ufStartWithOther_snapshot0 :
+    ufStartWithOther.snapshot ⟨0⟩ = some [0, 0, 1, 2, 2] := by decide
+
+theorem ufStartWithOther_snapshot1 :
+    ufStartWithOther.snapshot ⟨1⟩ = some [5, 0, 0] := by decide
+
+/-- The write's bytes: allocation `⟨0⟩` changes at offset 4 to `0`, and
+allocation `⟨1⟩` keeps `[5, 0, 0]`. -/
+theorem selfWrite_snapshot_option :
+    (ufStartWithOther.write ⟨0⟩ ⟨1⟩ 4 0).toOption.map
+        (fun s => (s.snapshot ⟨0⟩, s.snapshot ⟨1⟩)) =
+      some (some [0, 0, 1, 2, 0], some [5, 0, 0]) := by decide
+
+/-- The frame control: the write changes allocation `⟨0⟩`'s own bytes, leaves
+allocation `⟨1⟩`'s full component state and bytes exactly as they were, and
+therefore leaves its `Storage` certificate in place. -/
+theorem selfWrite_frames {s' : Sealed}
+    (h : ufStartWithOther.write ⟨0⟩ ⟨1⟩ 4 0 = .ok s') :
+    s'.state.find? ⟨1⟩ = ufStartWithOther.state.find? ⟨1⟩ ∧
+      s'.snapshot ⟨1⟩ = ufStartWithOther.snapshot ⟨1⟩ ∧
+      s'.snapshot ⟨0⟩ = some [0, 0, 1, 2, 0] ∧
+      s'.snapshot ⟨0⟩ ≠ ufStartWithOther.snapshot ⟨0⟩ ∧
+      ((∃ st, s'.state.find? ⟨1⟩ = some st ∧ st.Storage) ↔
+        (∃ st, ufStartWithOther.state.find? ⟨1⟩ = some st ∧ st.Storage)) := by
+  have hframe : WriteFrame ufStartWithOther s' ⟨0⟩ := sealed_write_frames h
+  have hself : s'.snapshot ⟨0⟩ = some [0, 0, 1, 2, 0] := by
+    have hc := selfWrite_snapshot_option
+    rw [h] at hc
+    change some (s'.snapshot ⟨0⟩, s'.snapshot ⟨1⟩) =
+      some (some [0, 0, 1, 2, 0], some [5, 0, 0]) at hc
+    exact congrArg Prod.fst (Option.some.inj hc)
+  refine ⟨hframe.component ⟨1⟩ (by decide),
+    hframe.snapshot_other ⟨1⟩ (by decide), hself, ?_, ?_⟩
+  · rw [hself, ufStartWithOther_snapshot0]
+    decide
+  · exact WriteFrame.storage_other hframe (by decide)
 
 /-- The whole `[0,5)` read--write fragment of the parent allocation. -/
 def wholeParent : Reconstruction.Fragment :=

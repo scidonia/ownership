@@ -69,7 +69,7 @@
 \large Implementation report, with examples\\[4pt]
 \normalsize separate from, and not a claim of, the ITP manuscript}
 \author{Gavin Mendel-Gleason}
-\date{15 November 2026}
+\date{26 November 2026}
 
 \begin{document}
 \maketitle
@@ -125,7 +125,11 @@ Module & Content \\
 \file{Cap/Reconstruction.lean} & borrowed subdivision and reconstruction obligations \\
 \file{Cap/Integrated.lean} & integrated multi-allocation sealed execution \\
 \file{Cap/UFReuse.lean} & reusable two-find compression on the functional model \\
-\file{Cap/UFIntegrated.lean} & two full-path finds through the integrated sealed boundary \\
+\file{Cap/UFGeneric.lean} & general sealed union-find theorem and reusable find \\
+\file{Cap/UFReuseRunner.lean} & state-threaded functional union-find successor runner \\
+\file{Cap/UFForest.lean} & ranked-forest construction witness for built forests \\
+\file{Cap/UFIntegrated.lean} & two-find instance of the general sealed theorem \\
+\file{Cap/AddressMap.lean} & state-level finite windows map; not connected to the bridge \\
 \file{llvm-bridge/} & compiled-C store kernel and its composition with an authorized write \\
 \file{Cap/FullInv.lean} & the combined invariant and its preservation \\
 \file{Cap/Bytes.lean} & reference byte heap \\
@@ -155,8 +159,8 @@ R2 & Access-capability ids separated from internal split-node provenance; \textt
 R3 & Delegation by retagging is the borrowed-authority mechanism: a borrow retags the active leaf to a distinct borrower and records a loan with its chain base, a return retags the borrower back and refuses while a descendant loan is live, and \texttt{World.BorrowOK} carries distinct names, issuance and liveness, the recorded base, global lender detachment, active-terminal-or-delegated authority, adjacent-edge agreement and issued-order monotonicity. \texttt{World.checkWorld\_fullInv} preserves it; \texttt{World.delegationChains\_ok} proves the world/chain correspondence under the separate \texttt{World.LoansChainOrderOK} hypothesis. \\
 R4 & \file{Cap/Disposal.lean}: one \texttt{Legal} predicate (entitlement, coverage, reconstructed root, empty loans) and a checked \texttt{free?}; not yet a command of the unified language. \\
 R5 & Not done: the complete split/borrow/fill/read/rejoin/restore/snapshot/free trace. \\
-G7 & \file{Cap/UFReuse.lean}: two full-path finds on the functional model, \texttt{[0,0,1,2,2]} from node 3 to \texttt{[0,0,0,0,2]} then from node 4 to \texttt{[0,0,0,0,0]}, with the first output's ranked-forest witness admitting the second operation as a certificate rather than a restated array. \file{Cap/UFIntegrated.lean} now runs the same two calls through the integrated sealed boundary on the first call's returned state, writing through the whole-share capability and re-exporting the integrated invariant; the world-based \texttt{UFRunner} is still not threaded. \\
-Accounting & \texttt{Reconstruction.State.Inv} now includes the ownership account \texttt{State.Accounts}, which relates the forest to \texttt{issued}, \texttt{retired} and \texttt{restores}: current authority-node identities, issuance coverage, retirement, dormant lenders, restoration realization, resource agreement and nested-obligation agreement. The integrated invariant requires the session-persistent allocation and capability histories, and \texttt{free} leaves both intact; \texttt{State.alloc} refuses an allocation identifier or an initial capability name that was ever issued, so a freed allocation identifier cannot be reissued and an old capability cannot authorize a replacement. \\
+G7 & \file{Cap/UFGeneric.lean}: general sealed union-find. For any represented ranked forest with $n\le256$ and whole-fragment write authority, \texttt{sealedFind\_spec} proves the returned root is the functional root, the post-buffer is exactly the full-path compression, the forest stays bounded, ranked, acyclic and partition-preserving, write authority is retained, every other allocation's full component and \texttt{Storage} certificate are framed (\texttt{WriteFrame}, with \texttt{WriteFrame.rel\_write} adding an address map's windows), and the integrated invariant survives; \texttt{findRanked} derives fuel $\texttt{rank}\,x+1$, and \texttt{findRanked\_twice} returns a successor satisfying the same preconditions. The bounded chase is explicit: \texttt{chase?\_none\_iff} makes exhaustion a refusal (\texttt{sealedFind\_error\_of\_no\_stops}), never a root. \file{Cap/UFReuseRunner.lean} threads a functional successor, \file{Cap/UFForest.lean} supplies the built-forest certificate, and \file{Cap/UFIntegrated.lean} is the two-find instance through the sealed boundary; the world-based \texttt{UFRunner} is still not threaded. \\
+Accounting & \texttt{Reconstruction.State.Inv} now includes the ownership account \texttt{State.Accounts}, which relates the forest to \texttt{issued}, \texttt{retired} and \texttt{restores}: current authority-node identities, issuance coverage, retirement, dormant lenders, restoration realization, resource agreement, restoration order, finite terminal realization and nested-obligation agreement. The integrated invariant requires the session-persistent allocation and capability histories, and \texttt{free} leaves both intact; \texttt{State.alloc} refuses an allocation identifier or an initial capability name that was ever issued, so a freed allocation identifier cannot be reissued and an old capability cannot authorize a replacement. \\
 Kernel & \file{llvm-bridge/}: clang's emitted body for one-byte \texttt{store8} is proved to have exactly the reference store's bounded outcome, and the composed theorem relates one accepted integrated write to that run at a caller-supplied address window, preserving the post-state's representation, the frame and the integrated invariant. The address assignment, IR projection, ABI and native execution remain stated assumptions. \\
 Reconstruction & \file{Cap/Reconstruction.lean} records checked spatial and fractional subdivision rules, a reconstruction operation and restoration obligations, each preserving the reconstruction invariant including the ownership account; \file{Cap/Integrated.lean} lifts it to a multi-allocation state and \file{Cap/Sealed.lean} re-exports the integrated sealed boundary, whose invariant includes each component's account and storage agreement. The world \texttt{UCmd} split/join guard remains allocation-wide. \\
 Validation & \texttt{scripts/check\_cap\_controls.sh} requires each negative fixture to fail with its intended diagnostic; \texttt{check\_all} runs it. \\
@@ -1180,8 +1184,12 @@ allocation's bytes: \texttt{decode} reads a buffer as a \texttt{UF.Arr},
 pointers with \texttt{Sealed.read?}, \texttt{compressPath} writes the root at
 each path node with \texttt{Sealed.write} through the whole-share capability, and
 \texttt{sealedFind} returns the root with the successor sealed state.
-\texttt{chase?\_eq} proves the sealed chase is the functional
-\texttt{UF.findRootF}/\texttt{rootPath} whenever the reads agree with the array.
+The chase is bounded: \texttt{chase?\_eq\_of\_stops} identifies a completed
+chase with \texttt{UF.findRootF}/\texttt{rootPath}, \texttt{chase?\_some\_spec}
+reads the same back from a successful result, and \texttt{chase?\_none\_iff}
+proves \texttt{none} is exactly the absence of a completed search, so exhaustion
+is a refusal (\texttt{sealedFind\_error\_of\_no\_stops}) rather than a root;
+\texttt{findRanked} derives the fuel $\texttt{rank}\,x+1$ from the rank.
 The first find from node 3 leaves \texttt{[0,0,0,0,2]}; the second, on the
 returned state from node 4, leaves \texttt{[0,0,0,0,0]}; a fresh find from node 4
 on the start state instead leaves \texttt{[0,0,0,2,0]}
@@ -1192,9 +1200,20 @@ two-allocation variant is framed as well, with
 and \texttt{ufSecondOwnershipFrames\_of\_ok} recording that both allocations'
 current fragments are still whole active read--write fragments, no access name
 was retired, no return obligation was recorded, both heaps still hold their
-bytes, and both allocations are live and distinct. Not proved: a general
-per-write refinement or frame law over sealed command lists; the final arrays are
-kernel-checked computations of the actual run.
+bytes, and both allocations are live and distinct. These are instances of the
+general theorem in \file{Cap/UFGeneric.lean}: \texttt{compressPath\_spec} lifts
+the single-write law over the compression path and proves the result is exactly
+\texttt{compressAll}, framing the rest of the state; \texttt{sealedFind\_spec}
+then proves, for any represented ranked forest with $n\le256$ and whole-range
+write authority, the functional root, the exact full-path compression, preserved
+bounds, rank, acyclicity and partition, retained write authority, the frame of
+every other allocation's full component and \texttt{Storage} certificate
+(\texttt{WriteFrame}, with \texttt{WriteFrame.rel\_write} adding an address map's
+windows), and the integrated invariant; \texttt{findRanked\_twice}
+returns a successor satisfying the same preconditions, so the two calls compose
+without manual precondition reconstruction. What remains is the world-based
+sealed runner, a compiled demonstration, and a frame law over arbitrary sealed
+command lists.
 
 \section{A compiled store composed with an authorized write}\label{sec:kernel}
 
@@ -1246,7 +1265,7 @@ environment-dependent.
 \section{What is proved, and what is open}\label{sec:open}
 
 \begin{center}
-\begin{tabular}{@{}lp{0.64\textwidth}@{}}
+\begin{tabular}{@{}p{0.40\textwidth}p{0.52\textwidth}@{}}
 \toprule
 Proved & Module \\
 \midrule
@@ -1257,10 +1276,12 @@ loan bookkeeping, delegation invariant, chain correspondence & Loans, Borrow, Di
 nested delegation chain, rooted path, derived holder, checked begin/end & Delegation \\
 coupled world/chain state, borrow/return correspondence & Discipline \\
 borrowed subdivision, reconstruction and restoration invariant & Reconstruction \\
-ownership accounting: issuance, retirement, dormant lenders, restoration realization & Reconstruction \\
+ownership accounting: issuance, retirement, dormant lenders & Reconstruction \\
+well-founded restoration order and terminal realization & Reconstruction \\
 integrated sealed execution, persistent histories and reuse refusal & Integrated \\
 two-find reusable compression on the functional model & UFReuse \\
-two-find compression through the integrated sealed boundary & UFIntegrated \\
+general sealed union-find theorem, reusable successor & UFGeneric \\
+two-find instance through the integrated sealed boundary & UFIntegrated \\
 compiled store kernel and its composition with one authorized write & llvm-bridge \\
 reference heap, snapshot independence & Bytes \\
 backend refinement, interpreter agreement, world relation & Backend, Exec, World \\
@@ -1288,11 +1309,12 @@ is repaired as a rooted path with a derived holder, and its checked begin/end
 operations preserve validity; the coupled state's borrow and return preserve the
 world/chain correspondence. Borrowed subdivision and reconstruction are proved
 in the reconstruction model, lifted to the integrated multi-allocation state and
-executed through its sealed boundary, with the ownership account and persistent
-histories part of the integrated invariant; the two-find
-reuse example is proved on the functional model and, for that instance, through
-the integrated sealed boundary. One compiled store kernel is proved and composed
-with one authorized integrated write at a stated address map. Also open: the read discipline;
+executed through its sealed boundary, with the ownership account, restoration
+dependency order and persistent histories part of the integrated invariant; the
+general sealed union-find theorem is proved, with the two-find example derived as
+an instance and run through the integrated sealed boundary. One compiled store
+kernel is proved and composed with one authorized integrated write at one
+caller-supplied address window. Also open: the read discipline;
 storage agreement as a world invariant (R2); integration of the reconstruction
 forest into the world split/join guard (R3) --- the reconstruction model exists,
 but \texttt{World.splitAtChecked} still refuses every split on a borrowed
@@ -1300,11 +1322,12 @@ allocation and does not consult it, so there is no single integrated
 world-and-restoration execution path; threading the world-based sealed
 \texttt{UFRunner} through the two-find sequence; one uniform disposal rule as a
 predicate with a checked free that is not yet wired into the unified language
-(R4); the complete certified 64-byte trace (R5); a general per-write refinement
-law over sealed command lists; an address assignment for more than one
-allocation, a semantic justification of the IR projection, and the ABI and
-installation of the verified kernel; hidden-index elaboration for symbolic
-programs; specialisation; and concurrency, which the design defers.
+(R4); the complete certified 64-byte trace (R5); a frame law over arbitrary
+sealed command lists; kernel-level address assignment across multiple
+allocations (the state-level \file{Cap/AddressMap.lean} model is separate and not
+connected to the bridge), a semantic justification of the IR projection, and the
+ABI and installation of the verified kernel; hidden-index elaboration for
+symbolic programs; specialisation; and concurrency, which the design defers.
 
 \subsection*{Claim corrections}
 
@@ -1320,7 +1343,9 @@ World borrowed reconstruction & The reconstruction model, the integrated multi-a
 64-byte acceptance run & The unified lifecycle runs alloc, write, split, write, fractional split, join, write and free; the integrated sealed lifecycle runs borrow, split, write, reconstruct and return in the checked multi-allocation state. A single world trace combining a live borrow with decomposition awaits integration of the reconstruction forest into the world guard \\
 Mutable backend & A pure buffer state machine over lists, not native mutation or RC=1 \\
 Admission excludes closures & Canonical storage excludes arbitrary original values; the encoding relation alone is not confinement \\
-Reconstruction invariant & Frontier coverage and rule validity alone are not the account; \texttt{State.Inv} also carries \texttt{State.Accounts}, which relates current identities to the issued, retired and outstanding restoration histories and rejects malformed obligations \\
+Reconstruction invariant & Frontier coverage and rule validity alone are not the account; \texttt{State.Inv} also carries \texttt{State.Accounts}, which relates current identities to the issued, retired and outstanding restoration histories, makes the dependency order well-founded so every obligation reaches a terminal forest node with its recorded resource, and rejects malformed obligations \\
+Union-find reuse & The two-find compression is an instance of the general sealed theorem (\texttt{sealedFind\_spec}, \texttt{findRanked\_twice}) over represented ranked forests; the functional successor runner and the world-based runner are separate, and the latter is still not threaded \\
+Address map & \file{Cap/AddressMap.lean} relates the integrated state to finite windows and preserves the relation over alloc, free and write, but it is a separate state-level model: nothing in the bridge imports it, and it does not assign addresses to the compiled kernel, which still has one caller-supplied window \\
 Allocation reuse & Prevention is a session-persistent allocation and capability history, not a generation or a physical-slot check; replaying an old sealed state is outside the model \\
 Compiled store & One clang-emitted kernel is proved and composed with one authorized integrated write at a caller-supplied address window. This is not a C memory-safety theorem, a full C/ABI refinement, a loader address assignment, a semantic justification of the IR projection, or a physical ownership refinement \\
 \bottomrule
@@ -1357,9 +1382,8 @@ The \file{llvm-bridge/} composition is a separate package with a sibling
 on a worker and \file{llvm-bridge/EVIDENCE.md} records those builds. No local
 Lean build of it was run for this revision.
 
-The LaTeX outputs were not rebuilt at this revision because the worker image has
-no LaTeX installation: \file{report/capability-report.pdf},
-\file{report/cap-tutorial.pdf} and \file{paper/sealed-ownership.pdf} are older
-than their \file{.tex} sources. The sources are updated; the PDFs are not.
+The LaTeX outputs are rebuilt from these sources at this revision:
+\file{report/capability-report.pdf} and \file{paper/sealed-ownership.pdf}
+correspond to their \file{.tex} sources.
 
 \end{document}

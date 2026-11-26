@@ -15,6 +15,7 @@ import Cap.UFReuseRunner
 import Cap.Reconstruction
 import Cap.Integrated
 import Cap.UFIntegrated
+import Cap.AddressMap
 
 open Cap
 
@@ -254,7 +255,11 @@ open Cap
 #print axioms Cap.sealed_write_snapshot_self
 #print axioms Cap.WriteFrame.refl
 #print axioms Cap.WriteFrame.trans
+#print axioms Cap.WriteFrame.snapshot_other
+#print axioms Cap.WriteFrame.component_other
+#print axioms Cap.WriteFrame.storage_other
 #print axioms Cap.sealed_write_frames
+#print axioms Cap.WriteFrame.rel_write
 #print axioms Cap.UFGeneric.Rep.fits
 #print axioms Cap.UFGeneric.eq_map_ofNat_of_map_toNat
 #print axioms Cap.UFGeneric.Rep.snapshot_eq
@@ -313,3 +318,24 @@ open Cap
 #print axioms Cap.UFIntegrated.ufSecondOther_restores
 #print axioms Cap.UFIntegrated.ufSecondOwnershipFrames_of_ok
 #print axioms Cap.UFIntegrated.ufSecondOther_invariant
+#print axioms Cap.UFIntegrated.ufStartWithOther_snapshot0
+#print axioms Cap.UFIntegrated.ufStartWithOther_snapshot1
+#print axioms Cap.UFIntegrated.selfWrite_snapshot_option
+#print axioms Cap.UFIntegrated.selfWrite_frames
+
+/-! ### The finite address map -/
+
+#print axioms Cap.AddressMap.Map.alloc_wellFormed
+#print axioms Cap.AddressMap.Map.free_wellFormed
+#print axioms Cap.AddressMap.Map.addr?_lt
+#print axioms Cap.AddressMap.Rel.alloc
+#print axioms Cap.AddressMap.Rel.free
+#print axioms Cap.AddressMap.Rel.write
+#print axioms Cap.AddressMap.twoAlloc_rel
+#print axioms Cap.AddressMap.example_write_other
+#print axioms Cap.AddressMap.example_window_addr
+#print axioms Cap.AddressMap.Map.alloc_refuses_overlap
+#print axioms Cap.AddressMap.Map.alloc_refuses_unbounded
+#print axioms Cap.AddressMap.overlapping_alloc_refused
+#print axioms Cap.AddressMap.missing_window_addr_none
+#print axioms Cap.AddressMap.out_of_window_addr_none

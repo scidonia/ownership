@@ -4,8 +4,10 @@
 %   latexmk -pdf -interaction=nonstopmode sealed-ownership.tex
 %
 % Status note: research draft reviewed against implementation a240557, extended
-% with the repaired delegation chain, the reconstruction model and its integrated
-% sealed execution, and the two-find reuse result.
+% with the repaired delegation chain; the reconstruction model and its integrated
+% sealed execution; well-founded restoration dependencies with finite terminal
+% realization; the general sealed union-find theorem with the two-find example
+% derived from it and a reusable functional runner; and one composed kernel.
 % Established declarations and target obligations are distinguished in the text.
 % Integration of the reconstruction forest into the world command guard, and a
 % verified C backend, remain open.
@@ -111,13 +113,16 @@ active-terminal-or-delegated authority, acyclicity, and non-duplication of
 lender and borrower authority. A reconstruction state machine, lifted to an
 integrated multi-allocation state, proves borrowed subdivision, restoration and
 a second execution on the resulting state; its invariant includes an ownership
-account over issued, retired and outstanding restoration names, and its sealed
-boundary keeps the allocation and capability histories, so a freed allocation
-identifier cannot be reissued and an old capability cannot authorize a
-replacement. Two full-path union-find finds run through that sealed boundary, and
-one clang-emitted byte-store kernel is proved and composed with an authorized
-integrated write at an explicit address map, under stated assumptions about the
-map, the IR projection, the ABI and installation. The sealed boundary executes
+account over issued, retired and outstanding restoration names and orders
+restoration dependencies so that every obligation terminates at a forest node
+carrying its recorded resource, and its sealed boundary keeps the allocation
+and capability histories, so a freed allocation identifier cannot be reissued
+and an old capability cannot authorize a replacement. A general full-path
+union-find theorem runs through that sealed boundary for any represented ranked
+forest with whole-fragment write authority, with the two-find example derived
+from it, and one clang-emitted byte-store kernel is proved and composed with an
+authorized integrated write at one caller-supplied address window, under stated
+assumptions about the window, the IR projection, the ABI and installation. The sealed boundary executes
 the reconstruction language, while integration into the world command guard
 remains open. The development identifies the logical
 obligations for a sealed low-level implementation interface, including resource
@@ -168,31 +173,34 @@ This example separates the two obligations that shape the development:
 conservation of authority and preservation of its return protocol.
 
 \paragraph*{Contributions and scope.}
-The development provides three groups of results.
+The development provides four groups of results.
 \begin{enumerate}
 \item A ledger whose per-byte budget treats fractional and spatial decomposition
-uniformly, with mechanised preservation and uniqueness of writable authority
-(Section~\ref{sec:ledger}).
-\item An executable authority machine and indexed interfaces, with separate
-results for authorization, invariant preservation, and absence of permission
-refusal (Section~\ref{sec:execution}). The combined theorem covers the command
-language's borrow and return commands; distinct-borrower delegation is the retag
-mechanism the combined invariant carries, and a rooted chain with a derived
-holder and checked begin/end operations states its admissible transitions
-(Section~\ref{sec:delegation}). A reconstruction state machine proves
-borrowed subdivision, reconstruction and restoration; the integrated
-multi-allocation state supplies the sealed boundary
-(Section~\ref{sec:delegation}).
-\item Representation-sensitive examples: computable full-path compression and
-byte marshalling, including exact correspondence between certified updates and
-checked write traces (Section~\ref{sec:clients}). A two-find instance proves the
-compression output is a reusable input certificate for the next operation on the
-functional model, and the same two calls run through the integrated sealed
-boundary on the first call's returned state. One compiled store kernel is proved
-and composed with an authorized integrated write at an explicit address map, with
-its remaining premises stated (Section~\ref{sec:boundary}). These expose the
-additional obligations for composing
-algorithms and implementing the sealed boundary in C.
+uniformly, with mechanised preservation and uniqueness of writable authority, and
+a reconstruction account whose well-founded restoration dependencies make every
+obligation terminate at a represented resource
+(Sections~\ref{sec:ledger} and~\ref{sec:delegation}). Distinct-borrower
+delegation is the retag mechanism the combined invariant carries.
+\item An executable authority machine and indexed program interfaces, proving
+authorization, invariant preservation, and absence of permission refusal, and the
+sealed borrowing, delegation and reconstruction machine that carries those
+guarantees through accepted runs. The combined theorem covers the command
+language's borrow and return commands, a rooted chain with a derived holder and
+checked begin/end operations states the admissible transitions, and the
+reconstruction state machine proves borrowed subdivision, reconstruction and
+restoration (Sections~\ref{sec:execution} and~\ref{sec:delegation}).
+\item A general representation-sensitive algorithm theorem: a verified find
+through the sealed interface, on any represented ranked forest with
+whole-fragment write authority, returns the correct root and the exact
+full-path compression, preserves the forest and ownership invariants, frames the
+other allocations, and supplies its own successor state
+(Section~\ref{sec:clients}). The two-find example is derived from it, and byte
+marshalling gives the exact write-trace counterpart.
+\item One authorized low-level kernel: a clang-emitted store body proved to have
+the reference store's bounded outcome, composed with an authorized integrated
+write at one caller-supplied address window, with its remaining premises stated
+(Section~\ref{sec:boundary}). These expose the additional obligations for
+implementing the sealed boundary in C.
 \end{enumerate}
 
 The central research objective remains a single sealed discipline covering
@@ -200,9 +208,11 @@ usable borrowing, reconstruction, and repeated algorithm execution. The present
 artifact has not completed the world-path half of that integration: the sealed
 path now executes the integrated multi-allocation reconstruction language, but
 the world command path keeps its allocation-wide split/join guard, and the
-world-based sealed runner remains outside the two-find example. The two-find
-result on the functional model and its execution through the integrated boundary
-are separate theorems. We distinguish
+world-based sealed runner remains outside the general find. The
+general sealed theorem and the functional successor runner are separate
+results, but the sealed two-find fixture is an instance of the general theorem;
+the world command guard and the world-based sealed runner remain outside it. We
+distinguish
 declarations in the artifact, concrete controls, and proposed interface
 obligations throughout; none of the proposed C boundary results is used as a
 premise of the existing Lean theorems.
@@ -564,7 +574,15 @@ invariant is frontier coverage, rule validity and an ownership account that
 relates the forest to those histories, constrains current and suspended
 identities, excludes retired and dormant names from current authority, requires
 each outstanding obligation to be realized by the recorded resource, and makes
-nested obligations agree on it. Writes,
+nested obligations agree on it. An obligation depends on another when the second
+record's lender is the first's borrower; borrowing prepends a record, and
+\lean{State.RestoreOrder} requires every such dependency to decrease the
+\lean{restores} index strictly, so \lean{dependency\_wellFounded} excludes cyclic
+justifications. Every outstanding obligation therefore reaches a terminal forest
+node through a finite dependency chain: \lean{restore\_reaches\_terminal} produces
+the node, \lean{restore\_terminal\_agrees} transports the recorded resource
+agreement along the path, and \lean{suspended\_frontier\_realizes} connects a
+suspended terminal parent to its rule descendants and frontier budget. Writes,
 borrows, both subdivisions, reconstruction and return each preserve the
 reconstruction invariant and the component storage agreement, and a return before
 reconstruction is refused. The integrated state's private-constructor boundary
@@ -627,7 +645,14 @@ The private \lean{UFRunner} packages a world, its combined invariant, its
 representation, backend, and rank. Its current \lean{findRoot} and
 \lean{findRootSnapshot} call the single-node certificate on a concrete
 64-byte zero forest. They do not return a reusable updated runner, and they do
-not invoke the full-path certificate. The reusable invariant and the second call
+not invoke the full-path certificate. A functional runner,
+\lean{Cap/UFReuseRunner.lean}, does: its private-constructor \lean{PathRunner}
+threads the current parent array, its length, the ranked-forest certificate, a
+partition witness and the recorded history of compressions, and
+\lean{PathRunner.find} returns the root together with a successor built from the
+call's own output array and chase witness; the successor keeps the length and the
+same ranked and acyclic certificate and composes the partition witness. The
+reusable invariant and the second call
 are proved on the functional model by \lean{Cap/UFReuse.lean}, on the
 discriminating instance
 \[
@@ -646,19 +671,38 @@ sealed boundary on the first call's returned state. The parent array is held in
 one allocation's bytes; \lean{Rep s a arr} says the allocation's snapshot decodes
 to \lean{arr}, \lean{chase?} follows parent pointers with \lean{Sealed.read?}, and
 \lean{compressPath} writes the root at each path node with \lean{Sealed.write}
-through the whole-share capability. \lean{chase?\_eq} proves the sealed chase is
-the functional \lean{findRootF}/\lean{rootPath} when the reads agree with the
-array. The first find from node 3 leaves $[0,0,0,0,2]$; the second, on the
+through the whole-share capability. The chase is a bounded search:
+\lean{chase?\_eq\_of\_stops} identifies a completed chase with
+\lean{findRootF}/\lean{rootPath}, \lean{chase?\_some\_spec} reads the same
+conclusion back from a successful result, and \lean{chase?\_none\_iff} proves that
+\lean{none} is exactly the absence of a completed search. Fuel exhaustion is
+therefore a refusal (\lean{sealedFind\_error\_of\_no\_stops}), never a root; the
+verified wrapper \lean{findRanked} derives fuel \lean{rank x + 1} from the
+ranked-forest measure. Reads use the existence-and-bounds observation
+\lean{Sealed.read?} and writes are capability-checked. The first find from node 3 leaves $[0,0,0,0,2]$; the second, on the
 returned state from node 4, leaves $[0,0,0,0,0]$; a fresh find from node 4 on the
 start state instead leaves $[0,0,0,2,0]$, so the second call consumes the first
 call's state rather than restating its assumptions. \lean{ufSecond\_invariant}
 re-exports the integrated invariant, including each component's ownership
 account, and a two-allocation variant's \lean{ufSecondOwnershipFrames\_of\_ok}
 records that both allocations' authority, retired names, obligations, heaps and
-live identities are unchanged. What remains is a general
-per-write refinement and frame law over sealed command lists: the final arrays
-are kernel-checked computations of the actual run, not instances of a derived
-write lemma. The world-based sealed \lean{UFRunner} is still not threaded.
+live identities are unchanged. These concrete runs are instances of a general
+theorem. \lean{Cap/UFGeneric.lean} defines \lean{Rep}, \lean{Writable} and
+\lean{compressPath\_spec}: the last lifts the single-write law over a compression
+path and proves the result is exactly \lean{compressAll}, with everything outside
+the allocation framed. From these, \lean{sealedFind\_spec} proves, for an
+arbitrary represented ranked forest with $n\leq256$ and whole-range write
+authority, that a find at the rank-derived fuel returns the functional root,
+leaves exactly the full-path compression of the chased path, keeps the array
+bounded, ranked and acyclic, preserves the partition, retains write authority,
+frames the other allocations, and carries the integrated invariant.
+\lean{findRanked} makes the fuel implicit in the rank, and
+\lean{findRanked\_twice} returns a successor satisfying the same preconditions, so
+two finds compose without reconstructing premises; the two-find fixture above is
+an instance of this theorem. \lean{Cap/UFForest.lean} supplies the ranked
+construction witness for built forests. What remains is the world-based sealed
+runner, a compiled demonstration, and a frame law over arbitrary sealed command
+lists.
 
 \subsection{Marshalling values with an explicit footprint}
 
@@ -711,16 +755,16 @@ does not prove physical snapshot independence for a future C implementation.
 
 Table~\ref{tab:evidence} states the evidence in the current repository, which
 extends the reviewed artifact revision \lean{a240557} with the repaired
-delegation chain, the reconstruction model and its integrated sealed execution, and the
-two-find reuse result. The repository contains Lean declarations and proof bodies
+delegation chain, the reconstruction model and its integrated sealed execution,
+well-founded restoration dependencies with finite terminal realization, and the
+general sealed union-find theorem with its two-find instance and functional
+successor runner. The repository contains Lean declarations and proof bodies
 for the listed results, together with executable controls. A fresh Lean build and
 timing record for this editorial revision are not supplied; the
 \lean{llvm-bridge/} package is built on a worker against a sibling
 \lean{lean-llvm} checkout and its builds are recorded in
-\lean{llvm-bridge/EVIDENCE.md}. The LaTeX outputs were not rebuilt at this
-revision because the worker image has no LaTeX installation:
-\lean{report/capability-report.pdf}, \lean{report/cap-tutorial.pdf} and
-\lean{paper/sealed-ownership.pdf} are older than their sources. No performance
+\lean{llvm-bridge/EVIDENCE.md}. The LaTeX outputs are rebuilt from these sources
+at this revision. No performance
 result is inferred from proof checking or from the existence of a computable
 definition.
 
@@ -736,9 +780,9 @@ Ledger & Budget preservation and writable-authority uniqueness & World guard int
 Checked language & Whole-run \lean{FullInv} preservation; per-write authority; borrow and return commands & A single invariant combining world execution and the reconstruction forest \\
 Indexed programs & Post-context and no-refusal theorems & Representation-sensitive operational client type \\
 Delegation & Retag budget lemma; rooted chain with derived holder and checked begin/end; world/chain correspondence; combined-invariant preservation & A single sealed world path carrying the reconstruction invariant \\
-Reconstruction & Checked spatial and fractional rules; reconstruction and restoration invariant with an ownership account over issued, retired and outstanding names; integrated sealed 64-byte lifecycle with a second cycle; persistent allocation and capability histories with reuse refusal & Consultation by the world split/join guard; concrete implementation \\
-Union-find & Functional results, exact two-find reuse on the functional model, two-find execution through the integrated sealed boundary, computable full-path certificates, exact write traces & General per-write refinement over sealed runs; world-based reusable sealed runner; compiled demonstration \\
-Compiled kernel & clang-emitted \lean{store8} body with a bounded exact behaviour theorem; composed theorem for one authorized integrated write at an explicit address map, with frame and post-state representation & Address assignment for multiple allocations, semantic justification of the IR projection, ABI and installation of the verified body \\
+Reconstruction & Checked spatial and fractional rules; reconstruction and restoration invariant with an ownership account over issued, retired and outstanding names; well-founded restoration dependency order with finite terminal realization; integrated sealed 64-byte lifecycle with a second cycle; persistent allocation and capability histories with reuse refusal & Consultation by the world split/join guard; concrete implementation \\
+Union-find & General sealed theorem (\lean{sealedFind\_spec}, \lean{findRanked\_twice}) over represented ranked forests, its two-find instance through the integrated sealed boundary, functional successor runner (\lean{PathRunner}), constructible forests (\lean{UFForest}), computable full-path certificates, exact write traces & World-based sealed runner; frame law over arbitrary sealed command lists; compiled demonstration \\
+Compiled kernel & clang-emitted \lean{store8} body with a bounded exact behaviour theorem; composed theorem for one authorized integrated write at one caller-supplied address window, with frame and post-state representation & Kernel-level address assignment across multiple allocations (\lean{Cap/AddressMap.lean} is a separate state-level model not connected to the bridge), semantic justification of the IR projection, ABI and installation of the verified body \\
 Marshalling & Round trips, range guards, representation and exact write trace & Concrete layout and ABI relation \\
 \bottomrule
 \end{tabular}
@@ -804,8 +848,9 @@ rather than assumed.
 
 The instance does not establish the general schema. Its remaining premises are
 stated, not discharged: the representation \lean{MemRep m buf base} and the
-base address are supplied by the caller; the address map is injective within one
-window, while two allocations' disjointness is a hypothesis of
+base address are supplied by the caller; the offset map $\mathit{off}\mapsto
+\mathit{base}+\mathit{off}$ is injective within the one window, while two
+allocations' disjointness is a hypothesis of
 \lean{MemRep.frame\_write}, not a loader theorem; the emitted IR is projected
 onto the parser's surface, and parser/AST agreement is a textual guard rather
 than a semantic justification of that projection; the capability route is the
@@ -934,14 +979,20 @@ cannot authorize a replacement; a fresh identifier with fresh names is accepted.
 sealed path
 is this integrated language; the world command path remains separate.
 
-\emph{Two-find reuse through the sealed boundary (proved for one instance).} The
-functional model proves the exact compression arrays and the successor
-certificate. The integrated sealed boundary separately runs those two finds on
-the first call's returned state, relating the allocation's bytes to the
-functional array, writing through the whole-share capability, and re-exporting
-the integrated invariant with its ownership account and unchanged framing. What
-remains is a general per-write refinement and frame law over sealed command
-lists, and the world-based sealed runner is still not threaded.
+\emph{General sealed union-find (proved).} \lean{Cap/UFGeneric.lean} proves the
+general theorem over an arbitrary represented ranked forest with whole-fragment
+write authority: \lean{sealedFind\_spec} returns the functional root, leaves
+exactly the full-path compression, preserves bounds, rank, acyclicity and the
+partition, retains write authority, frames every other allocation's full
+component and \lean{Storage} certificate (\lean{WriteFrame}, with
+\lean{WriteFrame.rel\_write} adding an address map's windows), and carries the
+integrated invariant; \lean{findRanked\_twice} returns a successor satisfying the
+same preconditions, so two finds compose without reconstructing premises.
+\lean{Cap/UFIntegrated.lean} is an instance of this theorem, running the two finds
+on the first call's returned state; \lean{Cap/UFReuseRunner.lean} supplies the
+functional successor runner and \lean{Cap/UFForest.lean} the ranked construction
+witness for built forests. What remains is the world-based sealed runner, a
+compiled demonstration, and a frame law over arbitrary sealed command lists.
 
 \emph{World-guard integration (open).} The checked world's split, fractional
 split and join still test the allocation-wide loan exclusion. They therefore
@@ -956,20 +1007,22 @@ achieved. No result here should be read as claiming that
 representation-sensitive algorithms to authorized execution. Particular exact
 trace theorems already establish that connection for compression writes and
 marshalling. They do not justify arbitrary inhabitants of \lean{Cert}. The
-two-find reuse certificate is proved on the functional model and executed through
-the integrated sealed boundary; a general derived write lemma for sealed runs is
-not proved.
+two-find certificate is a derived instance of the general sealed find, which
+lifts the single-write law over the compression path; a frame law over arbitrary
+sealed command lists is not proved.
 
-\emph{Reusable clients.} The full-path union-find result on the functional model
-returns a state that supports its next call, preserving the forest invariant as
-well as the permission invariant. The world-based sealed runner does not yet
-return such a successor, and the compiled example must run the same definition.
-Fuelled evaluators and rank-based completion should remain distinct from
+\emph{Reusable clients.} The general sealed find returns a successor state that
+satisfies the same preconditions, so a second call reads the first call's state;
+\lean{findRanked\_twice} packages the two-call composition, and
+\lean{PathRunner.find} does the same on the functional model, preserving the
+forest and permission invariants. The world-based sealed \lean{UFRunner} still
+returns no such successor, and the compiled example must run the same definition.
+Fuelled evaluation and rank-based completion should remain distinct from
 amortized complexity or performance claims.
 
 \emph{Compiled kernel (one instance).} One clang-emitted byte-store body is proved
 to have exactly the reference store's bounded outcome, and one authorized
-integrated write is composed with it at an explicit address window. This is not
+integrated write is composed with it at one caller-supplied address window. This is not
 the general simulation schema: the representation and base address are supplied,
 multi-allocation address assignment and window disjointness are not proved, the
 IR projection is assumed, the world capability route is not related to the
@@ -1001,9 +1054,10 @@ lender and its borrower twice. Its preservation protocol is proved, and borrowed
 subdivision and restoration are proved in the reconstruction model and executed
 through the integrated sealed state. Integrating that forest into the world
 command guard, so that one sealed execution path carries world delegation and
-reconstruction together, is the remaining mathematical requirement. Combined
-with an operational
-algorithm interface and a concrete implementation simulation, that result would
+reconstruction together, is the remaining mathematical requirement. The general
+sealed find already supplies the operational algorithm interface, with the
+world-based runner and the compiled demonstration outstanding; combined with a
+concrete implementation simulation of the sealed boundary, these would
 provide the ownership boundary needed to connect high-level Lean specifications
 to specialised low-level code without adding linear typing rules to Lean.
 

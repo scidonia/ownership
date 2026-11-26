@@ -55,6 +55,7 @@ check_ok CapDiscipline.lean
 check_ok CapReconstruction.lean
 check_ok CapRestorationOrder.lean
 check_ok CapIntegrated.lean
+check_ok CapAddressMap.lean
 check_ok CapRealization.lean
 check_ok CapUnionFindReuse.lean
 check_ok CapUFReuseRunner.lean

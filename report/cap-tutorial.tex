@@ -598,10 +598,15 @@ variant is framed as well: \lean{ufSecondOther\_invariant} re-exports the
 invariant for the whole state, and \lean{ufSecondOwnershipFrames\_of\_ok} records
 that both allocations' current fragments are still whole active read--write
 fragments, no access name was retired, no return obligation was recorded, both
-heaps still hold their bytes, and both allocations are live and distinct. Not
-proved: a general per-write refinement or frame law over sealed command lists ---
-the final arrays are kernel-checked computations of the actual run, not instances
-of a derived write lemma.
+heaps still hold their bytes, and both allocations are live and distinct. The
+single-write frame is general: \lean{WriteFrame} carries every other allocation's
+full \texttt{Reconstruction.State}, so \lean{selfWrite\_frames} shows a write to
+$\langle0\rangle$ changes its own bytes while leaving $\langle1\rangle$'s
+component, bytes and \texttt{Storage} certificate exactly as they were, and
+\lean{WriteFrame.rel\_write} extends the frame to an address map's windows. Not
+proved: the same frame over a whole sealed command list --- the final arrays are
+kernel-checked computations of the actual run, not instances of a list-level
+derived write lemma.
 
 \section{Two backends, one model}
 
@@ -661,12 +666,14 @@ reference heap & 51{,}956 \\
   integrated multi-allocation reconstruction state; the world \lean{UCmd} path is
   a separate theorem surface and is not routed through the forest.
 \item No in-place-update or compiled-performance claim anywhere in \file{Cap/}.
-\item Union-find correctness is the concrete five-node reuse instance and the
-  four-node write-discipline instance, not the general theorem. The two-find
-  reuse is proved on the functional model and, on that instance, through the
-  integrated sealed boundary (\file{Cap/UFIntegrated.lean}). The world-based
-  sealed \lean{UFRunner} is still not threaded, and no general per-write
-  refinement or frame law over sealed command lists is proved.
+\item Union-find correctness is the general sealed theorem
+  (\file{Cap/UFGeneric.lean}) instantiated on the five-node reuse fixture and the
+  four-node write-discipline instance. The two-find reuse is proved on the
+  functional model and, on that instance, through the integrated sealed boundary
+  (\file{Cap/UFIntegrated.lean}). The world-based sealed \lean{UFRunner} is still
+  not threaded, and no frame law over sealed command lists is proved; a single
+  accepted write is framed by \lean{WriteFrame}, including every unrelated
+  allocation's full component and \texttt{Storage} certificate.
 \item No C, ABI or physical ownership refinement. The separate \file{llvm-bridge}
   package proves one compiled store kernel's exact bounded behaviour and composes
   it with one authorized integrated byte write at a caller-supplied address
