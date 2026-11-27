@@ -53,3 +53,4 @@ name = "CapCertifiedTest"
 [[lean_exe]]
 name = "capruntimetransform"
 root = "bench.CapRuntimeTransform"
+
