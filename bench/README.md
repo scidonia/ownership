@@ -118,3 +118,34 @@ that the emitted C takes the in-place branch for the generated family. The
 certified path inside the fragment is the emitted program and its agreement with
 the model interpreter; the writes' runtime disposition remains observed, not
 proved.
+
+## Union-find performance probe: native Lean vs the ownership models
+
+`bench/CapUFPerformance.lean` (`lake exe capufbench`) compares one full-path
+find from the deepest node of an identical parent chain in three representations:
+
+- **lean-array**: native Lean `Array Nat`, find plus full path compression;
+- **uf-list**: the functional `Cap.UF` model (`findRootF` + `compressAll`);
+- **sealed**: the `Cap.Sealed` byte-encoded machine, with every parent read and
+  compression write crossing the checked sealed boundary.
+
+Construction is outside each timed region. The executable and toolchain are the
+same for all three rows (Lean 4.35.0-rc3, compiled executable on the worker).
+The sealed row includes capability checks and list-backed byte storage; it is
+**not** a native ownership backend and these are not amortized or
+union-by-size results.
+
+Observed on two runs of the same worker; values are nanoseconds per
+find-and-compress, 200 repetitions, minimum (mean in parentheses):
+
+| n | lean-array | uf-list | sealed | sealed / lean-array |
+| ---: | ---: | ---: | ---: | ---: |
+| 32 | 359 (375) | 12 052 (14 083) | 19 050 (20 412) | ~53× |
+| 128 | 1 774 (1 826) | 161 949 (181 624) | 199 776 (216 704) | ~113× |
+| 256 | 3 670 (3 877) | 628 291 (673 230) | 751 866 (799 577) | ~205× |
+
+The second run differed by a few percent. The sealed byte model is roughly two
+orders of magnitude slower than native Lean `Array` at the 256-node limit, and
+the pure functional list model accounts for most of that gap; the sealed checks
+add roughly 20% at 256. This is a model-vs-native comparison on one machine, not
+a claim about a specialized mutable implementation or asymptotic complexity.
