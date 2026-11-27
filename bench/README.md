@@ -197,3 +197,29 @@ This demonstrates the actual trigger: a live pre-write version, not the presence
 of Lean or of an ownership wrapper. A destructive C backend avoids the copy only
 if the algorithm does not need the old bytes; if it needs an undo/version log,
 it must copy or log them too.
+
+## Split views versus immutable slices
+
+`bench/CapRuntimeTransform.lean` (`lake exe capruntimetransform`) recursively
+splits one backing allocation and writes every byte:
+
+- **array-range**: idiomatic Lean, one unique `Array UInt8`, index ranges;
+- **immutable-slice**: one backing `Array`, two live logical slices; each write
+  and merge copies;
+- **runtime-view**: `CapRuntime.View` over one `ByteArray`; the two views are
+  disjoint and write in place.
+
+Best ns for the whole transform, 20 repetitions:
+
+| n | array-range | immutable-slice | runtime-view |
+| ---: | ---: | ---: | ---: |
+| 256 | 1,252–1,400 | 71,885–78,550 | 23,785–25,605 |
+| 1,024 | 5,534–5,657 | 1,047,433–1,166,121 | 94,811–103,049 |
+| 4,096 | 21,491–23,021 | 13,291,079–14,729,905 | 456,870–463,307 |
+
+At 4,096 the runtime view is **~29× faster than the immutable-slice API**,
+because it avoids copying the backing array. It is still **~20× slower than the
+unique index-range Array**, because every `View.write?` re-enters the allocation
+lookup/handle check. This is a real framework advantage over a safe sharing API,
+but not yet competitive with optimized index-range Lean. The fix is bulk/leaf
+writes and a cheaper view-to-buffer path, followed by the certified refinement.

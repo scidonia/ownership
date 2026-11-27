@@ -1,6 +1,6 @@
 # Erased-runtime refactor plan
 
-Status: Phases 1–3 are green; Phase 4 (byte/write/alloc refinement) is next.
+Status: Phases 1–3 are green; Phase 4 view/split runtime is started. A split-view benchmark avoids immutable-slice copies but is still slower than unique index-range Lean; per-write lookup cost and refinement remain next.
 
 - `CapRuntime` exists as a separate library with no ghost imports.
 - Raw `ByteArray` union-find and the runtime control compile and run.

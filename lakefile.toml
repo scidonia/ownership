@@ -49,3 +49,7 @@ name = "CapCertified"
 
 [[lean_lib]]
 name = "CapCertifiedTest"
+
+[[lean_exe]]
+name = "capruntimetransform"
+root = "bench.CapRuntimeTransform"
