@@ -246,3 +246,19 @@ This is the runtime half of the affine model: a private whole-buffer handle and 
 direct mutable path. The static one-use checker still needs to be attached to
 this runtime Owned type; the existing `bench/OwnedStatic.lean` checker is the
 prototype. No certification/refinement is claimed for this runtime yet.
+
+### Dynamic sealed handle cost
+
+`CapRuntime.SealedOwned` carries a shared `used` flag; `take` refuses a consumed
+or copied handle. In the bulk-fill transform (one consume per range, not per
+byte), it costs about 2% over the unsealed `Owned` mode:
+
+| n | runtime Owned | runtime SealedOwned | array fill loop | immutable slice |
+| ---: | ---: | ---: | ---: | ---: |
+| 256 | 450 | 485 | 398 | 55,293 |
+| 1,024 | 1,690 | 1,740 | 1,515 | 871,730 |
+| 4,096 | 6,603 | 6,720 | 5,290 | 10,855,184 |
+
+The control `CapRuntimeSealedTest.lean` verifies that a consumed handle and a
+copy of a live handle both refuse a second use. This is the dynamic option; the
+compile-time token checker remains the zero-overhead path.

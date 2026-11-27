@@ -1,5 +1,6 @@
 import CapRuntime.View
 import CapRuntime.Owned
+import CapRuntime.SealedOwned
 
 /- A recursive split/recurse/join benchmark over one byte array.
 
@@ -167,6 +168,24 @@ def timeOwned (n reps : Nat) : IO Nat := do
     if t1 - t0 < best then best := t1 - t0
   return best
 
+
+def timeSealedOwned (n reps : Nat) : IO Nat := do
+  let mut best := 18446744073709551615
+  for _ in [0:reps] do
+    let o ← SealedOwned.new n
+    let t0 ← IO.monoNanosNow
+    let o' ← SealedOwned.fillRange o 0 n 1
+    let t1 ← IO.monoNanosNow
+    let total := Id.run do
+      let mut a := 0
+      for i in [0:n] do
+        a := a + ((o'.read? i).getD 0).toNat
+      return a
+    unless total = n do
+      throw (IO.userError "sealed-owned checksum")
+    if t1 - t0 < best then best := t1 - t0
+  return best
+
 def main : IO Unit := do
   IO.println "implementation,n,reps,best_ns"
   for n in [256, 1024, 4096] do
@@ -176,6 +195,7 @@ def main : IO Unit := do
     IO.println s!"immutable-slice,{n},20,{(← timeSlice n 20)}"
     IO.println s!"runtime-view,{n},20,{(← timeView n 20)}"
     IO.println s!"runtime-owned,{n},20,{(← timeOwned n 20)}"
+    IO.println s!"runtime-sealed-owned,{n},20,{(← timeSealedOwned n 20)}"
 
 end CapRuntime.TransformBench
 

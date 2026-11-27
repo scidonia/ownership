@@ -54,3 +54,6 @@ name = "CapCertifiedTest"
 name = "capruntimetransform"
 root = "bench.CapRuntimeTransform"
 
+
+[[lean_lib]]
+name = "CapRuntimeSealedTest"
