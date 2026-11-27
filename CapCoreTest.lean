@@ -53,3 +53,48 @@ def cr : Ctx :=
 #guard (Ctx.borrow? c0 0 0).isNone
 #guard (match Ctx.free? c0 0 with | some c => !c.readAllowed 0 | none => false)
 #guard (Ctx.free? c0 7).isNone
+
+
+open CapCore
+
+-- A whole-share program is accepted: read, write, borrow, restore, free.
+def goodCmd : List Cmd :=
+  [.read 0, .write 0 1, .borrow 0 10, .write 10 2, .restore 10 0, .free 0]
+
+#guard (run c0 goodCmd).isSome
+
+-- The same shape is refused after the parent share is split.
+def staleAfterSplit : List Cmd :=
+  [.splitFraction 0 1 2 1 1 (by decide) (by decide), .write 0 1]
+
+#guard !(run c0 staleAfterSplit).isSome
+
+-- A half share cannot perform a second write program step.
+def halfWrite : List Cmd :=
+  [.splitFraction 0 1 2 1 1 (by decide) (by decide), .write 1 1]
+
+#guard !(run c0 halfWrite).isSome
+
+-- A container/tuple of commands still threads one context; the withdrawn id is
+-- dead for every later command in the list.
+def aliasTuple : List Cmd × List Cmd :=
+  ([.splitSpatial 0 3 4 2], [.write 0 1])
+
+#guard
+  match aliasTuple with
+  | (first, second) => !(run c0 (first ++ second)).isSome
+
+-- A reusable whole-share capability may be read twice.
+#guard (run c0 [.read 0, .read 0]).isSome
+
+-- Freed or borrowed-away names are refused by the next command.
+#guard !(run c0 [.free 0, .read 0]).isSome
+#guard !(run c0 [.borrow 0 10, .read 0]).isSome
+
+-- A checked certificate for the accepted sequence.
+def goodProg : Prog where
+  pre := c0
+  cmds := goodCmd
+  accepted := by decide
+
+#guard goodProg.execute.isSome
