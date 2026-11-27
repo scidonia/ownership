@@ -98,3 +98,7 @@ def goodProg : Prog where
   accepted := by decide
 
 #guard goodProg.execute.isSome
+
+-- Checker acceptance yields the semantic access evidence.
+example : CanRead c0 0 := canRead_of_readAllowed (by decide)
+example : CanWrite c0 0 1 := canWrite_of_writeAllowed (by decide)
