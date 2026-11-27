@@ -113,8 +113,8 @@ theorem MemRepMap.write_len {m : Mem} {map : Cap.AddressMap.Map}
     (hmap : MemRepMap m map s) (hw : map.lookup? a = some w)
     (hwrite : s.exec (.write a id off v) = some s') : off < w.len := by
   obtain ⟨hrel, hbuf⟩ := hmap
-  obtain ⟨st, st', c, h', hfind, hwf, hfind', hleaf, hstate, hq, hceil, hlo, hhi,
-    hhw, hst'⟩ := exec_write_parts hwrite
+  obtain ⟨st, st', c, h', hfind, hwf, hfind', hleaf, hstate, hq, hceil, halloc, hlo,
+    hhi, hhw, hst'⟩ := exec_write_parts hwrite
   obtain ⟨st_a, buf, hfind_a, hbuf_a, hlen_a, hrep_a⟩ := hbuf a w hw
   have hst_eq : st_a = st := Option.some.inj (hfind_a.symm.trans hfind)
   have hbuf_a' : st.heap.lookup? a = some buf := hst_eq ▸ hbuf_a
@@ -140,8 +140,8 @@ theorem MemRepMap.write {m : Mem} {map : Cap.AddressMap.Map}
     MemRepMap (writeByte m (w.addr off) v) map s' ∧
       (∀ b : Cap.AllocId, b ≠ a → s'.find? b = s.find? b) := by
   obtain ⟨hrel, hbuf⟩ := hmap
-  obtain ⟨st, st', c, h', hfind, hwf, hfind', hleaf, hstate, hq, hceil, hlo, hhi,
-    hhw, hst'⟩ := exec_write_parts hwrite
+  obtain ⟨st, st', c, h', hfind, hwf, hfind', hleaf, hstate, hq, hceil, halloc, hlo,
+    hhi, hhw, hst'⟩ := exec_write_parts hwrite
   obtain ⟨st_a, buf, hfind_a, hbuf_a, hlen_a, hrep_a⟩ := hbuf a w hw
   have hst_eq : st_a = st := Option.some.inj (hfind_a.symm.trans hfind)
   have hbuf_a' : st.heap.lookup? a = some buf := hst_eq ▸ hbuf_a

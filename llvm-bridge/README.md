@@ -116,7 +116,7 @@ For one accepted integrated write — `Cap.Sealed.write`, which
 
 | Theorem | Statement |
 | --- | --- |
-| `write_authority` | the write consumed a current (`findLeaf?`), active, whole-share (`c.q = st.D`), read--write (`c.ceiling = .readWrite`) fragment covering the offset — derived from the command's guard, not assumed |
+| `write_authority` | the write consumed a current (`findLeaf?`), active, whole-share (`c.q = st.D`), read--write (`c.ceiling = .readWrite`) fragment of the written allocation (`c.alloc = st.alloc`) covering the offset — derived from the command's guard, not assumed |
 | `component_write_parts`, `heap_write_lookup` | the component write behind it is a `Cap.Heap.write?` at that offset, so the post-heap is `List.set` and the offset was in range |
 | `runFuel_store8_at_mem` | from **any** flat memory the emitted body at `(base, off, bv)` completes at every positive budget with `writeByte` at `base + off` (the `getelementptr` adding case assumes `off < 2 ^ 63`) |
 | `store8IR_refines_model_at_mem`, `store8IR_completes_at_mem` | the run-level refinement and completion at that memory: every outcome is the reference store's, and it has one |

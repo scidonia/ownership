@@ -413,3 +413,202 @@ The `off < 2 ^ 63` pointer-width premise and the IR projection are as recorded
 for the one-window composition.  The executable edge (ABI, native execution, a
 live handle, the physical allocation) remains the sealed boundary's stated
 trust.
+
+# Evidence: the bridge against the repaired ownership invariant
+
+Recorded 2026-11-27.  Every compilation below ran on the worker; the local side
+only copied files and computed hashes.  No clang ran: the emitted IR is
+unchanged, so its recorded provenance above still applies.
+
+## Inputs
+
+| Input | Value |
+| --- | --- |
+| ownership repaired revision | `451dd30` (`Record the invariant repair revision`).  The worker's ownership package is that tree: its `Cap/` tree — 55 files, `Cap.lean` included — hashes file-for-file to `git archive 451dd30 Cap Cap.lean`, and revision `6e70b45` carries the same `Cap` tree (`git diff 451dd30 6e70b45 -- Cap Cap.lean` is empty).  The build therefore compiles the repaired `State.WriteGuard` (which now carries `c.alloc = s.alloc`) and the repaired `State.Inv` (whose component invariant now carries `Coherent` and `Scope`) |
+| this change's bridge delta | `LlvmBridge/Ownership.lean` (the guard is consumed as `st.WriteGuard c off`, and `c.alloc = st.alloc` is carried through `component_write_parts`, `exec_write_parts` and `write_authority`; two `#guard_msgs` pins added), `LlvmBridge/MultiAlloc.lean` (destructuring only), `scripts/check-axioms.lean` (the two new prints), `README.md` (the authority row), `EVIDENCE.md` |
+| sibling LeanLLVM commit | `e88ee2d`; the eight core modules the bridge imports and `lean-toolchain` in the pushed archive are byte-identical to `git cat-file blob e88ee2d:<path>`, and the sibling checkout's `git status --short` for them is empty |
+| bridge toolchain | `leanprover/lean4:v4.35.0` |
+| lake | `/nix/store/bkkg0bxfw5xl46icjwkd1ap9d0f19rd3-lean4-4.35.0/bin/lake`; `Lake version 5.0.0-src (Lean version 4.35.0)`, `Lean (version 4.35.0, Release)` |
+| worker | `ownership-audit-p0-01a1a0ae`, zone `europe-west4-b`, hostname `nixos`, Linux 6.18.63 x86_64, NixOS `26.05 (Yarara)` |
+
+`sha256` of the compiled inputs, each value equal on the local checkout, the
+pushed archive and (for the `Cap` files) the revision's blob:
+
+```
+9ae44a556ba1cf4cd3135610a684925d1bc820dab3147ed6a288779cc6a96982  LlvmBridge/Ownership.lean
+6b26aaac39e9230778ba848b1e52dae785c4f3cf9e43587b0f8a5e1833e05dd1  LlvmBridge/MultiAlloc.lean
+ead507b596b1b68dcaffcd3328bdfdda93dc3a9cbd90f1e9d399ca667c79d67f  LlvmBridge/Store8.lean
+5691f98c9c56d48e554e9e3ec0e65f301d8c77967d1018f908a4783babe9f353  LlvmBridge.lean
+2d6fe746a9ec3d57ceeea2fec8b9b74247c757afd8ed7509e665f095989ec1ea  scripts/check-axioms.lean
+bbf32ef6ec48702548339f278d6b0623a38537d694d7b725ab32b13696bc2e0c  scripts/worker-lean-llvm-lakefile.toml
+b486e85859f3767a922d4fbe47e4e2c492cf241b3a889590aec5b95eca2875c2  Cap/Reconstruction.lean
+6be706342100d362183ea66dcfeda9f7fc998788dc2f32e7db0766b5503d7bb6  Cap/Integrated.lean
+adca11444b8e289967f3c04cb4992ec8b4b64d3760f4d14f7d1950e7f12c06fd  Cap/AddressMap.lean
+4d4de55dd2588e459be070ca3fe04e6dc337799f4c418d942800eee6480d9075  Cap/Sealed.lean
+f390cdc0ed02329ec1f14655ddf73427ac885c396c3f4f9d884f5890175472f5  Cap.lean
+752fedf410bb9f3bf399d4dc663018e7a4da3c62920ceae92ae6c2168e2ba58b  lakefile.toml (the ownership package's committed definition)
+b59e7702e31f80f5eb71cf47f7d2f7f37dbcd4e30a36c61300a700d215b9e1ce  the sibling archive the worker extracted
+```
+
+The `Cap` manifest was compared on both sides with
+
+```bash
+git archive 451dd30 Cap Cap.lean | tar -x -C <snapshot>
+(cd <snapshot> && find Cap Cap.lean -type f | sort | xargs sha256sum | sort -k2)
+# on the worker:
+cd ~/final_p0b && find Cap Cap.lean -type f | sort | xargs sha256sum | sort -k2
+```
+
+and the two sorted manifests were identical (`diff` empty, 55 lines each).
+
+## Worker layout
+
+The bridge is at `~/final_p0b/llvm-bridge`, the sibling at `~/lean-llvm`, and the
+ownership package at `~/final_p0b`, with `~/final_p0b/lean-llvm` a symlink to
+`../lean-llvm`, so the bridge's `path = "../lean-llvm"` and `path = ".."`
+requirements resolve.  The sibling's package definition was replaced by
+`scripts/worker-lean-llvm-lakefile.toml` — the projection named above — so the
+Mathlib-backed `ITree` and JSON targets are outside this build.  Unlike the
+earlier records, the ownership package keeps its committed `lakefile.toml`: the
+bridge imports `Cap.Sealed`, and the build's 32-job list contains only `Cap.*`
+modules from that package, so its other libraries and the `capuf` executable are
+never built.  The worker's package holds exactly the committed `Cap` files the
+manifest above lists; the local checkout's untracked `Cap/Authority.lean` is not
+present there and is not part of this build.
+
+## The breakage the repair caused
+
+Before the bridge was changed, the committed `LlvmBridge/Ownership.lean` failed
+against the repaired `Cap`.  The old proof split the write's `if` on a
+five-conjunct spelling of the guard; the guard is now `st.WriteGuard c off`, so
+the split never fired and the goal kept its `dite`:
+
+```
+error: LlvmBridge/Ownership.lean:233:12: Tactic `subst` failed: invalid equality proof, it is not of the form (x = t) or (t = x)
+error: LlvmBridge/Ownership.lean:236:6: unsolved goals
+error: LlvmBridge/Ownership.lean:432:0: ❌️ Docstring on `#guard_msgs` does not match generated message:
+- info: 'LlvmBridge.store8_exec_write_comp' depends on axioms: [propext, Classical.choice, Quot.sound]
++ info: 'LlvmBridge.store8_exec_write_comp' depends on axioms: [propext, sorryAx, Classical.choice, Quot.sound]
+error: LlvmBridge/Ownership.lean:438:0: ❌️ Docstring on `#guard_msgs` does not match generated message:
+error: LlvmBridge/Ownership.lean:444:0: ❌️ Docstring on `#guard_msgs` does not match generated message:
+error: build failed
+```
+
+`Cap` itself built in that run (including `Cap.Reconstruction`, `Cap.Integrated`,
+`Cap.AddressMap` and `Cap.Sealed`); the only failing target was
+`LlvmBridge.Ownership`, and the `sorryAx` entries were the failed proof's
+consequence, refused by the pins.  `LlvmBridge/MultiAlloc.lean` had not been
+reached.
+
+The change is the one the guard requires, not a new hypothesis: the branch is on
+`st.WriteGuard c off` and the guard's five value conjuncts plus its allocation
+binding are read from the six-conjunct value.  `c.alloc = st.alloc` is added to
+the conclusions of `component_write_parts`, `exec_write_parts` and
+`write_authority` — a strengthening derived from the guard — and every consumer
+carries the extra conjunct in its `obtain`.  No theorem gains a premise, and the
+statements of `store8_exec_write_comp` and `sealed_store8_write_comp` are
+unchanged.
+
+## Command and transcript
+
+```bash
+cd ~/final_p0b/llvm-bridge
+rm -rf .lake ~/final_p0b/.lake ~/lean-llvm/.lake
+/nix/store/bkkg0bxfw5xl46icjwkd1ap9d0f19rd3-lean4-4.35.0/bin/lake build
+/nix/store/bkkg0bxfw5xl46icjwkd1ap9d0f19rd3-lean4-4.35.0/bin/lake env lean scripts/check-axioms.lean
+```
+
+All three `.lake` directories were removed first, so the transcript is a
+from-source build of the pushed tree, not a replay:
+
+```
+✔ [4/32] Built Cap.Id (367ms)
+✔ [5/32] Built LeanLLVM.Basic (1.1s)
+⚠ [6/32] Built Cap.Bytes (662ms)
+✔ [7/32] Built Cap.Backend (363ms)
+⚠ [8/32] Built Cap.Ledger (1.1s)
+⚠ [9/32] Built Cap.Retag (1.3s)
+⚠ [10/32] Built Cap.Loans (1.3s)
+⚠ [11/32] Built Cap.Join (1.5s)
+✔ [12/32] Built LeanLLVM.Syntax (2.6s)
+⚠ [13/32] Built Cap.Context (426ms)
+✔ [14/32] Built LeanLLVM.Printer (702ms)
+⚠ [15/32] Built Cap.World (401ms)
+⚠ [16/32] Built Cap.Invariant (1.0s)
+⚠ [17/32] Built LeanLLVM.Binary64 (4.4s)
+⚠ [18/32] Built Cap.History (379ms)
+⚠ [19/32] Built Cap.WorldInvariant (934ms)
+✔ [20/32] Built LeanLLVM.Parser (4.6s)
+⚠ [21/32] Built Cap.Reconstruction (6.5s)
+⚠ [22/32] Built Cap.Integrated (1.6s)
+⚠ [23/32] Built Cap.AddressMap (945ms)
+✔ [24/32] Built Cap.Sealed (2.4s)
+⚠ [25/32] Built LeanLLVM.Semantics (11s)
+⚠ [26/32] Built LeanLLVM.Memory (7.0s)
+✔ [27/32] Built LeanLLVM.Frames (376ms)
+✔ [28/32] Built LlvmBridge.Store8 (722ms)
+✔ [29/32] Built LlvmBridge.Ownership (480ms)
+✔ [30/32] Built LlvmBridge.MultiAlloc (526ms)
+✔ [31/32] Built LlvmBridge (241ms)
+Build completed successfully (32 jobs).
+```
+
+`⚠` marks a build that emitted warnings, not a failed module.  The transcript is
+1374 lines: no line contains `error` and no line contains `sorry`, and the 288
+warning lines are `Cap`'s and `LeanLLVM`'s own under Lean 4.35.0 (deprecated
+`if_pos`/`if_neg`/`dif_pos`/`dif_neg` spellings and unused simp arguments);
+`grep -c '^warning: LlvmBridge/'` is 0, so neither bridge module emits a warning.
+
+## Axiom audit
+
+```
+'LlvmBridge.runFuel_store8IR_succ' depends on axioms: [propext, Classical.choice, Quot.sound]
+'LlvmBridge.Beh_store8IR_iff' depends on axioms: [propext, Classical.choice, Quot.sound]
+'LlvmBridge.store8IR_refines_model' depends on axioms: [propext, Classical.choice, Quot.sound]
+'LlvmBridge.store8IR_completes' depends on axioms: [propext, Classical.choice, Quot.sound]
+'LlvmBridge.store8IR_frame' depends on axioms: [propext]
+'LlvmBridge.store8Model_replay_read' depends on axioms: [propext]
+'LlvmBridge.Beh_store8Ref_iff' depends on axioms: [propext, Classical.choice, Quot.sound]
+'LlvmBridge.store8IR_refines_store8Ref' depends on axioms: [propext, Classical.choice, Quot.sound]
+'LlvmBridge.store8_exec_write_comp' depends on axioms: [propext, Classical.choice, Quot.sound]
+'LlvmBridge.sealed_store8_write_comp' depends on axioms: [propext, Classical.choice, Quot.sound]
+'LlvmBridge.write_authority' depends on axioms: [propext]
+'LlvmBridge.component_write_parts' depends on axioms: [propext]
+'LlvmBridge.exec_write_parts' depends on axioms: [propext]
+'LlvmBridge.runFuel_store8_at_mem' depends on axioms: [propext, Classical.choice, Quot.sound]
+'LlvmBridge.store8IR_refines_model_at_mem' depends on axioms: [propext, Classical.choice, Quot.sound]
+'LlvmBridge.MemRepMap.write' depends on axioms: [propext, Quot.sound]
+'LlvmBridge.MemRepMap.write_len' depends on axioms: [propext]
+'LlvmBridge.sealed_store8_write_comp_map' depends on axioms: [propext, Classical.choice, Quot.sound]
+'LlvmBridge.memRepMap_twoAlloc' depends on axioms: [propext, Quot.sound]
+'LlvmBridge.example_write_model' depends on axioms: [propext, Quot.sound]
+'LlvmBridge.example_out_of_window_refused' depends on axioms: [propext, Quot.sound]
+'LlvmBridge.overlapping_window_refused' depends on axioms: [propext, Quot.sound]
+```
+
+The four footprints this record is about are unchanged by the repair:
+`store8_exec_write_comp` and `sealed_store8_write_comp` on
+`[propext, Classical.choice, Quot.sound]`, `MemRepMap.write` on
+`[propext, Quot.sound]`, and `sealed_store8_write_comp_map` on
+`[propext, Classical.choice, Quot.sound]`.  No footprint contains `sorryAx`.
+The two declarations whose statements changed and that were not already pinned —
+`component_write_parts` and `exec_write_parts` — are pinned in `Ownership.lean`
+with the `[propext]` lines the audit prints, alongside the existing
+`write_authority` pin, so a later footprint change fails the build rather than
+this audit.
+
+## What this record establishes
+
+* The bridge compiles from source against the repaired ownership invariant: the
+  `Cap` tree that the worker built is the repair commit's, byte for byte, and
+  the composed statements are kernel-checked with no `sorry` and no axiom beyond
+  the floor.
+* The repair's only effect on the bridge is the guard shape.  The branch follows
+  `st.WriteGuard`, the authority's allocation binding (`c.alloc = st.alloc`) is
+  derived from that guard and carried to the theorems that expose the consumed
+  fragment, and nothing is assumed to make the files compile.  The composed
+  theorems' statements are untouched, and `MemRepMap.write`,
+  `MemRepMap.write_len` and `sealed_store8_write_comp_map` are unchanged apart
+  from the extra `obtain` conjunct.
+* This is a `leanprover/lean4:v4.35.0` build, like the records above; it is not
+  an rc3 artifact.

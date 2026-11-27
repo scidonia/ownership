@@ -19,6 +19,8 @@ import LlvmBridge.MultiAlloc
 #print axioms LlvmBridge.store8_exec_write_comp
 #print axioms LlvmBridge.sealed_store8_write_comp
 #print axioms LlvmBridge.write_authority
+#print axioms LlvmBridge.component_write_parts
+#print axioms LlvmBridge.exec_write_parts
 #print axioms LlvmBridge.runFuel_store8_at_mem
 #print axioms LlvmBridge.store8IR_refines_model_at_mem
 #print axioms LlvmBridge.MemRepMap.write

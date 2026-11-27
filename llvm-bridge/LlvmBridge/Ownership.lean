@@ -18,8 +18,9 @@ needs before the frame can be read for it.
 What is proved, for one accepted integrated write:
 
 * `write_authority` — the write consumed a current, active, whole-share
-  (`c.q = st.D`) read--write (`c.ceiling = .readWrite`) fragment covering the
-  written offset.  The command's own guard supplies this; it is not assumed.
+  (`c.q = st.D`) read--write (`c.ceiling = .readWrite`) fragment of the written
+  allocation (`c.alloc = st.alloc`) covering the written offset.  The command's
+  own guard supplies this; it is not assumed.
 * `component_write_parts` and `heap_write_lookup` — the component write behind
   it is a `Cap.Heap.write?` at that offset, so the post-heap is `List.set` and
   the offset was in range.
@@ -212,27 +213,28 @@ theorem heap_read_of_lookup {h : Cap.Heap} {a : Cap.AllocId} {buf : List UInt8}
   rw [hl]
   simpa using hb
 
-/-- An accepted component write is a heap write at the written offset, under a
-current active whole-share read--write fragment that covers it. -/
+/-- An accepted component write is a heap write at the allocation's offset, under
+a current active whole-share read--write fragment of that same allocation that
+covers it.  The fragment's allocation binding is the guard's `c.alloc = st.alloc`
+conjunct, so the authority the write consumes names the bytes it updates. -/
 theorem component_write_parts {st st' : Cap.Reconstruction.State} {id : Cap.CapId}
     {off : Nat} {v : UInt8} (h : st.write id off v = some st') :
     ∃ (c : Cap.Leaf) (h' : Cap.Heap),
       st.forest.findLeaf? id = some c ∧ c.state = .active ∧ c.q = st.D ∧
-      c.ceiling = .readWrite ∧ c.lo ≤ off ∧ off < c.hi ∧
+      c.ceiling = .readWrite ∧ c.alloc = st.alloc ∧ c.lo ≤ off ∧ off < c.hi ∧
       st.heap.write? st.alloc off v = some h' ∧ st' = { st with heap := h' } := by
   cases hf : st.forest.findLeaf? id with
   | none => simp [Cap.Reconstruction.State.write, hf] at h
   | some c =>
-      by_cases hg : c.state = .active ∧ c.q = st.D ∧ c.ceiling = .readWrite ∧
-          c.lo ≤ off ∧ off < c.hi
+      by_cases hg : st.WriteGuard c off
       · simp only [Cap.Reconstruction.State.write, hf, dite_eq_left hg] at h
         cases hw : st.heap.write? st.alloc off v with
         | none => simp [hw] at h
         | some h' =>
             simp only [hw, Option.some.injEq] at h
             subst h
-            exact ⟨c, h', rfl, hg.1, hg.2.1, hg.2.2.1, hg.2.2.2.1, hg.2.2.2.2,
-              rfl, rfl⟩
+            exact ⟨c, h', rfl, hg.1, hg.2.1, hg.2.2.1, hg.2.2.2.1,
+              hg.2.2.2.2.1, hg.2.2.2.2.2, rfl, rfl⟩
       · simp only [Cap.Reconstruction.State.write, hf, dite_eq_right hg] at h
         simp at h
 
@@ -296,28 +298,28 @@ theorem exec_write_parts {s s' : Cap.Integrated.State} {a : Cap.AllocId}
     ∃ (st st' : Cap.Reconstruction.State) (c : Cap.Leaf) (h' : Cap.Heap),
       s.find? a = some st ∧ st.write id off v = some st' ∧ s'.find? a = some st' ∧
       st.forest.findLeaf? id = some c ∧ c.state = .active ∧ c.q = st.D ∧
-      c.ceiling = .readWrite ∧ c.lo ≤ off ∧ off < c.hi ∧
+      c.ceiling = .readWrite ∧ c.alloc = st.alloc ∧ c.lo ≤ off ∧ off < c.hi ∧
       st.heap.write? st.alloc off v = some h' ∧ st' = { st with heap := h' } := by
   have hupd : s.update a (fun st => st.write id off v) = some s' := h
   obtain ⟨st, st', hfind, hwf, hfind'⟩ := update_find hupd
-  obtain ⟨c, h', hleaf, hstate, hq, hceil, hlo, hhi, hhw, hst'⟩ :=
+  obtain ⟨c, h', hleaf, hstate, hq, hceil, halloc, hlo, hhi, hhw, hst'⟩ :=
     component_write_parts hwf
-  exact ⟨st, st', c, h', hfind, hwf, hfind', hleaf, hstate, hq, hceil, hlo, hhi,
-    hhw, hst'⟩
+  exact ⟨st, st', c, h', hfind, hwf, hfind', hleaf, hstate, hq, hceil, halloc, hlo,
+    hhi, hhw, hst'⟩
 
 /-- The capability an accepted integrated write consumed: a current, active,
-whole-share, read--write fragment covering the written offset.  Derived from the
-command's guard, not assumed. -/
+whole-share, read--write fragment of the written allocation covering the written
+offset.  Derived from the command's guard, not assumed. -/
 theorem write_authority {s s' : Cap.Integrated.State} {a : Cap.AllocId}
     {id : Cap.CapId} {off : Nat} {v : UInt8}
     (h : s.exec (.write a id off v) = some s') :
     ∃ (st : Cap.Reconstruction.State) (c : Cap.Leaf),
       s.find? a = some st ∧ st.forest.findLeaf? id = some c ∧
       c.state = .active ∧ c.q = st.D ∧ c.ceiling = .readWrite ∧
-      c.lo ≤ off ∧ off < c.hi := by
-  obtain ⟨st, st', c, h', hfind, hwf, hfind', hleaf, hstate, hq, hceil, hlo, hhi,
-    hhw, hst'⟩ := exec_write_parts h
-  exact ⟨st, c, hfind, hleaf, hstate, hq, hceil, hlo, hhi⟩
+      c.alloc = st.alloc ∧ c.lo ≤ off ∧ off < c.hi := by
+  obtain ⟨st, st', c, h', hfind, hwf, hfind', hleaf, hstate, hq, hceil, halloc, hlo,
+    hhi, hhw, hst'⟩ := exec_write_parts h
+  exact ⟨st, c, hfind, hleaf, hstate, hq, hceil, halloc, hlo, hhi⟩
 
 /-! ### The composition -/
 
@@ -352,8 +354,8 @@ theorem store8_exec_write_comp
       readByte (postMem m base off bv) (allocAddr base off) = some (byteOf bv) ∧
       s'.read? a off = some (byteOf bv) ∧
       (∀ b : Cap.AllocId, b ≠ a → s'.find? b = s.find? b) := by
-  obtain ⟨st₁, st', c, h', hfind₁, hwf, hfind', hleaf, hstate, hq, hceil, hlo, hhi,
-    hhw, hst'⟩ := exec_write_parts hwrite
+  obtain ⟨st₁, st', c, h', hfind₁, hwf, hfind', hleaf, hstate, hq, hceil, halloc, hlo,
+    hhi, hhw, hst'⟩ := exec_write_parts hwrite
   have hst₁ : st = st₁ := Option.some.inj (hfind.symm.trans hfind₁)
   have hb₁ : st₁.heap.lookup? a = some buf := hst₁ ▸ hb
   have hst_alloc : st₁.alloc = a := Cap.Integrated.State.find?_alloc hfind₁
@@ -382,8 +384,8 @@ theorem exec_write_read_frame {s s' : Cap.Integrated.State} {a : Cap.AllocId}
     {id : Cap.CapId} {off : Nat} {v : UInt8} {j : Nat}
     (h : s.exec (.write a id off v) = some s') (hj : off ≠ j) :
     s'.read? a j = s.read? a j := by
-  obtain ⟨st, st', c, h', hfind, hwf, hfind', hleaf, hstate, hq, hceil, hlo, hhi,
-    hhw, hst'⟩ := exec_write_parts h
+  obtain ⟨st, st', c, h', hfind, hwf, hfind', hleaf, hstate, hq, hceil, halloc, hlo,
+    hhi, hhw, hst'⟩ := exec_write_parts h
   have hst_alloc : st.alloc = a := Cap.Integrated.State.find?_alloc hfind
   rw [hst_alloc] at hhw
   subst hst'
@@ -443,5 +445,17 @@ info: 'LlvmBridge.write_authority' depends on axioms: [propext]
 -/
 #guard_msgs in
 #print axioms LlvmBridge.write_authority
+
+/--
+info: 'LlvmBridge.component_write_parts' depends on axioms: [propext]
+-/
+#guard_msgs in
+#print axioms LlvmBridge.component_write_parts
+
+/--
+info: 'LlvmBridge.exec_write_parts' depends on axioms: [propext]
+-/
+#guard_msgs in
+#print axioms LlvmBridge.exec_write_parts
 
 end LlvmBridge
