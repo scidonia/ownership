@@ -112,14 +112,15 @@ theorem MemRep.of_agrees {m m' : Mem} {buf : List UInt8} {base : Nat}
 /-- A write at one address leaves a second allocation's representation intact
 whenever that allocation's window avoids the written address.  This is the
 disjointness an address map for two live allocations owes, stated where it is
-used rather than assumed globally. -/
+used rather than assumed globally.  The written byte is arbitrary, so the frame
+serves the kernel's `byteOf bv` and the ownership model's own writes alike. -/
 theorem MemRep.frame_write {m : Mem} {buf₂ : List UInt8} {base base₂ : Nat}
-    {off : Nat} {bv : BitVec 8} (hrep₂ : MemRep m buf₂ base₂)
+    {off : Nat} {v : UInt8} (hrep₂ : MemRep m buf₂ base₂)
     (havoid : ∀ (j : Nat) (b : UInt8), buf₂[j]? = some b →
       allocAddr base₂ j ≠ allocAddr base off) :
-    MemRep (writeByte m (allocAddr base off) (byteOf bv)) buf₂ base₂ :=
+    MemRep (writeByte m (allocAddr base off) v) buf₂ base₂ :=
   MemRep.of_agrees
-    (by simpa [store8Model, allocAddr] using store8Model_frame m base off (byteOf bv))
+    (fun _ hc => readByte_writeByte_other m v (fun h => hc h.symm))
     hrep₂ havoid
 
 /-! ### The emitted body at an explicit memory

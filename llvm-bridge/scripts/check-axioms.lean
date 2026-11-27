@@ -6,6 +6,7 @@ the build rather than this audit.
 -/
 import LlvmBridge.Store8
 import LlvmBridge.Ownership
+import LlvmBridge.MultiAlloc
 
 #print axioms LlvmBridge.runFuel_store8IR_succ
 #print axioms LlvmBridge.Beh_store8IR_iff
@@ -20,3 +21,10 @@ import LlvmBridge.Ownership
 #print axioms LlvmBridge.write_authority
 #print axioms LlvmBridge.runFuel_store8_at_mem
 #print axioms LlvmBridge.store8IR_refines_model_at_mem
+#print axioms LlvmBridge.MemRepMap.write
+#print axioms LlvmBridge.MemRepMap.write_len
+#print axioms LlvmBridge.sealed_store8_write_comp_map
+#print axioms LlvmBridge.memRepMap_twoAlloc
+#print axioms LlvmBridge.example_write_model
+#print axioms LlvmBridge.example_out_of_window_refused
+#print axioms LlvmBridge.overlapping_window_refused

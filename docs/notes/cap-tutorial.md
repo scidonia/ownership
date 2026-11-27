@@ -393,8 +393,10 @@ same caveat.
   allocation, free and write preserve that relation; a write frames every other
   allocation's window and bytes, `WriteFrame.rel_write` lifts that frame to a
   sealed write, and `Rel.run_other` carries it across a whole command list. This
-  is a logical model: no loader assigns these
-  windows and the map is not wired into `llvm-bridge`.
+  is a logical model: no loader assigns these windows.
+  `LlvmBridge/MultiAlloc.lean` relates it to `lean-llvm`'s byte memory
+  (`MemRepMap`, `MemRepMap.write`, `sealed_store8_write_comp_map`), including a
+  two-allocation concrete model of both windows.
 - No in-place-update or compiled-performance claim anywhere in `Cap/`.
 - Union-find correctness is the general sealed theorem (`Cap/UFGeneric.lean`)
   instantiated on the five-node reuse fixture and the four-node write-discipline
@@ -409,12 +411,13 @@ same caveat.
 - No C, ABI or physical ownership refinement. `llvm-bridge` proves one compiled
   store kernel's exact bounded behaviour and composes it with one authorized
   integrated byte write at a caller-supplied address window
-  (`store8_exec_write_comp`, `sealed_store8_write_comp`). The representation
-  premise, a loader's address assignment for more than one allocation (the
-  finite map in `Cap/AddressMap.lean` relates live allocations to chosen windows;
-  it is not a loader and is not wired into the bridge), the IR projection, the
-  ABI, native execution and live-handle replay remain stated assumptions or trust
-  obligations.
+  (`store8_exec_write_comp`, `sealed_store8_write_comp`), and over the finite
+  address map (`MemRepMap.write`, `sealed_store8_write_comp_map`). The
+  representation premise, a loader's address assignment for more than one
+  allocation (the finite map in `Cap/AddressMap.lean` relates live allocations to
+  chosen windows; it is not a loader, and the bridge's `MemRepMap` relates it to
+  the byte memory), the IR projection, the ABI, native execution and
+  live-handle replay remain stated assumptions or trust obligations.
 - Reuse prevention is a session-persistent allocation and capability history,
   not an allocation generation, a physical-slot check or a runtime reclamation
   rule. Replaying an old immutable sealed state is outside the model.

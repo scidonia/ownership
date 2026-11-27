@@ -10,8 +10,11 @@ authorized write: *prove one useful kernel refinement through that boundary*,
 and *compose that refinement with an ownership state*. `LlvmBridge/Store8.lean`
 proves the kernel half against LeanLLVM's byte memory. `LlvmBridge/Ownership.lean`
 relates one `Cap.Integrated` allocation's heap bytes to that memory at an
-explicit address map and proves the composed statement; the last sections state
-exactly what the composition assumes and what remains.
+explicit address map and proves the composed statement, and
+`LlvmBridge/MultiAlloc.lean` extends that relation to a finite map: every live
+allocation has a window, the memory holds each window's buffer, and an accepted
+write preserves the relation while framing every other allocation. The last
+sections state exactly what the composition assumes and what remains.
 
 ## Files
 
@@ -28,6 +31,7 @@ exactly what the composition assumes and what remains.
 | `scripts/check-axioms.lean` | prints the theorem footprints for the build log |
 | `LlvmBridge/Store8.lean` | the AST pin, the reference store, and the kernel theorems |
 | `LlvmBridge/Ownership.lean` | the address map, the memory representation, and the composed ownership theorems |
+| `LlvmBridge/MultiAlloc.lean` | the finite multi-allocation relation `MemRepMap`, its write preservation and sealed composition, and the two-allocation model with its refused controls |
 | `EVIDENCE.md` | the recorded remote builds and the provenance of the IR |
 
 ## Provenance of the IR
@@ -126,6 +130,65 @@ The kernel half is this package's existing work, reused rather than re-proved:
 `State.exec_inv`, `State.find?_inv`/`find?_alloc`, `State.exec_frames_other` and
 `Heap.write_ne`.
 
+## The finite multi-allocation relation
+
+`LlvmBridge/MultiAlloc.lean` replaces the single caller-supplied window with
+`Cap.AddressMap`'s finite map.  The relation is
+
+```lean
+def MemRepMap (m : Mem) (map : Cap.AddressMap.Map) (s : Cap.Integrated.State) : Prop :=
+  Cap.AddressMap.Rel map s ∧
+    ∀ (a : Cap.AllocId) (w : Cap.AddressMap.Window),
+      map.lookup? a = some w →
+        ∃ (st : Cap.Reconstruction.State) (buf : List UInt8),
+          s.find? a = some st ∧ st.heap.lookup? a = some buf ∧
+            buf.length = w.len ∧ MemRep m buf w.base
+```
+
+so the map's own invariant (`Rel`: distinct keys, pairwise-disjoint bounded
+windows, and coverage of exactly the live allocations with their recorded
+lengths) comes with a representation of every window's buffer.  Nothing about
+the map is assumed beyond `Rel`; the windows themselves are still supplied by
+the caller.
+
+For an accepted integrated write the file proves:
+
+| Theorem | Statement |
+| --- | --- |
+| `MemRepMap.write_len` | an accepted write at a mapped allocation is inside that allocation's window: `off < w.len` is derived from acceptance and the relation (`heap_write_lookup`'s in-range offset and the relation's recorded length), not assumed |
+| `MemRepMap.write` | given the window lookup `map.lookup? a = some w` and `off < w.len`, the accepted write preserves `MemRepMap` at the kernel's post-memory `writeByte m (w.addr off) v` and frames every other allocation (`s'.find? b = s.find? b`) |
+| `sealed_store8_write_comp_map` | at the sealed boundary: the emitted body completes at every positive budget with `postMem m w.base off bv`, the post-memory satisfies the updated `MemRepMap`, and an unrelated allocation's component and snapshot are unchanged; the map is the same term, so its windows are unchanged |
+
+The write frame is where the finite map pays off.  `WellFormed`'s
+`NonOverlapping` gives two distinct live windows `wb` and `w` as `Disjoint`, and
+`disjoint_addr_ne` turns disjointness into `wb.base + j ≠ w.base + off` for every
+in-window `j` and `off`; that is exactly the avoidance `MemRep.frame_write`
+needs to keep `b`'s buffer represented in the post-memory.  `MemRep.frame_write`
+now takes an arbitrary `UInt8`, so the same lemma serves the kernel's
+`byteOf bv` and the ownership model's own write; `MemRep.set` handles the
+written allocation.
+
+The concrete model is `memRepMap_twoAlloc`: the map's own `twoAllocMap` and
+`twoAllocState` fixture (`⟨0⟩` at `[4096, 4160)`, `⟨3⟩` at `[8192, 8224)`) in a
+flat memory of the two windows' zero bytes.  `example_write_model` runs an
+accepted write at offset 5 of `⟨0⟩` — `twoAlloc_write0_accepted` is the
+`decide`-checked affirmative control that the write is not refused — and keeps
+the relation, `⟨3⟩`'s component and `⟨3⟩`'s snapshot.  `example_third_frame` is
+the same fact at the flat-memory level: every byte of `⟨3⟩` reads back unchanged
+after the write in `⟨0⟩`.
+
+The refused controls are the other half:
+
+* `MemRepMap.exec_write_eq_none_of_len_le` — a write at or past the mapped
+  window's end is refused, with `example_out_of_window_refused` the fixture
+  instance at offset 64 of `⟨0⟩`;
+* `overlapping_window_refused` — the map refuses a window overlapping `⟨0⟩`'s,
+  and `overlapping_window_shares_addr` shows the overlap is real (address 4128 is
+  offset 32 of `⟨0⟩`'s window and offset 0 of the refused one), which is what
+  would defeat the write frame;
+* `example_window_addr_none` — the map produces no address outside a window, so
+  there is no kernel call site past the end either.
+
 ## Build and run
 
 The package requires two path dependencies: the sibling `lean-llvm` checkout at
@@ -178,19 +241,26 @@ Proved, for one accepted integrated write: the authorization
 (`write_authority`), the component write and its in-range offset, completion and
 the run-level refinement from any memory, the represented post-state, the frame,
 the byte on both sides, other allocations unchanged, and the integrated
-invariant (`store8_exec_write_comp`, `sealed_store8_write_comp`).
+invariant (`store8_exec_write_comp`, `sealed_store8_write_comp`).  Over a finite
+map, the same write preserves `MemRepMap`, derives its own in-window bound, and
+frames every other allocation through the map's disjointness
+(`MemRepMap.write`, `MemRepMap.write_len`, `sealed_store8_write_comp_map`).
 
 Assumed, and stated rather than discharged:
 
 1. **The representation premise.** `MemRep m buf base` — the flat memory already
-   holds the window. `LeanLLVM` has no allocation bounds, so the C-level
-   in-bounds guarantee is the ownership guard plus `off < buf.length` (derived
-   from the accepted write), not a theorem about C. `off < 2 ^ 63` is the
-   pointer-width assumption the emitted `getelementptr` needs.
-2. **The address map's scope.** One allocation, one window, mapped by
-   `off ↦ base + off`. Two live allocations need the disjointness hypothesis of
-   `MemRep.frame_write`; that a loader assigns disjoint addresses is not proved,
-   and nothing here makes the map injective across allocations.
+   holds the window — and its finite-map form `MemRepMap m map s`, which also
+   holds every other live allocation's window. `LeanLLVM` has no allocation
+   bounds, so the C-level in-bounds guarantee is the ownership guard plus
+   `off < buf.length` (derived from the accepted write), not a theorem about C.
+   `off < 2 ^ 63` is the pointer-width assumption the emitted `getelementptr`
+   needs.
+2. **The address map.** The one-window theorem maps one allocation by
+   `off ↦ base + off`; the multi-allocation relation takes `Cap.AddressMap`'s
+   finite map, and assumes only its `Rel` — distinct keys, pairwise-disjoint
+   bounded windows, and coverage of exactly the live allocations.  Disjointness
+   is then what discharges `MemRep.frame_write`; that a *loader* assigns those
+   windows, and that the physical allocation lives at them, is not proved.
 3. **The projection.** The emitted IR is projected onto the parser's surface
    (`scripts/project-ir.sed`, above). Parser/AST agreement is a guard on the
    text, not a semantic justification of the abstraction; the projection is
@@ -212,11 +282,14 @@ unchanged), so allocation failure and cleanup have no path in this body.
 ## What is not claimed
 
 The kernel refinement is about LeanLLVM's byte memory; the composition adds one
-ownership state at an explicit window (above). What neither proves:
+ownership state at an explicit window, and the finite map relates a whole state
+to its windows (above). What neither proves:
 
-1. an address assignment by a loader. The map is caller-supplied; a live
-   allocation's base, and the disjointness of two allocations' windows, are
-   inputs (`MemRep.frame_write` states what the second one owes);
+1. an address assignment by a loader. The map is caller-supplied, and
+   well-formedness and coverage (`Cap.AddressMap.Rel`) are inputs. Disjointness
+   of two live windows is then a consequence of the map's `WellFormed`, not a
+   per-theorem hypothesis, but that a loader chose those windows — and that the
+   physical storage is there — is still assumed;
 2. a call-site `Writable` guard discharged through the `Cap.World` capability
    path. The authority used is the integrated reconstruction guard; the two
    routes are not related here;

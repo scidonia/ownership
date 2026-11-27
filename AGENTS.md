@@ -501,7 +501,15 @@
   reconstruction guard, not `World.Writable`; and the ABI, native compilation,
   installation, physical storage and replay of a copied live handle remain trust
   or proof obligations (`Cap.Sealed.boundaryClaims`). No full C/ABI or physical
-  ownership refinement is claimed. It builds only on a worker against a sibling
+  ownership refinement is claimed. `LlvmBridge/MultiAlloc.lean` carries the
+  relation over `Cap.AddressMap`: `MemRepMap m map s` is `Rel` plus a
+  represented buffer at every mapped window, `MemRepMap.write_len` derives the
+  in-window bound from an accepted write, `MemRepMap.write` preserves the
+  relation at `writeByte m (w.addr off) v` with the frame taken from the map's
+  `WellFormed` disjointness, and `sealed_store8_write_comp_map` states it at the
+  sealed boundary. `memRepMap_twoAlloc` and `example_write_model` are the
+  concrete two-allocation model, with the out-of-window and overlapping-window
+  refusal controls. It builds only on a worker against a sibling
   `lean-llvm` checkout (`scripts/build-remote.sh`), and `EVIDENCE.md` records
   those builds.
 - `Cap/Marshal.lean` is the verified marshalling layer for the closed code
@@ -898,8 +906,11 @@ shows the certificate it would have to emit, not proof-producing elaboration.
   writing `⟨0⟩` leaves `⟨3⟩`'s window and bytes unchanged, and
   `alloc_refuses_overlap` plus the fixture checks
   refuse overlapping, missing and out-of-window addresses. This is a logical
-  window model only: it is not a loader's address assignment and is not wired
-  into `llvm-bridge`.
+  window model only: it is not a loader's address assignment. The bridge's
+  `LlvmBridge/MultiAlloc.lean` consumes it: `MemRepMap m map s` is `Rel` plus a
+  represented buffer at every mapped window, and `MemRepMap.write` /
+  `sealed_store8_write_comp_map` preserve it across an accepted write, taking the
+  frame from `WellFormed`'s window disjointness.
 - `Cap/Trace.lean` states trace properties of the checker language:
   `checkWorld_cons_ok` splits an accepted command list at its first command, and
   `checkWorld_write_guard` proves that a write at any position of an accepted

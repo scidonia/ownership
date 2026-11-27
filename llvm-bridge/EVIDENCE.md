@@ -290,3 +290,126 @@ derived; `off < 2 ^ 63` for the emitted `getelementptr`), the address map's
 single-allocation scope (with `MemRep.frame_write` naming the disjointness a
 second allocation owes), the IR projection, the capability route, and the
 executable edge.
+
+# Evidence: the finite multi-allocation relation
+
+Recorded 2026-11-27.  Every compilation below ran on the worker; the local side
+only copied files.  No clang ran: the emitted IR is unchanged, so its recorded
+provenance above still applies.
+
+## Inputs
+
+| Input | Value |
+| --- | --- |
+| ownership base commit | `97e5afa`; this change's delta is under `llvm-bridge/` only |
+| this change's bridge delta | `LlvmBridge/MultiAlloc.lean` (new), `LlvmBridge/Ownership.lean` (`MemRep.frame_write` takes an arbitrary `UInt8`), `LlvmBridge.lean`, `scripts/check-axioms.lean`, `README.md`, `EVIDENCE.md` |
+| sibling LeanLLVM commit | `e88ee2d`; its working tree has 35 modified files outside the bridge's import closure, and the eight imported core modules plus `lean-toolchain`/`lakefile.toml` are clean |
+| bridge toolchain | `leanprover/lean4:v4.35.0` |
+| lake | `/nix/store/bkkg0bxfw5xl46icjwkd1ap9d0f19rd3-lean4-4.35.0/bin/lake`, `Lake version 5.0.0-src (Lean version 4.35.0)` |
+| worker | `ownership-bridge-map2-01a1a0ae`, zone `europe-west4-b`, hostname `nixos`, Linux 6.18.63 x86_64 |
+
+`sha256` of the Lean and script inputs the build compiled:
+
+```
+ac793dffefc83b330d948137bb9f522414e059382fd4c1aaecbca2cd74c2422a  llvm-bridge/LlvmBridge/MultiAlloc.lean
+4c21bf75928b6fda00145a2a3ebb7b4d5493a69b97042096e7f1089e61e24ba6  llvm-bridge/LlvmBridge/Ownership.lean
+5691f98c9c56d48e554e9e3ec0e65f301d8c77967d1018f908a4783babe9f353  llvm-bridge/LlvmBridge.lean
+8d23227ab9a37a719658664986e8eec897a5d7190765fa71a410b7e3b83f7408  llvm-bridge/scripts/check-axioms.lean
+adca11444b8e289967f3c04cb4992ec8b4b64d3760f4d14f7d1950e7f12c06fd  Cap/AddressMap.lean
+f9433588d03ad77eecb0d59304701bd996839529954b96394b940a9ea961cd1d  Cap/Integrated.lean
+4d4de55dd2588e459be070ca3fe04e6dc337799f4c418d942800eee6480d9075  Cap/Sealed.lean
+```
+
+The `Cap` hashes are the committed tree's: this change adds no `Cap` source.
+The worker's copies of those three files were checked to be the same bytes.
+
+## Worker layout
+
+The bridge is at `~/ownership/llvm-bridge`, the sibling at `~/lean-llvm`, and
+the ownership package at `~/ownership`, with `~/ownership/lean-llvm` a symlink
+to `../lean-llvm` so the bridge's `path = "../lean-llvm"` resolves.  The pushed
+sibling's package definition was replaced by
+`scripts/worker-lean-llvm-lakefile.toml` — the projection `build-remote.sh`
+installs — so the Mathlib-backed `ITree` and JSON targets are outside this
+build.  The sibling's sources are otherwise unmodified.  The worker's copies of
+the eight core modules the bridge imports and of `lean-toolchain` were checked to
+be the same bytes as this checkout's.
+
+## Command and transcript
+
+```bash
+cd ~/ownership/llvm-bridge
+rm -rf .lake ~/ownership/.lake ~/lean-llvm/.lake
+lake build
+lake env lean scripts/check-axioms.lean
+```
+
+with `lake` and `lean` taken from the release store path above.  All three
+`.lake` directories were removed first, so the transcript is a from-source build
+of the pushed tree, not a replay:
+
+```
+Lake version 5.0.0-src (Lean version 4.35.0)
+Lean (version 4.35.0, Release)
+✔ [4/32] Built Cap.Id (304ms)
+✔ [6/32] Built LeanLLVM.Basic (906ms)
+⚠ [21/32] Built Cap.Reconstruction (4.4s)
+⚠ [22/32] Built Cap.Integrated (1.4s)
+⚠ [23/32] Built Cap.AddressMap (814ms)
+✔ [24/32] Built Cap.Sealed (2.1s)
+⚠ [25/32] Built LeanLLVM.Semantics (9.6s)
+⚠ [26/32] Built LeanLLVM.Memory (6.4s)
+✔ [27/32] Built LeanLLVM.Frames (326ms)
+✔ [28/32] Built LlvmBridge.Store8 (612ms)
+✔ [29/32] Built LlvmBridge.Ownership (418ms)
+✔ [30/32] Built LlvmBridge.MultiAlloc (443ms)
+✔ [31/32] Built LlvmBridge (214ms)
+Build completed successfully (32 jobs).
+```
+
+The excerpt elides the intermediate `Cap` and `LeanLLVM` lines; the recorded log
+is 32 jobs with `errors=0`, `sorry=0` and `bridge_warnings=0`.  The 276 warning
+lines are `Cap`'s and `LeanLLVM`'s own under Lean 4.35.0 (deprecated
+`if_pos`/`if_neg`/`dif_pos`/`dif_neg` spellings and unused simp arguments);
+neither `LlvmBridge` module emits a warning.
+
+## Axiom audit
+
+```
+'LlvmBridge.MemRepMap.write' depends on axioms: [propext, Quot.sound]
+'LlvmBridge.MemRepMap.write_len' depends on axioms: [propext]
+'LlvmBridge.sealed_store8_write_comp_map' depends on axioms: [propext, Classical.choice, Quot.sound]
+'LlvmBridge.memRepMap_twoAlloc' depends on axioms: [propext, Quot.sound]
+'LlvmBridge.example_write_model' depends on axioms: [propext, Quot.sound]
+'LlvmBridge.example_out_of_window_refused' depends on axioms: [propext, Quot.sound]
+'LlvmBridge.overlapping_window_refused' depends on axioms: [propext, Quot.sound]
+```
+
+The full audit also reprints every earlier theorem with its unchanged footprint
+(`store8_exec_write_comp` and `sealed_store8_write_comp` remain on
+`[propext, Classical.choice, Quot.sound]`, `write_authority` on `[propext]`).
+The multi-allocation footprints are pinned inside `MultiAlloc.lean` with
+`#guard_msgs`, so a change fails the build rather than this audit.  No footprint
+contains `sorryAx`.
+
+## What this record establishes
+
+* `MemRepMap` and its write preservation are kernel-checked against the committed
+  `Cap.AddressMap`, with no `sorry` and no axiom beyond the bridge's floor.
+* The concrete two-allocation model is inhabited in a flat memory
+  (`memRepMap_twoAlloc`), the same model accepts an in-window write
+  (`twoAlloc_write0_accepted`, `example_write_model`), and the out-of-window and
+  overlapping-window controls are refused, so the refusal controls are not
+  vacuous.
+* The one-window theorems are unchanged apart from `MemRep.frame_write` taking
+  an arbitrary `UInt8`; their recorded footprints are the same.
+
+## Scope of the relation
+
+`Cap.AddressMap.Rel` is still caller-supplied: that the map is well formed,
+bounded, and covers exactly the live allocations is a premise, and that a loader
+assigns those windows — or that physical storage lives at them — is not proved.
+The `off < 2 ^ 63` pointer-width premise and the IR projection are as recorded
+for the one-window composition.  The executable edge (ABI, native execution, a
+live handle, the physical allocation) remains the sealed boundary's stated
+trust.
