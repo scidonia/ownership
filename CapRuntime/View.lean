@@ -50,4 +50,22 @@ def View.write? (s : State) (v : View) (i : Nat) (val : UInt8) :
           { alloc := v.alloc, generation := a.generation, offset := v.offset + i }
         s.write? h val
 
+
+/-- Fill a whole view with one value using a single allocation lookup and a
+direct `ByteArray` loop. -/
+def View.fill? (s : State) (v : View) (val : UInt8) : Except String State :=
+  match s.allocation? v.alloc with
+  | none => .error "fill denied: unknown allocation"
+  | some a =>
+      if v.offset + v.len > a.bytes.size then
+        .error "fill denied: view outside allocation"
+      else
+        let b :=
+          Id.run do
+            let mut b := a.bytes
+            for i in [v.offset:v.offset + v.len] do
+              b := b.set! i val
+            return b
+        .ok { s with allocations := s.allocations.set! v.alloc { a with bytes := b } }
+
 end CapRuntime

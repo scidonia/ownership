@@ -1,4 +1,5 @@
 import CapRuntime.View
+import CapRuntime.Owned
 
 /- A recursive split/recurse/join benchmark over one byte array.
 
@@ -47,8 +48,8 @@ partial def sliceRange (s : Slice) : Array UInt8 :=
 
 /-- Runtime path: split a view and recurse; writes share the one backing ByteArray. -/
 partial def viewRange (s : State) (v : View) : Except String State :=
-  if v.len <= 1 then
-    if v.len = 1 then v.write? s 0 1 else .ok s
+  if v.len <= 64 then
+    v.fill? s 1
   else
     match v.split (v.len / 2) with
     | none => .error "split refused"
@@ -105,12 +106,76 @@ def timeView (n reps : Nat) : IO Nat := do
         if t1 - t0 < best then best := t1 - t0
   return best
 
+
+def arrayFillLoop (p : Array UInt8) (v : UInt8) : Array UInt8 :=
+  Id.run do
+    let mut p := p
+    for i in [0:p.size] do
+      p := p.set! i v
+    return p
+
+def byteFillLoop (p : ByteArray) (v : UInt8) : ByteArray :=
+  Id.run do
+    let mut p := p
+    for i in [0:p.size] do
+      p := p.set! i v
+    return p
+
+def timeArrayFill (n reps : Nat) : IO Nat := do
+  let mut best := 18446744073709551615
+  for _ in [0:reps] do
+    let p := Array.replicate n (0 : UInt8)
+    let t0 ← IO.monoNanosNow
+    let p' := arrayFillLoop p 1
+    let t1 ← IO.monoNanosNow
+    unless p'.foldl (fun a x => a + x.toNat) 0 = n do
+      throw (IO.userError "array-fill checksum")
+    if t1 - t0 < best then best := t1 - t0
+  return best
+
+def timeByteFill (n reps : Nat) : IO Nat := do
+  let mut best := 18446744073709551615
+  for _ in [0:reps] do
+    let p := (ByteArray.mk (Array.replicate n (0 : UInt8)))
+    let t0 ← IO.monoNanosNow
+    let p' := byteFillLoop p 1
+    let t1 ← IO.monoNanosNow
+    let total := Id.run do
+      let mut a := 0
+      for i in [0:n] do a := a + (p'.get! i).toNat
+      return a
+    unless total = n do
+      throw (IO.userError "byte-fill checksum")
+    if t1 - t0 < best then best := t1 - t0
+  return best
+
+
+def timeOwned (n reps : Nat) : IO Nat := do
+  let mut best := 18446744073709551615
+  for _ in [0:reps] do
+    let o := Owned.new n
+    let t0 ← IO.monoNanosNow
+    let o' := Owned.fillRange o 0 n 1
+    let t1 ← IO.monoNanosNow
+    let total := Id.run do
+      let mut a := 0
+      for i in [0:n] do
+        a := a + ((o'.read? i).getD 0).toNat
+      return a
+    unless total = n do
+      throw (IO.userError "owned checksum")
+    if t1 - t0 < best then best := t1 - t0
+  return best
+
 def main : IO Unit := do
   IO.println "implementation,n,reps,best_ns"
   for n in [256, 1024, 4096] do
     IO.println s!"array-range,{n},20,{(← timeArray n 20)}"
+    IO.println s!"array-fill-loop,{n},20,{(← timeArrayFill n 20)}"
+    IO.println s!"bytearray-fill-loop,{n},20,{(← timeByteFill n 20)}"
     IO.println s!"immutable-slice,{n},20,{(← timeSlice n 20)}"
     IO.println s!"runtime-view,{n},20,{(← timeView n 20)}"
+    IO.println s!"runtime-owned,{n},20,{(← timeOwned n 20)}"
 
 end CapRuntime.TransformBench
 

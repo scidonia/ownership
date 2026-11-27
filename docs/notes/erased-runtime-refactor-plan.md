@@ -1,6 +1,6 @@
 # Erased-runtime refactor plan
 
-Status: Phases 1–3 are green; Phase 4 view/split runtime is started. A split-view benchmark avoids immutable-slice copies but is still slower than unique index-range Lean; per-write lookup cost and refinement remain next.
+Status: Phases 1–3 are green; Phase 4 runtime includes bulk view fill and a private `CapRuntime.Owned` whole-buffer mode. Owned is within ~4% of an optimized Array fill loop at 4,096 in the transform benchmark; static one-use checking and refinement remain next.
 
 - `CapRuntime` exists as a separate library with no ghost imports.
 - Raw `ByteArray` union-find and the runtime control compile and run.
