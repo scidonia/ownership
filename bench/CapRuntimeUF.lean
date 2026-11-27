@@ -26,6 +26,36 @@ def timeNative (n : Nat) : IO Nat := do
     throw (IO.userError s!"native wrong result at n={n}")
   return t1 - t0
 
+
+/-- Direct Lean `ByteArray` parent access with no capability/runtime wrapper. -/
+def directParent (p : ByteArray) (i : Nat) : Nat :=
+  if h : i < p.size then (p.get i h).toNat else i
+
+partial def directFindRoot (p : ByteArray) (x : Nat) : Nat :=
+  let px := directParent p x
+  if px = x then x else directFindRoot p px
+
+partial def directCompressTo (p : ByteArray) (root x fuel : Nat) : ByteArray :=
+  match fuel with
+  | 0 => p
+  | fuel + 1 =>
+      let px := directParent p x
+      if px = x then p
+      else directCompressTo (p.set! x (UInt8.ofNat root)) root px fuel
+
+def directFindCompress (p : ByteArray) (x : Nat) : Nat × ByteArray :=
+  let root := directFindRoot p x
+  (root, directCompressTo p root x (p.size + 1))
+
+def timeDirect (n : Nat) : IO Nat := do
+  let p := (chainBytes n).bytes
+  let t0 ← IO.monoNanosNow
+  let (r, p') := directFindCompress p (n - 1)
+  let t1 ← IO.monoNanosNow
+  unless r = 0 && directParent p' (n - 1) = 0 do
+    throw (IO.userError s!"direct wrong result at n={n}")
+  return t1 - t0
+
 def timeRuntime (n : Nat) : IO Nat := do
   let p := chainBytes n
   let t0 ← IO.monoNanosNow
@@ -52,7 +82,8 @@ def runCase (name : String) (n reps : Nat) (trial : Nat → IO Nat) : IO Unit :=
 def main : IO Unit := do
   IO.println "implementation,n,reps,best_ns,mean_ns"
   for n in [32, 128, 256] do
-    runCase "lean-array" n 200 timeNative
+    runCase "lean-array-nat" n 200 timeNative
+    runCase "bytearray-direct" n 200 timeDirect
     runCase "bytearray-runtime" n 200 timeRuntime
 
 end CapRuntime.UFBench

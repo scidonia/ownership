@@ -160,15 +160,17 @@ construction outside the timed region. Runtime correctness control:
 
 Observed on two runs, compiled rc3 executable, 200 repetitions, best ns/mean ns:
 
-| n | native `Array Nat` | runtime `ByteArray` |
-| ---: | ---: | ---: |
-| 32 | 337–347 / 360–371 | 221–224 / 236–237 |
-| 128 | 1,827–1,828 / 1,862–1,871 | 846–875 / 935–964 |
-| 256 | 3,727–3,773 / 3,824–3,916 | 1,638–1,715 / 1,835–1,863 |
+| n | native `Array Nat` | direct Lean `ByteArray` | `CapRuntime` `ByteArray` |
+| ---: | ---: | ---: | ---: |
+| 32 | 295 / 301–543 | 183–186 / 202–219 | 187–189 / 202–204 |
+| 128 | 1,558–1,563 / 1,596–1,598 | 726–736 / 780–785 | 731–733 / 764–789 |
+| 256 | 3,221–3,223 / 3,295–3,348 | 1,387–1,390 / 1,504–1,622 | 1,467–1,605 / 1,565–1,772 |
 
-The runtime is ~1.5× faster at 32 and ~2.2× faster at 256 than the native
-`Array Nat` path in this microbenchmark. Both are Lean-managed values; this is not
-a C/FFI comparison. The important result is the separation: the ghost interpreter
-at 256 was ~752,000 ns, while the erased raw runtime is ~1,700 ns. `CapRuntime`
-is not yet connected to a certificate/refinement theorem, so this is runtime
-performance, not certified-runtime performance.
+The direct `ByteArray` implementation and the `CapRuntime` wrapper are
+indistinguishable at 32 and 128. At 256 the wrapper is 5–15% slower in this
+sample, within the observed run variance; the representation, not the wrapper
+structure, is the dominant factor. Direct `ByteArray` and `CapRuntime` are both
+about 2.2× faster than native `Array Nat` at 256, and the ghost interpreter was
+~752,000 ns. Both Lean paths are managed values; this is not a C/FFI result.
+`CapRuntime` is not yet connected to a certificate/refinement theorem, so this is
+runtime performance, not certified-runtime performance.
