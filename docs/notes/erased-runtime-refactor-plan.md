@@ -62,6 +62,7 @@ pass:
 | `Cap/Certified/Program.lean` | `CertifiedProgram` with `program : Runtime.Program` and proof fields; `Certified.view` projection |
 | `Cap/Certified/Erase.lean` | `erase : CertifiedProgram → Runtime.Program`; proof that erased runtime commands are the source commands |
 | `Cap/Certified/Refines.lean` | `Rep` between runtime and ghost state; execution/refinement theorems |
+| `Cap/Recovery.lean` | ghost-interpreter completion strategy: recursive normalization of a designated obligation to accepted return/reconstruction commands, termination measure and framing |
 | `Cap/Runtime/Refinement.lean` | optional re-export/layer for clients; no ghost fields in runtime structures |
 
 Existing modules keep their names and proofs:
@@ -214,8 +215,20 @@ timing is retained as a separate labelled diagnostic.
 - Gate: existing nested lifecycle and split/return examples produce the same
   observations through runtime.
 
+### Phase 5b — constructive completion theorem
+- Define a recursive completion strategy over the maintained ghost invariant and
+  a designated obligation. It returns an actual `List Cmd`, not an assumed trace.
+- Prove: `State.run` accepts it; subordinate obligations are discharged; the
+  lender is restored; bytes are preserved; unrelated authority is framed.
+- Expose the termination measure over combined suspension/loan dependencies and
+  the next-step condition; add constraints to the discipline if the proof exposes
+  an obstruction.
+- This result precedes and anchors the erased runtime client. Its command list is
+  then the source for runtime UF/the array client, rather than a second model.
+
 ### Phase 6 — UF certified client
-- Erase `findRanked`/compression into runtime commands; prove root, exact
+- Erase `findRanked`/compression and the completion strategy into runtime
+  commands; prove root, exact
   post-array, partition preservation and successor precondition at the runtime
   level.
 - Add the parametric split/recurse/reconstruct array client required by the new
