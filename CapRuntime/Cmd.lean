@@ -10,6 +10,9 @@ inductive Cmd where
   | free (h : Handle)
   deriving Repr
 
+/-- A runtime program: runtime commands only, no certificate. -/
+abbrev Program := List Cmd
+
 /-- Execute one runtime command. -/
 def exec (s : State) : Cmd → Except String State
   | .alloc n => .ok (s.alloc n).1
