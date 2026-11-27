@@ -1,7 +1,7 @@
 # Artifact pins and verification record
 
 Baseline: `aaf94d033a774ef5fc23e4410e560bacd85dc2d2`. Code source and
-verified build: `985f2b0a67a554cfde30dc1edefa4c56a246a0b6`. This record is the
+verified build: `a8fabd226043af9ce8d365d8d2767bed8af42fc6`. This record is the
 commit that adds this file and changes no code.
 
 ## Toolchains
