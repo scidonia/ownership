@@ -232,11 +232,11 @@ no ghost state. Same recursive/split workload, best ns, 20 repetitions:
 
 | n | Array fill loop | ByteArray fill loop | runtime Owned | runtime View | recursive Array | immutable slice |
 | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| 256 | 526 | 486 | 622 | 726 | 1,410 | 77,006 |
-| 1,024 | 2,219 | 1,699 | 2,064 | 3,103 | 5,384 | 1,165,846 |
-| 4,096 | 8,029 | 6,173 | 8,311 | 14,342 | 21,375 | 16,096,317 |
+| 256 | 585 | 515 | 706 | 967 | 1,463 | 92,114 |
+| 1,024 | 2,075 | 1,889 | 2,370 | 3,562 | 6,385 | 1,302,489 |
+| 4,096 | 7,705 | 7,024 | 9,196 | 15,117 | 24,718 | 16,061,316 |
 
-The Owned mode is within ~4% of the optimized array fill loop at 4,096, ~2.6×
+The M0 fresh-input rerun puts Owned within ~19% of the optimized array fill loop at 4,096, ~2.7×
 faster than the recursive index-range transform, and ~1,900× faster than the
 immutable-slice API. It is still ~35% slower than the direct ByteArray loop at
 4,096. The per-write `View.write?` path is no longer the bottleneck; remaining
@@ -251,13 +251,13 @@ prototype. No certification/refinement is claimed for this runtime yet.
 
 `CapRuntime.SealedOwned` carries a shared `used` flag; `take` refuses a consumed
 or copied handle. In the bulk-fill transform (one consume per range, not per
-byte), it costs about 2% over the unsealed `Owned` mode:
+byte), it costs about 2–7% over the unsealed `Owned` mode:
 
 | n | runtime Owned | runtime SealedOwned | array fill loop | immutable slice |
 | ---: | ---: | ---: | ---: | ---: |
-| 256 | 450 | 485 | 398 | 55,293 |
-| 1,024 | 1,690 | 1,740 | 1,515 | 871,730 |
-| 4,096 | 6,603 | 6,720 | 5,290 | 10,855,184 |
+| 256 | 706 | 721 | 585 | 92,114 |
+| 1,024 | 2,370 | 2,563 | 2,075 | 1,302,489 |
+| 4,096 | 9,196 | 9,857 | 7,705 | 16,061,316 |
 
 The control `CapRuntimeSealedTest.lean` verifies that a consumed handle and a
 copy of a live handle both refuse a second use. This is the dynamic option; the

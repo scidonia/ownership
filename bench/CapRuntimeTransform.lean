@@ -90,11 +90,12 @@ def readView (s : State) (v : View) (generation i : Nat) : Nat :=
   | none => 0
 
 def timeView (n reps : Nat) : IO Nat := do
-  let (s, h) := State.empty.alloc n
-  let v : View := { alloc := h.alloc, offset := 0, len := n }
   let mut best := 18446744073709551615
   for _ in [0:reps] do
-    let s0 := s
+    -- construction is outside the timed region and fresh for every trial,
+    -- matching the array/byte baselines
+    let (s0, h) := State.empty.alloc n
+    let v : View := { alloc := h.alloc, offset := 0, len := n }
     let t0 ← IO.monoNanosNow
     match viewRange s0 v with
     | .error e => throw (IO.userError e)
