@@ -127,3 +127,16 @@ def joined : Ctx :=
 -- Reused live ids and a non-whole share sum are refused.
 #guard (Ctx.reconstruct? cf 1 2 1).isNone
 #guard (Ctx.reconstruct? cs 3 4 5).isNone
+
+open CapCore
+
+-- Indexed programs: only accepted steps can be composed.
+theorem readTwice : Program c0 [.read 0, .read 0] c0 :=
+  .cons (.read (by decide)) (.cons (.read (by decide)) (.nil c0))
+
+example : run c0 [.read 0, .read 0] = some c0 := Program.run_some readTwice
+
+theorem writeOnce : Program c0 [.write 0 1] c0 :=
+  .cons (.write (by decide)) (.nil c0)
+
+example : run c0 [.write 0 1] = some c0 := Program.run_some writeOnce
