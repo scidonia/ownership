@@ -55,7 +55,7 @@ changed sources.
 
 ## Stated gaps
 
-- Recoverability adds `State.Accounts.lenders_not_retired`, `Forest.RestoreChain`, `Forest.Recovers`/`WellRecovered`, and `State.Recovers`; the follow-up retired-lender and renamed-child witnesses are kernel-checked exclusions, and preservation runs through write, borrow, both splits, reconstruction and return. A constructive completion theorem and integrated framing for a designated obligation are not proved.
+- Recoverability adds `State.Accounts.lenders_not_retired`, `Forest.RestoreChain`, `Forest.Recovers`/`WellRecovered`, and `State.Recovers`; the follow-up retired-lender and renamed-child witnesses are kernel-checked exclusions, and preservation runs through write, borrow, both splits, reconstruction and return. A constructive completion theorem and integrated framing for a designated obligation are not proved. The release bridge was rebuilt from source against this revision (32 jobs, axiom audit clean) with the composed store and `MemRepMap` footprints unchanged.
 - The invariant repair adds `Forest.Coherent` and `State.Scope`, an allocation-binding write guard, and `State.Inv.restore_terminal_frontier`; the two audit witnesses are kernel-checked regressions in `bench/CapInvariantWitness.lean`.
 - `Cap/UFGeneric.WriteFrame` now equates every unrelated allocation's full
   `Reconstruction.State`, with `component_other`, `storage_other` and

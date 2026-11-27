@@ -612,3 +612,13 @@ this audit.
   from the extra `obtain` conjunct.
 * This is a `leanprover/lean4:v4.35.0` build, like the records above; it is not
   an rc3 artifact.
+
+## Rebuild after the recoverability invariant
+
+The recoverability repair (`1f3777f`) adds `lenders_not_retired`, `RestoreChain`,
+`Forest.Recovers`/`WellRecovered` and `State.Recovers` to `Cap` without changing
+the bridge source. A from-source release build on the repaired tree completed
+successfully (32 jobs), including `Cap`, `LeanLLVM`, `LlvmBridge.Store8`,
+`Ownership` and `MultiAlloc`; `scripts/check-axioms.lean` exited 0 with no
+`sorryAx`. The composed store and `MemRepMap` footprints remain
+`[propext, Classical.choice, Quot.sound]` and unchanged.
