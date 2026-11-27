@@ -1,7 +1,7 @@
 # Artifact pins and verification record
 
 Baseline: `aaf94d033a774ef5fc23e4410e560bacd85dc2d2`. Code source and
-verified build: `e4c5fd2e44cab92b1539bc69b2d204b2939c691e`. This record is the
+verified build: `6773070c5bf35f633baa59b68811f4c4561021c5`. This record is the
 commit that adds this file and changes no code.
 
 ## Toolchains
@@ -59,11 +59,17 @@ changed sources.
   `Reconstruction.State`, with `component_other`, `storage_other` and
   `rel_write`. The command-list frame follows from `State.run_frames_other` and
   `Sealed.run_frames_other` (`Sealed.RunFrame`), with `Rel.run_other` carrying it
-  across a list for the address map; the bridge connection remains open.
+  across a list for the address map. The bridge's `MemRepMap.write` carries the
+  same frame into `lean-llvm`'s byte memory for the one written range.
 - `Cap/AddressMap.lean` is a finite logical window model with disjointness and
-  alloc/free/write framing; it is not wired into the LLVM bridge or a loader.
+  alloc/free/write framing; `LlvmBridge/MultiAlloc.lean` relates it to the
+  bridge's byte memory (`MemRepMap`, `MemRepMap.write`,
+  `sealed_store8_write_comp_map`), so it is wired into `llvm-bridge`. It is
+  still not a loader's address assignment.
 - The parent representation caps `n ≤ 256`.
-- The bridge covers one allocation and one caller-supplied window; the
-  multi-allocation address map, ABI, native installation and copied-handle
-  replay remain outside the proved boundary. The trust split is recorded in
+- The bridge's proved boundary covers one allocation against one caller-supplied
+  window (`LlvmBridge/Ownership.lean`) and the finite multi-allocation map with
+  its two-allocation concrete model (`LlvmBridge/MultiAlloc.lean`). A loader's
+  address assignment, ABI, native installation and copied-handle replay remain
+  outside the proved boundary. The trust split is recorded in
   `docs/notes/executable-edge-contract.md`.
