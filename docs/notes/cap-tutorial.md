@@ -243,8 +243,15 @@ requires every dependency to strictly decrease the index in `restores`, which is
 the direction borrowing prepends. `State.Accounts.dependency_wellFounded` rules
 out a positive delegation cycle and `State.Accounts.restore_reaches_terminal`
 finds a finite path from every obligation to a terminal forest node with the
-recorded resource agreeing along it. A suspended terminal parent is connected to
-its current rule descendants by `Forest.suspended_frontier_realizes`.
+recorded resource agreeing along it. `State.Inv.restore_terminal_frontier`
+derives the suspended parent's actual descendant-frontier budget and containment
+from `Forest.Coherent`, without caller-supplied subtree budgets. Identity
+recovery is tracked separately: `State.Accounts.lenders_not_retired` keeps an
+outstanding lender usable, and `Forest.WellRecovered` requires every suspension's
+children to recover their rule identities directly, through a finite
+`Forest.RestoreChain`, or by a recursively recoverable subdivision. The
+follow-up audit's retired-lender and renamed-child states are excluded by these
+conditions; a constructive completion theorem is not proved.
 `bench/CapRestorationOrder.lean` records the two-edge cycle that the earlier
 fields admit and the repaired account rejects, together with a valid nested
 borrow and a missing-terminal refusal.

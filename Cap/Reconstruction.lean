@@ -407,6 +407,126 @@ def Coherent : Forest → Prop
   | .split k p lr rr l r =>
       RuleValid k p lr rr ∧ l.Realizes lr ∧ r.Realizes rr ∧ l.Coherent ∧ r.Coherent
 
+/-- A finite chain of outstanding restoration records from one access name to
+another. The empty chain names an identity twice; a record whose lender is the
+chain's current endpoint extends the chain to that record's borrower. Following
+a chain backwards through `return` is how a borrowed name is recovered. -/
+inductive RestoreChain (restores : List Restore) : CapId → CapId → Prop where
+  | nil (a : CapId) : RestoreChain restores a a
+  | snoc {a b : CapId} (r : Restore) (h : RestoreChain restores a b)
+      (hr : r ∈ restores) (hl : r.lender = b) :
+      RestoreChain restores a r.borrower
+
+/-- With no outstanding records, a restoration chain can only name one identity
+twice. -/
+theorem RestoreChain.nil_left {a b : CapId} (h : RestoreChain [] a b) : a = b := by
+  cases h with
+  | nil => rfl
+  | snoc => simp_all
+
+/-- A single outstanding record is a one-step chain. -/
+theorem RestoreChain.single {restores : List Restore} {r : Restore}
+    (hr : r ∈ restores) : RestoreChain restores r.lender r.borrower :=
+  .snoc r (.nil r.lender) hr rfl
+
+/-- A chain through a restoration list is a chain through any list containing it. -/
+theorem RestoreChain.mono {restores restores' : List Restore}
+    (hsub : ∀ r ∈ restores, r ∈ restores') {a b : CapId}
+    (h : RestoreChain restores a b) : RestoreChain restores' a b := by
+  induction h with
+  | nil => exact .nil _
+  | snoc r _ hr hl ih => exact .snoc r ih (hsub _ hr) hl
+
+/-- Chains compose. -/
+theorem RestoreChain.trans {restores : List Restore} {a b c : CapId}
+    (h : RestoreChain restores a b) (h' : RestoreChain restores b c) :
+    RestoreChain restores a c := by
+  induction h' with
+  | nil => exact h
+  | snoc r _ hr hl ih => exact .snoc r ih hr hl
+
+/-- A subtree carries the identity protocol for an expected access name. A leaf
+qualifies when its own identity is reachable from the expected name through
+outstanding restoration records; a suspension qualifies when its parent identity
+is so reachable and its two subtrees in turn recover their own rule fragment
+identities. Resource agreement is `Realizes`'s business; this relation tracks
+only where the identities a pending reconstruction must recover actually live. -/
+inductive Recovers (restores : List Restore) : Forest → CapId → Prop where
+  | leaf (c : Leaf) {e : CapId} (h : RestoreChain restores e c.id) :
+      Recovers restores (.leaf c) e
+  | split (kind : RuleKind) (p lr rr : Leaf) (l r : Forest) {e : CapId}
+      (h : RestoreChain restores e p.id)
+      (hl : Recovers restores l lr.id) (hr : Recovers restores r rr.id) :
+      Recovers restores (.split kind p lr rr l r) e
+
+/-- Every suspension's children recover the rule fragment identities it records,
+and every nested suspension does so too. -/
+def WellRecovered (restores : List Restore) : Forest → Prop
+  | .leaf _ => True
+  | .split _ _ lr rr l r =>
+      l.Recovers restores lr.id ∧ r.Recovers restores rr.id ∧
+      l.WellRecovered restores ∧ r.WellRecovered restores
+
+/-- Identity recovery is monotone in the restoration list. -/
+theorem Recovers.mono {restores restores' : List Restore}
+    (hsub : ∀ r ∈ restores, r ∈ restores') {f : Forest} {e : CapId}
+    (h : f.Recovers restores e) : f.Recovers restores' e := by
+  induction h with
+  | leaf c hc => exact Forest.Recovers.leaf c (RestoreChain.mono hsub hc)
+  | split kind par lrule rrule lf rt hc _ _ ihl ihr =>
+      exact Forest.Recovers.split kind par lrule rrule lf rt
+        (RestoreChain.mono hsub hc) ihl ihr
+
+/-- Identity recovery is monotone in the restoration relation itself, not only
+in the list. -/
+theorem Recovers.chainMono {restores restores' : List Restore}
+    (hmono : ∀ {a b : CapId}, RestoreChain restores a b → RestoreChain restores' a b)
+    {f : Forest} {e : CapId} (h : f.Recovers restores e) : f.Recovers restores' e := by
+  induction h with
+  | leaf c hc => exact Forest.Recovers.leaf c (hmono hc)
+  | split kind par lrule rrule lf rt hc _ _ ihl ihr =>
+      exact Forest.Recovers.split kind par lrule rrule lf rt (hmono hc) ihl ihr
+
+/-- Whole-forest recovery is monotone in the restoration relation. -/
+theorem WellRecovered.chainMono {restores restores' : List Restore}
+    (hmono : ∀ {a b : CapId}, RestoreChain restores a b → RestoreChain restores' a b)
+    {f : Forest} (h : f.WellRecovered restores) : f.WellRecovered restores' := by
+  induction f with
+  | leaf c => trivial
+  | split k p lr rr l r ihl ihr =>
+      simp only [Forest.WellRecovered] at h ⊢
+      exact ⟨Forest.Recovers.chainMono hmono h.1, Forest.Recovers.chainMono hmono h.2.1,
+        ihl h.2.2.1, ihr h.2.2.2⟩
+
+/-- Whole-forest recovery is monotone in the restoration list. -/
+theorem WellRecovered.mono {restores restores' : List Restore}
+    (hsub : ∀ r ∈ restores, r ∈ restores') {f : Forest}
+    (h : f.WellRecovered restores) : f.WellRecovered restores' := by
+  induction f with
+  | leaf c => trivial
+  | split k p lr rr l r ihl ihr =>
+      simp only [Forest.WellRecovered] at h ⊢
+      exact ⟨Forest.Recovers.mono hsub h.1, Forest.Recovers.mono hsub h.2.1,
+        ihl h.2.2.1, ihr h.2.2.2⟩
+
+/-- Every suspension of a well-recovered forest has children that recover the
+rule identities the suspension records. -/
+theorem wellRecovered_suspension {restores : List Restore} {f : Forest}
+    (h : f.WellRecovered restores) {susp : Suspension}
+    (hs : susp ∈ f.suspensions) :
+    susp.left.Recovers restores susp.leftRule.id ∧
+      susp.right.Recovers restores susp.rightRule.id := by
+  induction f with
+  | leaf c => simp [Forest.suspensions] at hs
+  | split k p lr rr l r ihl ihr =>
+      simp only [Forest.WellRecovered] at h
+      obtain ⟨hL, hR, hWL, hWR⟩ := h
+      simp only [Forest.suspensions, List.mem_cons, List.mem_append] at hs
+      rcases hs with rfl | hs | hs
+      · exact ⟨hL, hR⟩
+      · exact ihl hWL hs
+      · exact ihr hWR hs
+
 /-- The recorded resource of an authority node agrees with everything actually
 below it. A current leaf is its own frontier. A suspended parent's frontier is
 the pair of current subtrees its suspension records: their pointwise budget is
@@ -3569,6 +3689,587 @@ theorem retagLeaf_nodes_scope {f f' : Forest} {id newId : CapId} {p : Leaf}
   exact nodes_scope_modifyLeafAt h hf
     (fun d x d' hg hd => retagLeafAt_nodes_scope hg hd)
 
+/-! ### Identity recovery through the checked operations
+
+The recovery relation is preserved by every operation that changes a current
+leaf or a suspension: a locally recoverable replacement keeps each suspension's
+identity dependency, and the operations only grow the restoration list (`borrow`,
+the subdivisions) or shrink it by exactly the record a `return` discharges.
+-/
+
+/-- Replacing one leaf at a fixed site preserves identity recovery when the
+replacement locally recovers the expected identity and each suspension's
+identity dependency is monotone in the restoration list. -/
+theorem recovers_modifyLeafAt {f : Forest} {id : CapId}
+    {g : Leaf → Option (Forest × Leaf)}
+    {rs rs' : List Restore}
+    (hmono : ∀ {a b : CapId}, RestoreChain rs a b → RestoreChain rs' a b)
+    (hlocal : ∀ (d : Leaf) (x : Forest) (d' : Leaf), d.id = id →
+      g d = some (x, d') → ∀ {e : CapId},
+      (Forest.leaf d).Recovers rs e → x.Recovers rs' e)
+    {e : CapId} (hr : f.Recovers rs e) :
+    ∀ {f' : Forest} {c : Leaf}, f.modifyLeafAt id g = some (f', c) →
+      f'.Recovers rs' e := by
+  induction hr with
+  | leaf c0 hchain =>
+      intro f' c h
+      simp only [Forest.modifyLeafAt] at h
+      split at h
+      · rename_i hcid
+        exact hlocal c0 f' c hcid h (Forest.Recovers.leaf c0 hchain)
+      · cases h
+  | split kind par lrule rrule lf rt hchain hlft hrgt ihl ihr =>
+      intro f' c h
+      simp only [Forest.modifyLeafAt] at h
+      split at h
+      · rename_i l' c' hl
+        simp only [Option.some.injEq, Prod.mk.injEq] at h
+        obtain ⟨rfl, rfl⟩ := h
+        exact Forest.Recovers.split kind par lrule rrule l' rt (hmono hchain) (ihl hl)
+          (Forest.Recovers.chainMono hmono hrgt)
+      · rename_i hl
+        split at h
+        · rename_i r' c' hr'
+          simp only [Option.some.injEq, Prod.mk.injEq] at h
+          obtain ⟨rfl, rfl⟩ := h
+          exact Forest.Recovers.split kind par lrule rrule lf r' (hmono hchain)
+            (Forest.Recovers.chainMono hmono hlft) (ihr hr')
+        · cases h
+
+/-- Replacing one leaf at a fixed site preserves whole-forest recovery when the
+replacement is itself well recovered and the restoration list only grows. -/
+theorem wellRecovered_modifyLeafAt {f f' : Forest} {id : CapId}
+    {g : Leaf → Option (Forest × Leaf)} {c : Leaf}
+    (h : f.modifyLeafAt id g = some (f', c))
+    {rs rs' : List Restore} (hsub : ∀ r ∈ rs, r ∈ rs')
+    (hlocal : ∀ (d : Leaf) (x : Forest) (d' : Leaf), d.id = id →
+      g d = some (x, d') → ∀ {e : CapId},
+      (Forest.leaf d).Recovers rs e → x.Recovers rs' e)
+    (hlocalW : ∀ (d : Leaf) (x : Forest) (d' : Leaf), d.id = id →
+      g d = some (x, d') → x.WellRecovered rs')
+    (hw : f.WellRecovered rs) : f'.WellRecovered rs' := by
+  induction f generalizing f' c with
+  | leaf c0 =>
+      simp only [Forest.modifyLeafAt] at h
+      split at h
+      · rename_i hcid
+        exact hlocalW c0 f' c hcid h
+      · cases h
+  | split k p0 lr rr l r ihl ihr =>
+      simp only [Forest.WellRecovered] at hw
+      obtain ⟨hL, hR, hWL, hWR⟩ := hw
+      simp only [Forest.modifyLeafAt] at h
+      split at h
+      · rename_i l' c' hl
+        simp only [Option.some.injEq, Prod.mk.injEq] at h
+        obtain ⟨rfl, rfl⟩ := h
+        exact ⟨Forest.recovers_modifyLeafAt
+            (fun {a b} hc => RestoreChain.mono hsub hc) hlocal hL hl,
+          Forest.Recovers.mono hsub hR, ihl hl hWL,
+          Forest.WellRecovered.mono hsub hWR⟩
+      · rename_i hl
+        split at h
+        · rename_i r' c' hr'
+          simp only [Option.some.injEq, Prod.mk.injEq] at h
+          obtain ⟨rfl, rfl⟩ := h
+          exact ⟨Forest.Recovers.mono hsub hL,
+            Forest.recovers_modifyLeafAt
+              (fun {a b} hc => RestoreChain.mono hsub hc) hlocal hR hr',
+            Forest.WellRecovered.mono hsub hWL, ihr hr' hWR⟩
+        · cases h
+
+/-- A subdivision preserves whole-forest recovery: the new suspension's children
+are the two fresh leaves, each recovered from its own rule identity. -/
+theorem wellRecovered_splitSpatialAt {f f' : Forest} {p : Leaf} {id c1 c2 : CapId}
+    {lo1 hi1 lo2 hi2 : Nat}
+    (h : f.splitSpatialAt id c1 c2 lo1 hi1 lo2 hi2 = some (f', p))
+    {rs : List Restore} (hw : f.WellRecovered rs) : f'.WellRecovered rs := by
+  unfold Forest.splitSpatialAt at h
+  refine wellRecovered_modifyLeafAt h (fun x hx => hx) ?_ ?_ hw
+  · intro d x d' _hid hg e hrec
+    obtain ⟨-, l, r, rfl, -⟩ := spatialLeafSplit_shape hg
+    cases hrec with
+    | leaf c0 hchain =>
+        exact Forest.Recovers.split .spatial d l r (.leaf l) (.leaf r) hchain
+          (Forest.Recovers.leaf l (RestoreChain.nil l.id))
+          (Forest.Recovers.leaf r (RestoreChain.nil r.id))
+  · intro d x d' _hid hg
+    obtain ⟨-, l, r, rfl, -⟩ := spatialLeafSplit_shape hg
+    exact ⟨Forest.Recovers.leaf l (RestoreChain.nil l.id),
+      Forest.Recovers.leaf r (RestoreChain.nil r.id), trivial, trivial⟩
+
+/-- A fractional subdivision preserves whole-forest recovery. -/
+theorem wellRecovered_splitFractionAt {f f' : Forest} {p : Leaf} {id c1 c2 : CapId}
+    {q1 q2 : Nat}
+    (h : f.splitFractionAt id c1 c2 q1 q2 = some (f', p))
+    {rs : List Restore} (hw : f.WellRecovered rs) : f'.WellRecovered rs := by
+  unfold Forest.splitFractionAt at h
+  refine wellRecovered_modifyLeafAt h (fun x hx => hx) ?_ ?_ hw
+  · intro d x d' _hid hg e hrec
+    obtain ⟨-, l, r, rfl, -⟩ := fractionalLeafSplit_shape hg
+    cases hrec with
+    | leaf c0 hchain =>
+        exact Forest.Recovers.split .fractional d l r (.leaf l) (.leaf r) hchain
+          (Forest.Recovers.leaf l (RestoreChain.nil l.id))
+          (Forest.Recovers.leaf r (RestoreChain.nil r.id))
+  · intro d x d' _hid hg
+    obtain ⟨-, l, r, rfl, -⟩ := fractionalLeafSplit_shape hg
+    exact ⟨Forest.Recovers.leaf l (RestoreChain.nil l.id),
+      Forest.Recovers.leaf r (RestoreChain.nil r.id), trivial, trivial⟩
+
+/-- Retagging a leaf for a borrow preserves whole-forest recovery: the new record
+links the old identity to the new one, so every chain that ended at the old leaf
+identity now ends at the new one. -/
+theorem wellRecovered_retagLeaf {f f' : Forest} {id newId : CapId} {p : Leaf}
+    (h : f.retagLeaf id newId = some (f', p))
+    {rs : List Restore} {r : Restore} (hrl : r.lender = id) (hrb : r.borrower = newId)
+    (hw : f.WellRecovered rs) : f'.WellRecovered (r :: rs) := by
+  unfold Forest.retagLeaf at h
+  refine wellRecovered_modifyLeafAt h (fun x hx => List.mem_cons_of_mem _ hx) ?_ ?_ hw
+  · intro d x d' hid hg e hrec
+    unfold retagLeafAt at hg
+    split at hg
+    · simp only [Option.some.injEq, Prod.mk.injEq] at hg
+      obtain ⟨rfl, rfl⟩ := hg
+      cases hrec with
+      | leaf c0 hchain =>
+          exact Forest.Recovers.leaf {d with id := newId}
+            (hrb ▸ RestoreChain.snoc r
+              (RestoreChain.mono (fun y hy => List.mem_cons_of_mem _ hy) hchain)
+              List.mem_cons_self (by rw [hrl, ← hid]))
+    · cases hg
+  · intro d x d' _hid hg
+    unfold retagLeafAt at hg
+    split at hg
+    · simp only [Option.some.injEq, Prod.mk.injEq] at hg
+      obtain ⟨rfl, rfl⟩ := hg
+      trivial
+    · cases hg
+
+/-- Reconstruction preserves identity recovery: a reconstructed suspension is a
+leaf carrying the identity its suspension recorded, which is exactly the
+expected identity. -/
+theorem recovers_reconstructAt {f : Forest} {id : CapId} {restores : List Restore} :
+    ∀ {e : CapId}, f.Recovers restores e →
+      ∀ {f' : Forest} {a b : Leaf}, f.reconstructAt id = some (f', a, b) →
+        f'.Recovers restores e := by
+  induction f with
+  | leaf c =>
+      intro e hr f' a b h
+      simp [Forest.reconstructAt] at h
+  | split k p0 lr rr l r ihl ihr =>
+      intro e hr f' a b h
+      cases hr with
+      | split kind par lrule rrule lf rt hchain hlft hrgt =>
+          simp only [Forest.reconstructAt] at h
+          split at h
+          · rename_i hp
+            have hf' : f' = .leaf p0 := Forest.reconstructHere_nodes h
+            subst hf'
+            exact Forest.Recovers.leaf p0 hchain
+          · rename_i hp
+            split at h
+            · rename_i l' a' b' hl
+              simp only [Option.some.injEq, Prod.mk.injEq] at h
+              obtain ⟨rfl, rfl, rfl⟩ := h
+              exact Forest.Recovers.split k p0 lr rr l' r hchain (ihl hlft hl) hrgt
+            · rename_i hl
+              split at h
+              · rename_i r' a' b' hr'
+                simp only [Option.some.injEq, Prod.mk.injEq] at h
+                obtain ⟨rfl, rfl, rfl⟩ := h
+                exact Forest.Recovers.split k p0 lr rr l r' hchain hlft (ihr hrgt hr')
+              · cases h
+
+/-- Reconstruction preserves whole-forest recovery. -/
+theorem wellRecovered_reconstructAt {f : Forest} {id : CapId} {restores : List Restore}
+    (hw : f.WellRecovered restores) :
+    ∀ {f' : Forest} {a b : Leaf}, f.reconstructAt id = some (f', a, b) →
+      f'.WellRecovered restores := by
+  induction f with
+  | leaf c =>
+      intro f' a b h
+      simp [Forest.reconstructAt] at h
+  | split k p0 lr rr l r ihl ihr =>
+      intro f' a b h
+      simp only [Forest.WellRecovered] at hw
+      obtain ⟨hL, hR, hWL, hWR⟩ := hw
+      simp only [Forest.reconstructAt] at h
+      split at h
+      · rename_i hp
+        have hf' : f' = .leaf p0 := Forest.reconstructHere_nodes h
+        subst hf'
+        trivial
+      · rename_i hp
+        split at h
+        · rename_i l' a' b' hl
+          simp only [Option.some.injEq, Prod.mk.injEq] at h
+          obtain ⟨rfl, rfl, rfl⟩ := h
+          exact ⟨Forest.recovers_reconstructAt hL hl, hR, ihl hWL hl, hWR⟩
+        · rename_i hl
+          split at h
+          · rename_i r' a' b' hr'
+            simp only [Option.some.injEq, Prod.mk.injEq] at h
+            obtain ⟨rfl, rfl, rfl⟩ := h
+            exact ⟨hL, Forest.recovers_reconstructAt hR hr', hWL, ihr hWR hr'⟩
+          · cases h
+
+/-! ### Return: filtering the discharged record
+
+A `return` retags the borrower back to its lender, retires the borrower name and
+removes the discharged record from the restoration list. Identity recovery
+survives because the record can only ever be the *last* step of a chain: a chain
+that reached another record's lender from the borrower name would make the
+borrower an outstanding lender, which the return guard excludes.
+-/
+
+/-- A chain either names the same identity twice, or its last record and the
+prefix that reaches that record's lender. -/
+theorem RestoreChain.unsnoc {restores : List Restore} {a b : CapId}
+    (h : RestoreChain restores a b) :
+    a = b ∨ ∃ (a' : CapId) (r : Restore), RestoreChain restores a a' ∧
+      r ∈ restores ∧ r.lender = a' ∧ r.borrower = b := by
+  induction h with
+  | nil => exact Or.inl rfl
+  | snoc r0 hprev hr hl =>
+      exact Or.inr ⟨_, r0, hprev, hr, hl, rfl⟩
+
+/-- A chain that ends away from the discharged borrower survives removing the
+records borrowed by that name. -/
+theorem RestoreChain.filter_ne {restores : List Restore} {borrower : CapId}
+    (hguard : ∀ r ∈ restores, r.lender ≠ borrower) {a b : CapId}
+    (h : RestoreChain restores a b) (hb : b ≠ borrower) :
+    RestoreChain (restores.filter (fun x => decide (x.borrower ≠ borrower))) a b := by
+  induction h with
+  | nil => exact RestoreChain.nil _
+  | snoc r0 hprev hr hl ih =>
+      have hb0 := hguard r0 hr
+      rw [hl] at hb0
+      have hprev' := ih hb0
+      have hmem : r0 ∈ restores.filter (fun x => decide (x.borrower ≠ borrower)) :=
+        List.mem_filter.mpr ⟨hr, by simpa using hb⟩
+      exact RestoreChain.snoc (a := a) r0 hprev' hmem hl
+
+/-- A chain that ends at the discharged borrower becomes a chain to its lender
+after the record is removed. -/
+theorem RestoreChain.filter_to_lender {restores : List Restore} {borrower lender a : CapId}
+    (hguard : ∀ r ∈ restores, r.lender ≠ borrower)
+    (hrec : ∀ r ∈ restores, r.borrower = borrower → r.lender = lender)
+    (ha : a ≠ borrower) (h : RestoreChain restores a borrower) :
+    RestoreChain (restores.filter (fun x => decide (x.borrower ≠ borrower))) a lender := by
+  rcases RestoreChain.unsnoc h with heq | ⟨a', r0, hprev, hr, hl, hb⟩
+  · exact absurd heq ha
+  · have hla : r0.lender = lender := hrec r0 hr hb
+    have hne : a' ≠ borrower := by rw [← hl]; exact hguard r0 hr
+    rw [← hla, hl]
+    exact RestoreChain.filter_ne hguard hprev hne
+
+/-- The separation facts a `return` needs at a forest: distinct node identities,
+the only node carrying the returned name is the retagging site, and no rule
+fragment carries it. -/
+structure ReturnSite (f : Forest) (borrower : CapId) (p : Leaf) : Prop where
+  /-- Authority node identities are distinct. -/
+  nodup : (f.nodes.map Leaf.id).Nodup
+  /-- The only node carrying the returned name is the retagged leaf. -/
+  site : ∀ c ∈ f.nodes, c.id = borrower → c = p
+  /-- No rule fragment carries the returned name. -/
+  rule : ∀ x ∈ f.ruleIds, x ≠ borrower
+
+/-- A subtree that contains no occurrence of the returned name. -/
+structure Avoids (f : Forest) (borrower : CapId) : Prop where
+  /-- No authority node carries the returned name. -/
+  node : ∀ x ∈ f.nodes.map Leaf.id, x ≠ borrower
+  /-- No rule fragment carries the returned name. -/
+  rule : ∀ x ∈ f.ruleIds, x ≠ borrower
+
+/-- An identity equal at two positions of a nodup map comes from the same
+element. -/
+theorem eq_of_mem_of_map_eq {α β : Type} {l : List α} {f : α → β}
+    (hn : (l.map f).Nodup) {a b : α} (ha : a ∈ l) (hb : b ∈ l) (h : f a = f b) :
+    a = b := by
+  induction l with
+  | nil => cases ha
+  | cons x xs ih =>
+      rw [List.map_cons, List.nodup_cons] at hn
+      obtain ⟨hx, hxs⟩ := hn
+      rcases List.mem_cons.mp ha with hhead | htail
+      · rcases List.mem_cons.mp hb with hhead' | htailb
+        · rw [hhead, hhead']
+        · subst hhead
+          exact absurd (h.symm ▸ List.mem_map.mpr ⟨b, htailb, rfl⟩) hx
+      · rcases List.mem_cons.mp hb with hhead' | htailb
+        · subst hhead'
+          exact absurd (h ▸ List.mem_map.mpr ⟨a, htail, rfl⟩) hx
+        · exact ih hxs htail htailb
+
+/-- Node identities of a left subtree lift to the split. -/
+theorem node_ids_mem_left {kind : RuleKind} {p lr rr : Leaf} {l r : Forest}
+    {x : CapId} (hx : x ∈ l.nodes.map Leaf.id) :
+    x ∈ (Forest.split kind p lr rr l r).nodes.map Leaf.id := by
+  simp only [Forest.nodes, List.map_cons, List.map_append]
+  exact List.mem_cons_of_mem _ (List.mem_append.mpr (Or.inl hx))
+
+/-- Node identities of a right subtree lift to the split. -/
+theorem node_ids_mem_right {kind : RuleKind} {p lr rr : Leaf} {l r : Forest}
+    {x : CapId} (hx : x ∈ r.nodes.map Leaf.id) :
+    x ∈ (Forest.split kind p lr rr l r).nodes.map Leaf.id := by
+  simp only [Forest.nodes, List.map_cons, List.map_append]
+  exact List.mem_cons_of_mem _ (List.mem_append.mpr (Or.inr hx))
+
+/-- Rule identities of a left subtree lift to the split. -/
+theorem rule_ids_mem_left {kind : RuleKind} {p lr rr : Leaf} {l r : Forest}
+    {x : CapId} (hx : x ∈ l.ruleIds) :
+    x ∈ (Forest.split kind p lr rr l r).ruleIds := by
+  simp only [Forest.ruleIds, List.mem_cons, List.mem_append]
+  exact Or.inr (Or.inr (Or.inl hx))
+
+/-- Rule identities of a right subtree lift to the split. -/
+theorem rule_ids_mem_right {kind : RuleKind} {p lr rr : Leaf} {l r : Forest}
+    {x : CapId} (hx : x ∈ r.ruleIds) :
+    x ∈ (Forest.split kind p lr rr l r).ruleIds := by
+  simp only [Forest.ruleIds, List.mem_cons, List.mem_append]
+  exact Or.inr (Or.inr (Or.inr hx))
+
+/-- A current leaf of the left subtree is not the suspended parent. -/
+theorem parent_ne_of_mem_left {kind : RuleKind} {par lrule rrule : Leaf} {lf rt : Forest}
+    {p : Leaf}
+    (hn : ((Forest.split kind par lrule rrule lf rt).nodes.map Leaf.id).Nodup)
+    (hpl : p ∈ lf.nodes) : p ≠ par := by
+  intro heq
+  have hnd : (par.id :: (lf.nodes.map Leaf.id ++ rt.nodes.map Leaf.id)).Nodup := by
+    simpa [Forest.nodes, List.map_cons, List.map_append] using hn
+  exact (List.nodup_cons.mp hnd).1
+    (heq ▸ List.mem_append.mpr (Or.inl (List.mem_map.mpr ⟨p, hpl, rfl⟩)))
+
+/-- A current leaf of the right subtree is not the suspended parent. -/
+theorem parent_ne_of_mem_right {kind : RuleKind} {par lrule rrule : Leaf} {lf rt : Forest}
+    {p : Leaf}
+    (hn : ((Forest.split kind par lrule rrule lf rt).nodes.map Leaf.id).Nodup)
+    (hpr : p ∈ rt.nodes) : p ≠ par := by
+  intro heq
+  have hnd : (par.id :: (lf.nodes.map Leaf.id ++ rt.nodes.map Leaf.id)).Nodup := by
+    simpa [Forest.nodes, List.map_cons, List.map_append] using hn
+  exact (List.nodup_cons.mp hnd).1
+    (heq ▸ List.mem_append.mpr (Or.inr (List.mem_map.mpr ⟨p, hpr, rfl⟩)))
+
+/-- The return-site facts restrict to the left subtree. -/
+theorem ReturnSite.left {kind : RuleKind} {p0 lr rr : Leaf} {l r : Forest}
+    {borrower : CapId} {p : Leaf}
+    (h : ReturnSite (Forest.split kind p0 lr rr l r) borrower p) :
+    ReturnSite l borrower p := by
+  have hnd : (p0.id :: (l.nodes.map Leaf.id ++ r.nodes.map Leaf.id)).Nodup := by
+    simpa [Forest.nodes, List.map_cons, List.map_append] using h.nodup
+  exact ⟨(List.nodup_append.mp (List.nodup_cons.mp hnd).2).1,
+    fun c hc hcid => h.site c
+      (List.mem_cons_of_mem _ (List.mem_append.mpr (Or.inl hc))) hcid,
+    fun x hx => h.rule x (rule_ids_mem_left hx)⟩
+
+/-- The return-site facts restrict to the right subtree. -/
+theorem ReturnSite.right {kind : RuleKind} {p0 lr rr : Leaf} {l r : Forest}
+    {borrower : CapId} {p : Leaf}
+    (h : ReturnSite (Forest.split kind p0 lr rr l r) borrower p) :
+    ReturnSite r borrower p := by
+  have hnd : (p0.id :: (l.nodes.map Leaf.id ++ r.nodes.map Leaf.id)).Nodup := by
+    simpa [Forest.nodes, List.map_cons, List.map_append] using h.nodup
+  exact ⟨(List.nodup_append.mp (List.nodup_cons.mp hnd).2).2.1,
+    fun c hc hcid => h.site c
+      (List.mem_cons_of_mem _ (List.mem_append.mpr (Or.inr hc))) hcid,
+    fun x hx => h.rule x (rule_ids_mem_right hx)⟩
+
+/-- The avoidance facts restrict to the left subtree. -/
+theorem Avoids.left {kind : RuleKind} {p0 lr rr : Leaf} {l r : Forest}
+    {borrower : CapId} (h : Avoids (Forest.split kind p0 lr rr l r) borrower) :
+    Avoids l borrower :=
+  ⟨fun x hx => h.node x (node_ids_mem_left hx), fun x hx => h.rule x (rule_ids_mem_left hx)⟩
+
+/-- The avoidance facts restrict to the right subtree. -/
+theorem Avoids.right {kind : RuleKind} {p0 lr rr : Leaf} {l r : Forest}
+    {borrower : CapId} (h : Avoids (Forest.split kind p0 lr rr l r) borrower) :
+    Avoids r borrower :=
+  ⟨fun x hx => h.node x (node_ids_mem_right hx), fun x hx => h.rule x (rule_ids_mem_right hx)⟩
+
+/-- The left subtree avoids the returned name when the retagged leaf is a node of
+the right subtree: a duplicate identity would break node distinctness. -/
+theorem Avoids.left_of_found_right {kind : RuleKind} {p0 lr rr : Leaf} {l r : Forest}
+    {borrower : CapId} {p : Leaf}
+    (hsite : ReturnSite (Forest.split kind p0 lr rr l r) borrower p)
+    (hpr : p ∈ r.nodes) : Avoids l borrower := by
+  have hnd : (p0.id :: (l.nodes.map Leaf.id ++ r.nodes.map Leaf.id)).Nodup := by
+    simpa [Forest.nodes, List.map_cons, List.map_append] using hsite.nodup
+  obtain ⟨-, -, hdisj⟩ := List.nodup_append.mp (List.nodup_cons.mp hnd).2
+  refine ⟨?_, fun x hx => hsite.rule x (rule_ids_mem_left hx)⟩
+  intro x hx hxb
+  obtain ⟨c, hc, hcid⟩ := List.mem_map.mp hx
+  have hcf : c ∈ (Forest.split kind p0 lr rr l r).nodes := by
+    simp only [Forest.nodes]
+    exact List.mem_cons_of_mem _ (List.mem_append.mpr (Or.inl hc))
+  have hcp : c = p := hsite.site c hcf (by rw [hcid, hxb])
+  exact hdisj c.id (List.mem_map.mpr ⟨c, hc, rfl⟩) p.id
+    (List.mem_map.mpr ⟨p, hpr, rfl⟩) (by rw [hcp])
+
+/-- The right subtree avoids the returned name when the retagged leaf is a node
+of the left subtree. -/
+theorem Avoids.right_of_found_left {kind : RuleKind} {p0 lr rr : Leaf} {l r : Forest}
+    {borrower : CapId} {p : Leaf}
+    (hsite : ReturnSite (Forest.split kind p0 lr rr l r) borrower p)
+    (hpl : p ∈ l.nodes) : Avoids r borrower := by
+  have hnd : (p0.id :: (l.nodes.map Leaf.id ++ r.nodes.map Leaf.id)).Nodup := by
+    simpa [Forest.nodes, List.map_cons, List.map_append] using hsite.nodup
+  obtain ⟨-, -, hdisj⟩ := List.nodup_append.mp (List.nodup_cons.mp hnd).2
+  refine ⟨?_, fun x hx => hsite.rule x (rule_ids_mem_right hx)⟩
+  intro x hx hxb
+  obtain ⟨c, hc, hcid⟩ := List.mem_map.mp hx
+  have hcf : c ∈ (Forest.split kind p0 lr rr l r).nodes := by
+    simp only [Forest.nodes]
+    exact List.mem_cons_of_mem _ (List.mem_append.mpr (Or.inr hc))
+  have hcp : c = p := hsite.site c hcf (by rw [hcid, hxb])
+  exact hdisj p.id (List.mem_map.mpr ⟨p, hpl, rfl⟩) c.id
+    (List.mem_map.mpr ⟨c, hc, rfl⟩) (by rw [hcp])
+
+/-- Removing the discharged record preserves recovery for a subtree that carries
+no occurrence of the returned name. -/
+theorem recovers_filter {restores : List Restore} {borrower : CapId}
+    (hguard : ∀ r ∈ restores, r.lender ≠ borrower) {f : Forest} {e : CapId}
+    (hr : f.Recovers restores e) :
+    Avoids f borrower →
+      f.Recovers (restores.filter (fun x => decide (x.borrower ≠ borrower))) e := by
+  induction hr with
+  | leaf c0 hchain =>
+      intro havoid
+      have hcne : c0.id ≠ borrower :=
+        havoid.node c0.id (List.mem_map.mpr ⟨c0, by simp [Forest.nodes], rfl⟩)
+      exact Forest.Recovers.leaf c0 (RestoreChain.filter_ne hguard hchain hcne)
+  | split kind par lrule rrule lf rt hchain hlft hrgt ihl ihr =>
+      intro havoid
+      have hpne : par.id ≠ borrower :=
+        havoid.node par.id (List.mem_map.mpr ⟨par, by simp [Forest.nodes], rfl⟩)
+      exact Forest.Recovers.split kind par lrule rrule lf rt
+        (RestoreChain.filter_ne hguard hchain hpne)
+        (ihl (Avoids.left havoid)) (ihr (Avoids.right havoid))
+
+/-- Removing the discharged record preserves whole-forest recovery for a subtree
+that carries no occurrence of the returned name. -/
+theorem wellRecovered_filter {restores : List Restore} {borrower : CapId}
+    (hguard : ∀ r ∈ restores, r.lender ≠ borrower) {f : Forest}
+    (hw : f.WellRecovered restores) (havoid : Avoids f borrower) :
+    f.WellRecovered (restores.filter (fun x => decide (x.borrower ≠ borrower))) := by
+  induction f with
+  | leaf c => trivial
+  | split k p0 lr rr l r ihl ihr =>
+      simp only [Forest.WellRecovered] at hw ⊢
+      exact ⟨recovers_filter hguard hw.1 (Avoids.left havoid), recovers_filter hguard hw.2.1
+          (Avoids.right havoid), ihl hw.2.2.1 (Avoids.left havoid),
+        ihr hw.2.2.2 (Avoids.right havoid)⟩
+
+/-- Removing the discharged record preserves recovery of the retagged subtree:
+a chain to the borrower becomes a chain to the lender. -/
+theorem recovers_return {restores : List Restore} {borrower lender : CapId}
+    (hguard : ∀ r ∈ restores, r.lender ≠ borrower)
+    (hrec : ∀ r ∈ restores, r.borrower = borrower → r.lender = lender) {f : Forest}
+    {e : CapId} (hr : f.Recovers restores e) :
+    e ≠ borrower → ∀ {p : Leaf} {f' : Forest},
+      ReturnSite f borrower p → f.retagLeaf borrower lender = some (f', p) →
+        f'.Recovers (restores.filter (fun x => decide (x.borrower ≠ borrower))) e := by
+  induction hr with
+  | leaf c0 hchain =>
+      intro he p f' hsite hret
+      unfold Forest.retagLeaf at hret
+      simp only [Forest.modifyLeafAt] at hret
+      split at hret
+      · rename_i hcid
+        unfold retagLeafAt at hret
+        split at hret
+        · simp only [Option.some.injEq, Prod.mk.injEq] at hret
+          obtain ⟨rfl, rfl⟩ := hret
+          exact Forest.Recovers.leaf {c0 with id := lender}
+            (RestoreChain.filter_to_lender hguard hrec he
+              (by rwa [hcid] at hchain))
+        · cases hret
+      · cases hret
+  | split kind par lrule rrule lf rt hchain hlft hrgt ihl ihr =>
+      intro he p f' hsite hret
+      unfold Forest.retagLeaf at hret
+      simp only [Forest.modifyLeafAt] at hret
+      split at hret
+      · rename_i l' c' hl
+        simp only [Option.some.injEq, Prod.mk.injEq] at hret
+        obtain ⟨rfl, rfl⟩ := hret
+        have hpl : c' ∈ lf.nodes := (Forest.retagLeaf_found hl).2
+        have hpne : par.id ≠ borrower := by
+          intro heq
+          have hpar : par = c' := hsite.site par (by simp [Forest.nodes]) heq
+          exact (parent_ne_of_mem_left hsite.nodup hpl) hpar.symm
+        exact Forest.Recovers.split kind par lrule rrule l' rt
+          (RestoreChain.filter_ne hguard hchain hpne)
+          (ihl (hsite.rule lrule.id (by simp [Forest.ruleIds])) (ReturnSite.left hsite) hl)
+          (recovers_filter hguard hrgt (Avoids.right_of_found_left hsite hpl))
+      · rename_i hl
+        split at hret
+        · rename_i r' c' hr'
+          simp only [Option.some.injEq, Prod.mk.injEq] at hret
+          obtain ⟨rfl, rfl⟩ := hret
+          have hpr : c' ∈ rt.nodes := (Forest.retagLeaf_found hr').2
+          have hpne : par.id ≠ borrower := by
+            intro heq
+            have hpar : par = c' := hsite.site par (by simp [Forest.nodes]) heq
+            exact (parent_ne_of_mem_right hsite.nodup hpr) hpar.symm
+          exact Forest.Recovers.split kind par lrule rrule lf r'
+            (RestoreChain.filter_ne hguard hchain hpne)
+            (recovers_filter hguard hlft (Avoids.left_of_found_right hsite hpr))
+            (ihr (hsite.rule rrule.id (by simp [Forest.ruleIds])) (ReturnSite.right hsite) hr')
+        · cases hret
+
+/-- A `return` preserves whole-forest recovery. -/
+theorem wellRecovered_return {restores : List Restore} {borrower lender : CapId}
+    (hguard : ∀ r ∈ restores, r.lender ≠ borrower)
+    (hrec : ∀ r ∈ restores, r.borrower = borrower → r.lender = lender) {f : Forest}
+    (hw : f.WellRecovered restores) :
+    ∀ {p : Leaf} {f' : Forest}, ReturnSite f borrower p →
+      f.retagLeaf borrower lender = some (f', p) →
+        f'.WellRecovered (restores.filter (fun x => decide (x.borrower ≠ borrower))) := by
+  induction f with
+  | leaf c =>
+      intro p f' hsite hret
+      unfold Forest.retagLeaf at hret
+      simp only [Forest.modifyLeafAt] at hret
+      split at hret
+      · rename_i hcid
+        unfold retagLeafAt at hret
+        split at hret
+        · simp only [Option.some.injEq, Prod.mk.injEq] at hret
+          obtain ⟨rfl, rfl⟩ := hret
+          trivial
+        · cases hret
+      · cases hret
+  | split k p0 lr rr l r ihl ihr =>
+      intro p f' hsite hret
+      simp only [Forest.WellRecovered] at hw
+      obtain ⟨hL, hR, hWL, hWR⟩ := hw
+      unfold Forest.retagLeaf at hret
+      simp only [Forest.modifyLeafAt] at hret
+      split at hret
+      · rename_i l' c' hl
+        simp only [Option.some.injEq, Prod.mk.injEq] at hret
+        obtain ⟨rfl, rfl⟩ := hret
+        have hpl : c' ∈ l.nodes := (Forest.retagLeaf_found hl).2
+        exact ⟨recovers_return hguard hrec hL
+            (hsite.rule lr.id (by simp [Forest.ruleIds])) (ReturnSite.left hsite) hl,
+          recovers_filter hguard hR (Avoids.right_of_found_left hsite hpl),
+          ihl hWL (ReturnSite.left hsite) hl,
+          wellRecovered_filter hguard hWR (Avoids.right_of_found_left hsite hpl)⟩
+      · rename_i hl
+        split at hret
+        · rename_i r' c' hr'
+          simp only [Option.some.injEq, Prod.mk.injEq] at hret
+          obtain ⟨rfl, rfl⟩ := hret
+          have hpr : c' ∈ r.nodes := (Forest.retagLeaf_found hr').2
+          exact ⟨recovers_filter hguard hL (Avoids.left_of_found_right hsite hpr),
+            recovers_return hguard hrec hR
+              (hsite.rule rr.id (by simp [Forest.ruleIds])) (ReturnSite.right hsite) hr',
+            wellRecovered_filter hguard hWL (Avoids.left_of_found_right hsite hpr),
+            ihr hWR (ReturnSite.right hsite) hr'⟩
+        · cases hret
+
 end Forest
 
 /-- The reconstruction state of one allocation. The heap is the reference byte
@@ -3625,6 +4326,14 @@ def State.RestoreTerminal (s : State) (r : Restore) (c : Leaf) : Prop :=
 def State.Covered (s : State) : Prop :=
   ∀ x, x < s.len → s.forest.budget x = s.D
 
+/-- Every suspension's children recover the rule fragment identities the
+suspension records, and every nested suspension does so too. Resource
+realization says the authority under a suspension still exists; recovery says the
+names a reconstruction must recover are still reachable through accepted
+operations, so an outstanding protocol is not stranded on an identity no accepted
+transition can produce. -/
+def State.Recovers (s : State) : Prop := s.forest.WellRecovered s.restores
+
 /-- Ownership accounting for one allocation.
 
 * `nodeIds_nodup` — the authority-carrying fragments (current leaves and
@@ -3643,6 +4352,11 @@ def State.Covered (s : State) : Prop :=
   borrowers, and no obligation lends to itself.
 * `dormant_absent` — a lender awaiting return is not exercising authority in the
   current frontier.
+* `lenders_not_retired` — a lender awaiting return is not a retired name, so the
+  identity the return protocol must restore is still a usable access name. The
+  dynamic return guard tests the same condition; this account is what makes the
+  conclusion hold of every accepted state rather than of guarded operations
+  alone.
 * `borrower_not_rule` — a borrower identity is not also a rule fragment, so a
   suspension cannot retire a live obligation's identity.
 * `restore_realized` — every obligation's borrower either holds a current or
@@ -3665,6 +4379,11 @@ structure State.Accounts (s : State) : Prop where
   lenders_nodup : (s.restores.map Restore.lender).Nodup
   lender_ne_borrower : ∀ r ∈ s.restores, r.lender ≠ r.borrower
   dormant_absent : ∀ r ∈ s.restores, r.lender ∉ s.forest.nodes.map Leaf.id
+  /-- An outstanding lender has not been retired, so the identity the return
+  protocol must eventually restore is still a usable access name. The dynamic
+  return guard tests the same condition; this account states that no accepted
+  transition can leave an obligation whose target is already unusable. -/
+  lenders_not_retired : ∀ r ∈ s.restores, r.lender ∉ s.retired
   borrower_not_rule : ∀ r ∈ s.restores, r.borrower ∉ s.forest.ruleIds
   restore_realized : ∀ r ∈ s.restores,
       (∃ c ∈ s.forest.nodes, c.id = r.borrower ∧ r.Agrees c) ∨
@@ -3714,10 +4433,11 @@ def State.Coherent (s : State) : Prop := s.forest.Coherent
 
 /-- The reconstruction invariant: the frontier is covered, every recorded rule
 is checked, the ownership accounts are complete, the forest is coherent — every
-current subtree realizes the rule fragment it was recorded for — and every
-fragment is in the component's allocation scope. -/
+current subtree realizes the rule fragment it was recorded for — every fragment
+is in the component's allocation scope, and every suspension's rule identities
+are recoverable. -/
 def State.Inv (s : State) : Prop :=
-  s.Covered ∧ s.forest.Valid ∧ s.Accounts ∧ s.Coherent ∧ s.Scope
+  s.Covered ∧ s.forest.Valid ∧ s.Accounts ∧ s.Coherent ∧ s.Scope ∧ s.Recovers
 
 /-- The covered half of the invariant. -/
 theorem State.Inv.covered {s : State} (h : s.Inv) : s.Covered := h.1
@@ -3732,7 +4452,23 @@ theorem State.Inv.accounts {s : State} (h : s.Inv) : s.Accounts := h.2.2.1
 theorem State.Inv.coherent {s : State} (h : s.Inv) : s.forest.Coherent := h.2.2.2.1
 
 /-- Component allocation scope. -/
-theorem State.Inv.scope {s : State} (h : s.Inv) : s.Scope := h.2.2.2.2
+theorem State.Inv.scope {s : State} (h : s.Inv) : s.Scope := h.2.2.2.2.1
+
+/-- Identity recovery of every suspension's rule fragments. -/
+theorem State.Inv.recoverable {s : State} (h : s.Inv) : s.Recovers := h.2.2.2.2.2
+
+/-- An invariant state's every suspension records rule identities its children
+can still recover. -/
+theorem State.Inv.suspension_recovers {s : State} (h : s.Inv) {susp : Forest.Suspension}
+    (hs : susp ∈ s.forest.suspensions) :
+    susp.left.Recovers s.restores susp.leftRule.id ∧
+      susp.right.Recovers s.restores susp.rightRule.id :=
+  Forest.wellRecovered_suspension h.recoverable hs
+
+/-- An invariant state's outstanding lenders are not retired. -/
+theorem State.Inv.lenders_not_retired {s : State} (h : s.Inv) {r : Restore}
+    (hr : r ∈ s.restores) : r.lender ∉ s.retired :=
+  h.accounts.lenders_not_retired r hr
 
 /-- Rule descriptors are in scope: their allocation, extent and share are bounded
 by the component's. An empty descriptor is admitted (it carries no bytes and no
@@ -3761,12 +4497,24 @@ theorem State.Accounts.setHeap {s : State} (h : s.Accounts) (h' : Heap) :
     lenders_nodup := h.lenders_nodup
     lender_ne_borrower := h.lender_ne_borrower
     dormant_absent := h.dormant_absent
+    lenders_not_retired := h.lenders_not_retired
     borrower_not_rule := h.borrower_not_rule
     restore_realized := h.restore_realized
     node_agrees := h.node_agrees
     nested_agrees := h.nested_agrees
     restore_order := h.restore_order
     rule_fragments_issued := h.rule_fragments_issued }
+
+/-- Replacing the heap keeps identity recovery: recovery mentions only the forest
+and the outstanding obligations. -/
+theorem State.Recovers.setHeap {s : State} (h : s.Recovers) (h' : Heap) :
+    ({ s with heap := h' } : State).Recovers := h
+
+/-- A state whose forest and obligations are unchanged keeps identity recovery. -/
+theorem State.Recovers.of_forest {s s' : State} (hf : s'.forest = s.forest)
+    (hrs : s'.restores = s.restores) (h : s.Recovers) : s'.Recovers := by
+  unfold State.Recovers at h ⊢
+  rwa [hf, hrs]
 
 /-- The component's represented storage: its heap holds the allocation with
 exactly `len` bytes. This is the storage half of the integrated invariant; the
@@ -3785,7 +4533,7 @@ theorem State.Storage.of_heap {s s' : State} (hheap : s'.heap = s.heap)
 /-- A whole live allocation satisfies the reconstruction invariant. -/
 theorem State.initial_inv (a : AllocId) (n D : Nat) (pos : 0 < D)
     (rootId disposalId : CapId) : (State.initial a n D pos rootId disposalId).Inv := by
-  refine ⟨?_, ?_, ?_, ?_, ?_⟩
+  refine ⟨?_, ?_, ?_, ?_, ?_, ?_⟩
   · intro x hx
     change (Forest.leaf
       { id := rootId, alloc := a, lo := 0, hi := n, ordered := Nat.zero_le n,
@@ -3802,6 +4550,7 @@ theorem State.initial_inv (a : AllocId) (n D : Nat) (pos : 0 < D)
         lenders_nodup := ?_
         lender_ne_borrower := ?_
         dormant_absent := ?_
+        lenders_not_retired := ?_
         borrower_not_rule := ?_
         restore_realized := ?_
         node_agrees := ?_
@@ -3832,6 +4581,8 @@ theorem State.initial_inv (a : AllocId) (n D : Nat) (pos : 0 < D)
       simp [State.initial] at hr
     · intro r hr
       simp [State.initial] at hr
+    · intro r hr
+      simp [State.initial] at hr
     · intro id hid
       simp [State.initial, Forest.ruleIds] at hid
   · show (State.initial a n D pos rootId disposalId).forest.Coherent
@@ -3845,6 +4596,8 @@ theorem State.initial_inv (a : AllocId) (n D : Nat) (pos : 0 < D)
       omega
     · intro r hr
       simp [State.initial] at hr
+  · show (State.initial a n D pos rootId disposalId).forest.WellRecovered []
+    trivial
 
 /-- Delegation paths compose. -/
 theorem State.RestoreReaches.trans {s : State} {a b c : Restore}
@@ -3943,7 +4696,7 @@ theorem State.Inv.restore_terminal_frontier {s : State} (h : s.Inv) {r : Restore
     ∃ r' c, State.RestoreTerminal s r' c ∧
       (r' = r ∨ State.RestoreReaches s r r') ∧ r.Agrees c ∧
       s.forest.NodeRealized c := by
-  obtain ⟨-, -, hacct, hcoh, -⟩ := h
+  obtain ⟨-, -, hacct, hcoh, -, -⟩ := h
   obtain ⟨r', c, hterm, hpath, hag⟩ := hacct.restore_reaches_terminal hr
   exact ⟨r', c, hterm, hpath, hag, Forest.coherent_nodeRealized hcoh hterm.2.2.1⟩
 
@@ -4089,7 +4842,8 @@ theorem State.write_inv {s s' : State} {id : CapId} {i : Nat} {v : UInt8}
           simp only [hw, Option.some.injEq] at h
           subst h
           exact ⟨hinv.1, hinv.2.1, State.Accounts.setHeap hinv.2.2.1 h',
-            hinv.2.2.2.1, State.Scope.setHeap hinv.2.2.2.2 h'⟩
+            hinv.2.2.2.1, State.Scope.setHeap hinv.2.2.2.2.1 h',
+            State.Recovers.setHeap hinv.2.2.2.2.2 h'⟩
     · simp at h
 
 /-- An accepted write is authorised by a current leaf of this component's
@@ -4240,12 +4994,129 @@ def State.return (s : State) (borrower : CapId) : Option State :=
                   retired := borrower :: s.retired }
           else none
 
+/-- A checked spatial subdivision keeps identity recovery: the operation changes
+one leaf into the suspension whose own children are freshly recovered. -/
+theorem State.Recovers.splitSpatial {s s' : State} {parentId c1 c2 : CapId}
+    {lo1 hi1 lo2 hi2 : Nat}
+    (h : s.splitSpatial parentId c1 c2 lo1 hi1 lo2 hi2 = some s')
+    (hs : s.Recovers) : s'.Recovers := by
+  unfold State.splitSpatial at h
+  split at h
+  · simp at h
+  · rename_i f' p hsplit
+    split at h
+    · rename_i _
+      simp only [Option.some.injEq] at h
+      subst h
+      have hw := Forest.wellRecovered_splitSpatialAt (p := p) hsplit hs
+      simpa [State.Recovers] using hw
+    · simp at h
+
+/-- A checked fractional subdivision keeps identity recovery. -/
+theorem State.Recovers.splitFraction {s s' : State} {parentId c1 c2 : CapId}
+    {q1 q2 : Nat}
+    (h : s.splitFraction parentId c1 c2 q1 q2 = some s')
+    (hs : s.Recovers) : s'.Recovers := by
+  unfold State.splitFraction at h
+  split at h
+  · simp at h
+  · rename_i f' p hsplit
+    split at h
+    · rename_i _
+      simp only [Option.some.injEq] at h
+      subst h
+      have hw := Forest.wellRecovered_splitFractionAt (p := p) hsplit hs
+      simpa [State.Recovers] using hw
+    · simp at h
+
+/-- Beginning a borrow keeps identity recovery: the new record links the leaf's
+old identity to its new one. -/
+theorem State.Recovers.borrow {s s' : State} {lender borrower : CapId}
+    (h : s.borrow lender borrower = some s') (hs : s.Recovers) : s'.Recovers := by
+  unfold State.borrow at h
+  split at h
+  · simp at h
+  · rename_i c hfind
+    split at h
+    · rename_i hok
+      split at h
+      · simp at h
+      · rename_i f' p hretag
+        simp only [Option.some.injEq] at h
+        subst h
+        have hw := Forest.wellRecovered_retagLeaf (id := lender) (newId := borrower)
+          (r := { lender := lender, borrower := borrower, alloc := p.alloc, lo := p.lo,
+                  hi := p.hi, q := p.q, ceiling := p.ceiling })
+          hretag rfl rfl hs
+        simpa [State.Recovers] using hw
+    · simp at h
+
+/-- Reconstruction keeps identity recovery. -/
+theorem State.Recovers.reconstruct {s s' : State} {parentId : CapId}
+    (h : s.reconstruct parentId = some s') (hs : s.Recovers) : s'.Recovers := by
+  unfold State.reconstruct at h
+  split at h
+  · simp at h
+  · rename_i f' lf rf hrec
+    simp only [Option.some.injEq] at h
+    subst h
+    have hw := Forest.wellRecovered_reconstructAt (f := s.forest) (id := parentId)
+      (restores := s.restores) hs hrec
+    simpa [State.Recovers] using hw
+
+/-- Returning a borrow keeps identity recovery: the discharged record can only be
+the last step of a chain, so the chain now ends at the restored lender. -/
+theorem State.Recovers.return {s s' : State} {borrower : CapId}
+    (h : s.return borrower = some s') (hinv : s.Inv) : s'.Recovers := by
+  unfold State.return at h
+  split at h
+  · simp at h
+  · rename_i r hrestore
+    split at h
+    · simp at h
+    · rename_i c hleaf
+      split at h
+      · rename_i hok
+        split at h
+        · simp at h
+        · rename_i f' p hretag
+          simp only [Option.some.injEq] at h
+          subst h
+          have hrmem : r ∈ s.restores := List.mem_of_find?_eq_some hrestore
+          have hrb : r.borrower = borrower := by
+            have hb := List.find?_some hrestore
+            simpa using hb
+          have hguard : ∀ r' ∈ s.restores, r'.lender ≠ borrower :=
+            fun r' hr' => hok.2.2.2.2.2.2.2 r' hr'
+          have hrec : ∀ r' ∈ s.restores, r'.borrower = borrower → r'.lender = r.lender := by
+            intro r' hr' hbr
+            have heq : r' = r :=
+              Forest.eq_of_mem_of_map_eq hinv.accounts.borrowers_nodup hr' hrmem
+                (by rw [hbr, hrb])
+            rw [heq]
+          have hp := Forest.retagLeaf_found hretag
+          have hsite : Forest.ReturnSite s.forest borrower p :=
+            { nodup := hinv.accounts.nodeIds_nodup
+              site := by
+                intro c' hc' hcid
+                exact Forest.eq_of_mem_of_map_eq hinv.accounts.nodeIds_nodup hc' hp.2
+                  (by rw [hcid, hp.1])
+              rule := by
+                intro x hx heq
+                exact (hrb ▸ hinv.accounts.borrower_not_rule r hrmem) (heq ▸ hx) }
+          have hw := Forest.wellRecovered_return (restores := s.restores)
+            (borrower := borrower) (lender := r.lender) hguard hrec hinv.recoverable
+            hsite hretag
+          simpa [State.Recovers] using hw
+      · simp at h
+
 /-- A checked spatial subdivision preserves the reconstruction invariant. -/
 theorem State.splitSpatial_inv {s s' : State} {parentId c1 c2 : CapId}
     {lo1 hi1 lo2 hi2 : Nat}
     (h : s.splitSpatial parentId c1 c2 lo1 hi1 lo2 hi2 = some s')
     (hinv : s.Inv) : s'.Inv := by
-  obtain ⟨hcov, hval, hacct, hcoh, hscope⟩ := hinv
+  obtain ⟨hcov, hval, hacct, hcoh, hscope, hrecov⟩ := hinv
+  have hrecResult := State.Recovers.splitSpatial h hrecov
   unfold State.splitSpatial at h
   split at h
   · simp at h
@@ -4264,7 +5135,7 @@ theorem State.splitSpatial_inv {s s' : State} {parentId c1 c2 : CapId}
         intro hm
         obtain ⟨c', hc', hid⟩ := List.mem_map.mp hm
         exact hfresh.2.1 (hid ▸ hacct.issue_covers c'.id (Forest.node_id_mem_ids hc'))
-      refine ⟨?_, ?_, ?_, ?_, ?_⟩
+      refine ⟨?_, ?_, ?_, ?_, ?_, ?_⟩
       · intro x hx
         change f'.budget x = s.D
         rw [Forest.splitSpatialAt_budget hsplit x]
@@ -4280,6 +5151,7 @@ theorem State.splitSpatial_inv {s s' : State} {parentId c1 c2 : CapId}
             lenders_nodup := ?_
             lender_ne_borrower := ?_
             dormant_absent := ?_
+            lenders_not_retired := hacct.lenders_not_retired
             borrower_not_rule := ?_
             restore_realized := ?_
             node_agrees := ?_
@@ -4355,6 +5227,7 @@ theorem State.splitSpatial_inv {s s' : State} {parentId c1 c2 : CapId}
       · exact ⟨hscope.denom_pos,
           Forest.splitSpatialAt_nodes_scope hsplit hscope.node_scope hne,
           fun r hr => hscope.restore_scope r hr⟩
+      · exact hrecResult
     · simp at h
 
 /-- A checked fractional subdivision preserves the reconstruction invariant. -/
@@ -4362,7 +5235,8 @@ theorem State.splitFraction_inv {s s' : State} {parentId c1 c2 : CapId}
     {q1 q2 : Nat}
     (h : s.splitFraction parentId c1 c2 q1 q2 = some s')
     (hinv : s.Inv) : s'.Inv := by
-  obtain ⟨hcov, hval, hacct, hcoh, hscope⟩ := hinv
+  obtain ⟨hcov, hval, hacct, hcoh, hscope, hrecov⟩ := hinv
+  have hrecResult := State.Recovers.splitFraction h hrecov
   unfold State.splitFraction at h
   split at h
   · simp at h
@@ -4380,7 +5254,7 @@ theorem State.splitFraction_inv {s s' : State} {parentId c1 c2 : CapId}
         intro hm
         obtain ⟨c', hc', hid⟩ := List.mem_map.mp hm
         exact hfresh.2.1 (hid ▸ hacct.issue_covers c'.id (Forest.node_id_mem_ids hc'))
-      refine ⟨?_, ?_, ?_, ?_, ?_⟩
+      refine ⟨?_, ?_, ?_, ?_, ?_, ?_⟩
       · intro x hx
         change f'.budget x = s.D
         rw [Forest.splitFractionAt_budget hsplit x]
@@ -4396,6 +5270,7 @@ theorem State.splitFraction_inv {s s' : State} {parentId c1 c2 : CapId}
             lenders_nodup := ?_
             lender_ne_borrower := ?_
             dormant_absent := ?_
+            lenders_not_retired := hacct.lenders_not_retired
             borrower_not_rule := ?_
             restore_realized := ?_
             node_agrees := ?_
@@ -4471,6 +5346,7 @@ theorem State.splitFraction_inv {s s' : State} {parentId c1 c2 : CapId}
       · exact ⟨hscope.denom_pos,
           Forest.splitFractionAt_nodes_scope hsplit hscope.node_scope,
           fun r hr => hscope.restore_scope r hr⟩
+      · exact hrecResult
     · simp at h
 
 /-- A spatial subdivision frames every outstanding return obligation. -/
@@ -4508,7 +5384,8 @@ theorem State.splitFraction_frames_restores {s s' : State} {parentId c1 c2 : Cap
 /-- Reconstruction preserves the reconstruction invariant. -/
 theorem State.reconstruct_inv {s s' : State} {parentId : CapId}
     (h : s.reconstruct parentId = some s') (hinv : s.Inv) : s'.Inv := by
-  obtain ⟨hcov, hval, hacct, hcoh, hscope⟩ := hinv
+  obtain ⟨hcov, hval, hacct, hcoh, hscope, hrecov⟩ := hinv
+  have hrecResult := State.Recovers.reconstruct h hrecov
   unfold State.reconstruct at h
   split at h
   · simp at h
@@ -4517,7 +5394,7 @@ theorem State.reconstruct_inv {s s' : State} {parentId : CapId}
     subst h
     have hsub : ∀ {c : Leaf}, c ∈ f'.nodes → c ∈ s.forest.nodes :=
       fun hc => Forest.reconstructAt_nodes_sub hrec hc
-    refine ⟨?_, ?_, ?_, ?_, ?_⟩
+    refine ⟨?_, ?_, ?_, ?_, ?_, ?_⟩
     · intro x hx
       change f'.budget x = s.D
       rw [Forest.reconstructAt_budget hrec x]
@@ -4532,6 +5409,7 @@ theorem State.reconstruct_inv {s s' : State} {parentId : CapId}
           lenders_nodup := ?_
           lender_ne_borrower := ?_
           dormant_absent := ?_
+          lenders_not_retired := ?_
           borrower_not_rule := ?_
           restore_realized := ?_
           node_agrees := ?_
@@ -4569,6 +5447,21 @@ theorem State.reconstruct_inv {s s' : State} {parentId : CapId}
       · intro r hr hm
         obtain ⟨c', hc', hcid⟩ := List.mem_map.mp hm
         exact hacct.dormant_absent r hr (List.mem_map.mpr ⟨c', hsub hc', hcid⟩)
+      · intro r hr hret
+        obtain ⟨ha, hb⟩ := Forest.reconstructAt_removed_mem_nodes hrec
+        have hne_l : r.lender ≠ lf.id := by
+          intro heq
+          exact hacct.dormant_absent r hr
+            (heq ▸ List.mem_map.mpr ⟨lf, ha, rfl⟩)
+        have hne_r : r.lender ≠ rf.id := by
+          intro heq
+          exact hacct.dormant_absent r hr
+            (heq ▸ List.mem_map.mpr ⟨rf, hb, rfl⟩)
+        rcases List.mem_cons.mp hret with heq | hret
+        · exact hne_l heq
+        · rcases List.mem_cons.mp hret with heq | hret
+          · exact hne_r heq
+          · exact hacct.lenders_not_retired r hr hret
       · intro r hr hm
         exact hacct.borrower_not_rule r hr (Forest.reconstructAt_ruleIds_mem hrec hm)
       · intro r hr
@@ -4594,11 +5487,13 @@ theorem State.reconstruct_inv {s s' : State} {parentId : CapId}
     · exact ⟨hscope.denom_pos,
         Forest.reconstructAt_nodes_scope hrec hscope.node_scope,
         fun r hr => hscope.restore_scope r hr⟩
+    · exact hrecResult
 
 /-- Beginning a borrow preserves the reconstruction invariant. -/
 theorem State.borrow_inv {s s' : State} {lender borrower : CapId}
     (h : s.borrow lender borrower = some s') (hinv : s.Inv) : s'.Inv := by
-  obtain ⟨hcov, hval, hacct, hcoh, hscope⟩ := hinv
+  obtain ⟨hcov, hval, hacct, hcoh, hscope, hrecov⟩ := hinv
+  have hrecResult := State.Recovers.borrow h hrecov
   unfold State.borrow at h
   split at h
   · simp at h
@@ -4627,7 +5522,7 @@ theorem State.borrow_inv {s s' : State} {lender borrower : CapId}
           have hb : r.borrower = borrower :=
             (congrArg Restore.borrower heq).symm
           exact hok.2.1 (by rw [← hb]; exact (hacct.restores_issued r hr).2)
-        refine ⟨?_, ?_, ?_, ?_, ?_⟩
+        refine ⟨?_, ?_, ?_, ?_, ?_, ?_⟩
         · intro x hx
           change f'.budget x = s.D
           rw [Forest.retagLeaf_budget hretag x]
@@ -4643,6 +5538,7 @@ theorem State.borrow_inv {s s' : State} {lender borrower : CapId}
               lenders_nodup := ?_
               lender_ne_borrower := ?_
               dormant_absent := ?_
+              lenders_not_retired := ?_
               borrower_not_rule := ?_
               restore_realized := ?_
               node_agrees := ?_
@@ -4686,6 +5582,10 @@ theorem State.borrow_inv {s s' : State} {lender borrower : CapId}
               · have hc'id : c'.id = borrower := by rw [ho]
                 have hlend : r.lender = borrower := hcid'.symm.trans hc'id
                 exact hok.2.1 (by rw [← hlend]; exact (hacct.restores_issued r hr).1)
+          · intro r hr
+            rcases List.mem_cons.mp hr with rfl | hr
+            · exact hacct.retired_absent lender hLenderNode
+            · exact hacct.lenders_not_retired r hr
           · intro r hr hm
             rcases List.mem_cons.mp hr with rfl | hr
             · exact hok.2.1 (hacct.rule_fragments_issued borrower
@@ -4760,12 +5660,14 @@ theorem State.borrow_inv {s s' : State} {lender borrower : CapId}
           rcases List.mem_cons.mp hr with rfl | hr
           · exact hscope.node_scope p (Forest.retagLeaf_found hretag).2
           · exact hscope.restore_scope r hr
+        · exact hrecResult
     · simp at h
 
 /-- Returning a borrow preserves the reconstruction invariant. -/
 theorem State.return_inv {s s' : State} {borrower : CapId}
     (h : s.return borrower = some s') (hinv : s.Inv) : s'.Inv := by
-  obtain ⟨hcov, hval, hacct, hcoh, hscope⟩ := hinv
+  have hrecResult := State.Recovers.return h hinv
+  obtain ⟨hcov, hval, hacct, hcoh, hscope, hrecov⟩ := hinv
   unfold State.return at h
   split at h
   · simp at h
@@ -4792,7 +5694,7 @@ theorem State.return_inv {s s' : State} {borrower : CapId}
           have hrc : r.Agrees c :=
             ⟨hok.2.1.symm, hok.2.2.1.symm, hok.2.2.2.1.symm,
              hok.2.2.2.2.1.symm, hok.2.2.2.2.2.1.symm⟩
-          refine ⟨?_, ?_, ?_, ?_, ?_⟩
+          refine ⟨?_, ?_, ?_, ?_, ?_, ?_⟩
           · intro x hx
             change f'.budget x = s.D
             rw [Forest.retagLeaf_budget hretag x]
@@ -4808,6 +5710,7 @@ theorem State.return_inv {s s' : State} {borrower : CapId}
                 lenders_nodup := ?_
                 lender_ne_borrower := ?_
                 dormant_absent := ?_
+                lenders_not_retired := ?_
                 borrower_not_rule := ?_
                 restore_realized := ?_
                 node_agrees := ?_
@@ -4855,6 +5758,12 @@ theorem State.return_inv {s s' : State} {borrower : CapId}
                 have hne' : r' ≠ r := fun heq => hnb' (by rw [heq]; exact hrb')
                 exact absurd hr'lend
                   (Forest.ne_of_map_nodup hacct.lenders_nodup hr'_old hrmem hne')
+            · intro r' hr'
+              obtain ⟨hr'_old, _⟩ := List.mem_filter.mp hr'
+              intro hmem
+              rcases List.mem_cons.mp hmem with heq | hmem
+              · exact hok.2.2.2.2.2.2.2 r' hr'_old heq
+              · exact hacct.lenders_not_retired r' hr'_old hmem
             · intro r' hr' hm
               obtain ⟨hr'_old, _⟩ := List.mem_filter.mp hr'
               exact hacct.borrower_not_rule r' hr'_old
@@ -4922,6 +5831,7 @@ theorem State.return_inv {s s' : State} {borrower : CapId}
               Forest.retagLeaf_nodes_scope hretag hscope.node_scope, ?_⟩
             intro r' hr'
             exact hscope.restore_scope r' (List.mem_filter.mp hr').1
+          · exact hrecResult
       · simp at h
 
 /-- Beginning a borrow leaves the represented heap, allocation and length

@@ -857,6 +857,18 @@ shows the certificate it would have to emit, not proof-producing elaboration.
   `State.write_guard`; `State.write_alloc` shows the accepted write updates the
   allocation its authorising fragment names, and `State.Inv.write_scope` derives
   that fragment's allocation, extent and share from the invariant.
+  Identity recovery is separate from resource realization:
+  `State.Accounts.lenders_not_retired` keeps every outstanding lender usable,
+  `Forest.RestoreChain` records a finite chain through outstanding obligations,
+  `Forest.Recovers` lets a child directly carry its rule identity or recover it
+  through a chain or a recursively recoverable suspension, and
+  `Forest.WellRecovered` requires this at every suspension, with
+  `State.Recovers` carrying it in `State.Inv`. Preservation is
+  `State.Recovers.{splitSpatial,splitFraction,borrow,reconstruct,return}`.
+  The follow-up witnesses (`retiredLender`, `renamedChild`) satisfy the previous
+  invariant but are excluded; a borrowed child with an explaining chain remains
+  accepted and reconstructible after return. A constructive completion theorem
+  for a cooperating client is not proved.
   `bench/CapInvariantWitness.lean` is the adversarial regression: the overstated
   suspended parent (`witnessA`) and the mislabelled-allocation write
   (`witnessB`) satisfy the previous `Covered ∧ Valid ∧ Accounts` predicate,

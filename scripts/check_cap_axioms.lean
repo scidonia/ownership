@@ -400,3 +400,14 @@ open Cap
 #print axioms Cap.AddressMap.overlapping_alloc_refused
 #print axioms Cap.AddressMap.missing_window_addr_none
 #print axioms Cap.AddressMap.out_of_window_addr_none
+
+/-! ### Recoverability: retired lenders and identity provenance -/
+
+#print axioms Cap.Reconstruction.Forest.RestoreChain.nil_left
+#print axioms Cap.Reconstruction.Forest.WellRecovered.chainMono
+#print axioms Cap.Reconstruction.State.Inv.lenders_not_retired
+#print axioms Cap.Reconstruction.State.Recovers.splitSpatial
+#print axioms Cap.Reconstruction.State.Recovers.splitFraction
+#print axioms Cap.Reconstruction.State.Recovers.borrow
+#print axioms Cap.Reconstruction.State.Recovers.reconstruct
+#print axioms Cap.Reconstruction.State.Recovers.return

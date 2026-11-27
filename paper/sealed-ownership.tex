@@ -599,7 +599,15 @@ satisfy the earlier predicate and are excluded by coherence and scope
 (\lean{witnessA\_not\_inv}, \lean{witnessB\_not\_inv}). The write guard includes
 the leaf allocation binding, so an accepted write uses authority for the
 allocation it updates (\lean{State.write\_guard}, \lean{State.write\_alloc}).
-Writes,
+Identity recovery is tracked separately from resource realization: every
+outstanding lender is unretired, and each child subtree carries a finite
+restoration chain or a recursively recoverable suspension for the identity its
+enclosing rule requires (\lean{Forest.Recovers}, \lean{Forest.WellRecovered}).
+The follow-up audit's retired-lender and renamed-child witnesses satisfy the
+previous invariant but are excluded by these conditions
+(\lean{retiredLender\_not\_inv}, \lean{renamedChild\_not\_inv}), while a
+borrowed child whose changed name is explained by its restoration chain remains
+accepted and reconstructible. Writes,
 borrows, both subdivisions, reconstruction and return each preserve the
 reconstruction invariant and the component storage agreement, and a return before
 reconstruction is refused. The integrated state's private-constructor boundary
@@ -798,7 +806,7 @@ Ledger & Budget preservation and writable-authority uniqueness & World guard int
 Checked language & Whole-run \lean{FullInv} preservation; per-write authority; borrow and return commands & A single invariant combining world execution and the reconstruction forest \\
 Indexed programs & Post-context and no-refusal theorems & Representation-sensitive operational client type \\
 Delegation & Retag budget lemma; rooted chain with derived holder and checked begin/end; world/chain correspondence; combined-invariant preservation & A single sealed world path carrying the reconstruction invariant \\
-Reconstruction & Checked spatial and fractional rules; recursive resource coherence and allocation scope; reconstruction and restoration invariant with an ownership account over issued, retired and outstanding names; well-founded dependency order; unconditional terminal frontier realization; kernel-checked malformed-state witnesses; integrated sealed 64-byte lifecycle with a second cycle; persistent allocation and capability histories with reuse refusal & Consultation by the world split/join guard; concrete implementation \\
+Reconstruction & Checked spatial and fractional rules; recursive resource coherence and allocation scope; reconstruction and restoration invariant with an ownership account over issued, retired and outstanding names; well-founded dependency order; unconditional terminal frontier realization; retired-lender and identity-recovery invariants with kernel-checked witnesses; constructive completion not yet proved; integrated sealed 64-byte lifecycle with a second cycle; persistent allocation and capability histories with reuse refusal & Consultation by the world split/join guard; concrete implementation \\
 Union-find & General sealed theorem (\lean{sealedFind\_spec}, \lean{findRanked\_twice}) over represented ranked forests, its two-find instance through the integrated sealed boundary, functional successor runner (\lean{PathRunner}), constructible forests (\lean{UFForest}), computable full-path certificates, exact write traces; compiled \lean{capuf} model driver & World-based sealed runner; optimized native ownership backend \\
 Compiled kernel & clang-emitted \lean{store8} body with a bounded exact behaviour theorem; \lean{MemRepMap} finite multi-allocation relation and \lean{sealed\_store8\_write\_comp\_map}, with frame and post-state representation & Loader's physical address assignment; semantic justification of the IR projection; ABI, native installation and copied-handle replay \\
 Marshalling & Round trips, range guards, representation and exact write trace & Concrete layout and ABI relation \\
@@ -1016,6 +1024,16 @@ any allocation no command of the list targets keeps its component, bytes and
 \texttt{Storage} certificate. What remains is the world-based sealed runner and
 an optimized native ownership backend; the compiled \lean{capuf} driver is a
 correctness demonstration of the model, not a performance result.
+
+\emph{Recoverability (structural invariant proved; completion open).} Resource
+realization does not by itself imply that a cooperating client can finish a
+return protocol: a dormant lender may be retired, or a resource-equivalent child
+may lack the identity chain its enclosing reconstruction needs. The maintained
+invariant now excludes both witnesses and preserves identity recovery through
+write, borrow, both splits, reconstruction and return. A constructive theorem
+that emits a finite accepted completion sequence for a designated obligation is
+not proved, so no arbitrary-client termination or general completion claim is
+made.
 
 \emph{World-guard integration (open).} The checked world's split, fractional
 split and join still test the allocation-wide loan exclusion. They therefore
