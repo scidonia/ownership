@@ -151,7 +151,7 @@ theorem two_edge_cycle_not_accounts : ¬ cycleState.Accounts := by
 
 /-- The repaired reconstruction invariant rejects the cycle. -/
 theorem two_edge_cycle_not_inv : ¬ cycleState.Inv :=
-  fun h => two_edge_cycle_not_accounts h.2.2
+  fun h => two_edge_cycle_not_accounts h.2.2.1
 
 /-! ### A longer cycle is rejected -/
 
@@ -168,7 +168,7 @@ theorem three_edge_cycle_not_accounts : ¬ cycle3State.Accounts := by
 
 /-- The repaired reconstruction invariant rejects the three-edge cycle. -/
 theorem three_edge_cycle_not_inv : ¬ cycle3State.Inv :=
-  fun h => three_edge_cycle_not_accounts h.2.2
+  fun h => three_edge_cycle_not_accounts h.2.2.1
 
 /-! ### A missing terminal is rejected -/
 
@@ -193,7 +193,7 @@ theorem missing_terminal_not_accounts : ¬ missingState.Accounts :=
 
 /-- The repaired reconstruction invariant rejects the missing terminal. -/
 theorem missing_terminal_not_inv : ¬ missingState.Inv :=
-  fun h => missing_terminal_not_accounts h.2.2
+  fun h => missing_terminal_not_accounts h.2.2.1
 
 /-! ### A valid nested borrow is accepted -/
 
@@ -210,7 +210,7 @@ theorem nested_inv : nestedB.Inv :=
       (State.initial_inv ⟨0⟩ 64 64 (by decide) ⟨1⟩ ⟨2⟩))
 
 /-- The valid nested borrow satisfies the repaired account. -/
-theorem nested_accounts : nestedB.Accounts := nested_inv.2.2
+theorem nested_accounts : nestedB.Accounts := nested_inv.2.2.1
 
 /-- The nested obligations are ordered: the inner obligation precedes the outer
 one and the dependency runs from the outer to the inner. -/

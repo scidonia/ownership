@@ -222,9 +222,14 @@ The retag chain represents one unresolved path. Borrowed subdivision needs a
 forest of obligations instead. `Reconstruction.State` pairs the reference heap
 with a forest whose interior nodes record the checked spatial or fractional rule
 that produced them, the issued and retired names, and the outstanding `Restore`
-obligations. `State.Inv` is frontier coverage, forest validity and the ownership
-account `State.Accounts`: the budget at every byte is still `D`, every recorded
-rule is checked, and the account constrains current authority-node identities,
+obligations. `State.Inv` is frontier coverage, forest validity, the ownership
+account `State.Accounts`, recursive resource coherence `Forest.Coherent` and
+component allocation scope `State.Scope`: the budget at every byte is still `D`,
+every recorded rule is checked, each actual child subtree realizes the rule
+fragment it was recorded for (pointwise budget, allocation identity, interval and
+ceiling containment, without equating access names), every authority fragment
+lies in the component's allocation and extent, and the account constrains
+current authority-node identities,
 issuance coverage, retirement, dormant lenders, restoration realization,
 resource agreement and restoration order. The account is not a structural
 restatement of the forest: it relates the forest to `issued`, `retired` and

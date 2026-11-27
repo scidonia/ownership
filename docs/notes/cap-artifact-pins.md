@@ -1,7 +1,7 @@
 # Artifact pins and verification record
 
 Baseline: `aaf94d033a774ef5fc23e4410e560bacd85dc2d2`. Code source and
-verified build: `6773070c5bf35f633baa59b68811f4c4561021c5`. This record is the
+verified build: `985f2b0a67a554cfde30dc1edefa4c56a246a0b6`. This record is the
 commit that adds this file and changes no code.
 
 ## Toolchains
@@ -28,7 +28,7 @@ lake build capuf
 Observed: `lake build Cap` completed (the committed-tree executable build reports 76 jobs
 for the package plus driver); `capability controls: OK`; the axiom audit exited
 `0` with no `sorryAx` and only the standard `propext`, `Classical.choice`,
-`Quot.sound` footprints; the docs census reported `OK (147 rows)`.
+`Quot.sound` footprints; the docs census reported `OK (159 rows)`.
 
 The compiled driver printed:
 
@@ -49,12 +49,13 @@ not claimed as an rc3 artifact.
 
 ## Manuscript
 
-`paper/sealed-ownership.pdf` (17 pages) and `report/capability-report.pdf`
+`paper/sealed-ownership.pdf` (18 pages) and `report/capability-report.pdf`
 (20 pages) were rebuilt with `latexmk -g -pdf -interaction=nonstopmode` from the
 changed sources.
 
 ## Stated gaps
 
+- The invariant repair adds `Forest.Coherent` and `State.Scope`, an allocation-binding write guard, and `State.Inv.restore_terminal_frontier`; the two audit witnesses are kernel-checked regressions in `bench/CapInvariantWitness.lean`.
 - `Cap/UFGeneric.WriteFrame` now equates every unrelated allocation's full
   `Reconstruction.State`, with `component_other`, `storage_other` and
   `rel_write`. The command-list frame follows from `State.run_frames_other` and

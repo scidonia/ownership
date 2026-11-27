@@ -186,6 +186,51 @@ open Cap
 #print axioms Cap.Reconstruction.State.Accounts.restore_reaches_terminal
 #print axioms Cap.Reconstruction.State.Accounts.restore_terminal_agrees
 #print axioms Cap.Reconstruction.World.splitAtChecked_refuses_with_loan
+#print axioms Cap.Reconstruction.Forest.coherent_valid
+#print axioms Cap.Reconstruction.Forest.coherent_suspension
+#print axioms Cap.Reconstruction.Forest.split_budget_realizes
+#print axioms Cap.Reconstruction.Forest.coherent_suspension_realizes
+#print axioms Cap.Reconstruction.Forest.coherent_nodeRealized
+#print axioms Cap.Reconstruction.Forest.inside_modifyLeafAt
+#print axioms Cap.Reconstruction.Forest.realizes_modifyLeafAt
+#print axioms Cap.Reconstruction.Forest.coherent_modifyLeafAt
+#print axioms Cap.Reconstruction.Forest.nodes_scope_modifyLeafAt
+#print axioms Cap.Reconstruction.Forest.ruleFragments_scope
+#print axioms Cap.Reconstruction.Forest.spatialLeafSplit_realizes
+#print axioms Cap.Reconstruction.Forest.spatialLeafSplit_coherent
+#print axioms Cap.Reconstruction.Forest.fractionalLeafSplit_realizes
+#print axioms Cap.Reconstruction.Forest.fractionalLeafSplit_coherent
+#print axioms Cap.Reconstruction.Forest.spatialLeafSplit_nodes_scope
+#print axioms Cap.Reconstruction.Forest.fractionalLeafSplit_nodes_scope
+#print axioms Cap.Reconstruction.Forest.splitSpatialAt_realizes
+#print axioms Cap.Reconstruction.Forest.splitSpatialAt_coherent
+#print axioms Cap.Reconstruction.Forest.splitFractionAt_realizes
+#print axioms Cap.Reconstruction.Forest.splitFractionAt_coherent
+#print axioms Cap.Reconstruction.Forest.splitSpatialAt_nodes_scope
+#print axioms Cap.Reconstruction.Forest.splitFractionAt_nodes_scope
+#print axioms Cap.Reconstruction.Forest.retagLeafAt_realizes
+#print axioms Cap.Reconstruction.Forest.retagLeafAt_coherent
+#print axioms Cap.Reconstruction.Forest.retagLeafAt_nodes_scope
+#print axioms Cap.Reconstruction.Forest.retagLeaf_realizes
+#print axioms Cap.Reconstruction.Forest.retagLeaf_coherent
+#print axioms Cap.Reconstruction.Forest.retagLeaf_nodes_scope
+#print axioms Cap.Reconstruction.Forest.realizes_reconstructAt
+#print axioms Cap.Reconstruction.Forest.coherent_reconstructAt
+#print axioms Cap.Reconstruction.Forest.reconstructAt_nodes_scope
+#print axioms Cap.Reconstruction.State.Inv.covered
+#print axioms Cap.Reconstruction.State.Inv.valid
+#print axioms Cap.Reconstruction.State.Inv.accounts
+#print axioms Cap.Reconstruction.State.Inv.coherent
+#print axioms Cap.Reconstruction.State.Inv.scope
+#print axioms Cap.Reconstruction.State.Scope.rule_scope
+#print axioms Cap.Reconstruction.State.Scope.setHeap
+#print axioms Cap.Reconstruction.State.Accounts.setHeap
+#print axioms Cap.Reconstruction.State.Inv.restore_terminal_frontier
+#print axioms Cap.Reconstruction.State.Inv.terminal_suspended_realizes
+#print axioms Cap.Reconstruction.State.write_guard
+#print axioms Cap.Reconstruction.State.write_alloc
+#print axioms Cap.Reconstruction.State.Inv.write_scope
+
 
 /-! ### The sealed integrated boundary -/
 
@@ -203,6 +248,8 @@ open Cap
 #print axioms Cap.Integrated.updateState_alloc_mem
 #print axioms Cap.Integrated.updateState_inv
 #print axioms Cap.Integrated.State.update_inv
+#print axioms Cap.Integrated.State.find?_coherent
+#print axioms Cap.Integrated.State.find?_scope
 #print axioms Cap.Integrated.State.alloc_inv
 #print axioms Cap.Integrated.State.free_inv
 #print axioms Cap.Integrated.State.free_histories_intact
@@ -224,6 +271,8 @@ open Cap
 #print axioms Cap.Integrated.Prog.never_refuses
 #print axioms Cap.Integrated.Prog.finish_inv
 #print axioms Cap.Integrated.Sealed.invariant
+#print axioms Cap.Integrated.Sealed.component_coherent
+#print axioms Cap.Integrated.Sealed.component_scope
 #print axioms Cap.Integrated.Sealed.run
 #print axioms Cap.Integrated.Sealed.run_invariant
 #print axioms Cap.Integrated.lifecycle64_ok

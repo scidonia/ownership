@@ -60,6 +60,36 @@ instance (a b : Leaf) : Decidable (a.SameResource b) := by
   unfold Leaf.SameResource
   infer_instance
 
+/-- One leaf's resource contains another's: same allocation and ceiling, with the
+interval contained and the share no larger. This is the scope a decomposition
+transfers to its children; like `SameResource` it says nothing about access
+identity, so retagging preserves it. -/
+def Leaf.Within (a b : Leaf) : Prop :=
+  a.alloc = b.alloc ∧ b.lo ≤ a.lo ∧ a.hi ≤ b.hi ∧ a.ceiling = b.ceiling ∧ a.q ≤ b.q
+
+instance (a b : Leaf) : Decidable (a.Within b) := by
+  unfold Leaf.Within
+  infer_instance
+
+/-- One leaf's allocation, interval and share lie within a component of
+allocation `a`, length `len` and denominator `D`. The empty-range policy is the
+disjunction: a fragment may be empty only when the whole allocation is empty, so
+a zero-length allocation is admitted and a zero-length fragment inside a
+non-empty allocation is not. -/
+def Leaf.InScope (a : AllocId) (len D : Nat) (c : Leaf) : Prop :=
+  c.alloc = a ∧ c.hi ≤ len ∧ (c.lo < c.hi ∨ len = 0) ∧ c.q ≤ D
+
+/-- Resource containment is reflexive. -/
+theorem Leaf.Within.refl (a : Leaf) : a.Within a :=
+  ⟨rfl, Nat.le_refl _, Nat.le_refl _, rfl, Nat.le_refl _⟩
+
+/-- Resource containment is transitive. -/
+theorem Leaf.Within.trans {a b c : Leaf} (hab : a.Within b) (hbc : b.Within c) :
+    a.Within c :=
+  ⟨hab.1.trans hbc.1, Nat.le_trans hbc.2.1 hab.2.1,
+   Nat.le_trans hab.2.2.1 hbc.2.2.1, hab.2.2.2.1.trans hbc.2.2.2.1,
+   Nat.le_trans hab.2.2.2.2 hbc.2.2.2.2⟩
+
 namespace Reconstruction
 
 /-- The two checked subdivision rules. -/
@@ -204,6 +234,58 @@ def Valid : Forest → Prop
   | .leaf _ => True
   | .split k p lr rr l r => RuleValid k p lr rr ∧ l.Valid ∧ r.Valid
 
+/-- One suspended decomposition: the checked rule, the suspended parent and the
+two current subtrees that must be reconstructed to the rule fragments. The
+current subtrees carry their own access names, which retagging may change; the
+rule fragments record the resource, not the name. -/
+structure Suspension where
+  kind : RuleKind
+  parent : Leaf
+  leftRule : Leaf
+  rightRule : Leaf
+  left : Forest
+  right : Forest
+
+/-- The suspensions of a forest, outermost first. -/
+def suspensions : Forest → List Suspension
+  | .leaf _ => []
+  | .split k p lr rr l r =>
+      { kind := k, parent := p, leftRule := lr, rightRule := rr, left := l, right := r } ::
+        (l.suspensions ++ r.suspensions)
+
+/-- The rule descriptors of every suspension. -/
+def ruleFragments : Forest → List Leaf
+  | .leaf _ => []
+  | .split _ _ lr rr l r => lr :: rr :: (l.ruleFragments ++ r.ruleFragments)
+
+/-- The left rule fragment of a checked rule lies within the parent's resource. -/
+theorem RuleValid.left_within {kind : RuleKind} {p lr rr : Leaf}
+    (h : RuleValid kind p lr rr) : lr.Within p := by
+  obtain ⟨-, hla, -, hlc, -, -, -, -, -, -, hpart⟩ := h
+  cases kind with
+  | spatial =>
+      obtain ⟨hlo, hhi, hrhi, hql, -⟩ := hpart
+      exact ⟨hla, Nat.le_of_eq (hlo.symm),
+        Nat.le_trans (Nat.le_of_eq hhi) (Nat.le_trans rr.ordered (Nat.le_of_eq hrhi)),
+        hlc, Nat.le_of_eq hql⟩
+  | fractional =>
+      obtain ⟨hlo, hhi, -, -, -, hq2, hsum⟩ := hpart
+      exact ⟨hla, Nat.le_of_eq (hlo.symm), Nat.le_of_eq hhi, hlc, by omega⟩
+
+/-- The right rule fragment of a checked rule lies within the parent's resource. -/
+theorem RuleValid.right_within {kind : RuleKind} {p lr rr : Leaf}
+    (h : RuleValid kind p lr rr) : rr.Within p := by
+  obtain ⟨-, -, hra, -, hrc, -, -, -, -, -, hpart⟩ := h
+  cases kind with
+  | spatial =>
+      obtain ⟨hlo, hhi, hrhi, -, hqr⟩ := hpart
+      exact ⟨hra,
+        Nat.le_trans (Nat.le_of_eq (hlo.symm)) (Nat.le_trans lr.ordered (Nat.le_of_eq hhi)),
+        Nat.le_of_eq hrhi, hrc, Nat.le_of_eq hqr⟩
+  | fractional =>
+      obtain ⟨-, -, hlo2, hhi2, hq1, -, hsum⟩ := hpart
+      exact ⟨hra, Nat.le_of_eq (hlo2.symm), Nat.le_of_eq hhi2, hrc, by omega⟩
+
 /-- A spatial split preserves the parent's budget at every byte. -/
 theorem spatial_split_budget {p l r : Leaf} {x : Nat}
     (hsl : l.state = p.state) (hsr : r.state = p.state)
@@ -302,6 +384,52 @@ reconstruction must recover before it may restore the suspended parent. -/
 def ruleIds : Forest → List CapId
   | .leaf _ => []
   | .split _ _ lr rr l r => lr.id :: rr.id :: (l.ruleIds ++ r.ruleIds)
+
+/-- Every authority node of the subtree — a current leaf or a suspended parent —
+lies within the fragment's resource. Rule descriptors are excluded: they are
+templates a reconstruction fills, not authority the subtree currently carries. -/
+def Inside (f : Forest) (c : Leaf) : Prop := ∀ d ∈ f.nodes, d.Within c
+
+/-- A subtree realizes a recorded resource: its frontier has the resource's share
+at every byte, and every authority node it carries lies within the resource's
+allocation, interval, ceiling and share. This is the connection between a
+suspended parent and what is actually live below it. -/
+def Realizes (f : Forest) (c : Leaf) : Prop :=
+  (∀ x, f.budget x = (Forest.leaf c).budget x) ∧ f.Inside c
+
+/-- Recursive forest coherence. At every suspension the checked rule holds and
+each current child subtree realizes the rule fragment it must be reconstructed
+to; the children are themselves coherent. The resource connection is stated by
+`Realizes` rather than by identifier equality, so a borrowed or retagged child
+survives: restoration records, not names, explain how identities return. -/
+def Coherent : Forest → Prop
+  | .leaf _ => True
+  | .split k p lr rr l r =>
+      RuleValid k p lr rr ∧ l.Realizes lr ∧ r.Realizes rr ∧ l.Coherent ∧ r.Coherent
+
+/-- The recorded resource of an authority node agrees with everything actually
+below it. A current leaf is its own frontier. A suspended parent's frontier is
+the pair of current subtrees its suspension records: their pointwise budget is
+the parent's, and their authority nodes lie within the parent's resource. -/
+def NodeRealized (f : Forest) (c : Leaf) : Prop :=
+  c ∈ f.leaves ∨
+  ∃ l r : Forest,
+    (∃ s ∈ f.suspensions, s.parent = c ∧ s.left = l ∧ s.right = r) ∧
+    (∀ x, l.budget x + r.budget x = (Forest.leaf c).budget x) ∧
+    l.Inside c ∧ r.Inside c
+
+/-- Resource containment lifts through a subtree: if the subtree lies in `a` and
+`a` lies in `b`, the subtree lies in `b`. -/
+theorem Inside.trans {f : Forest} {a b : Leaf} (h : f.Inside a) (hab : a.Within b) :
+    f.Inside b := fun d hd => (h d hd).trans hab
+
+/-- A single leaf realizes its own resource. -/
+theorem realizes_leaf (c : Leaf) : (Forest.leaf c).Realizes c := by
+  refine ⟨fun _ => rfl, ?_⟩
+  intro d hd
+  simp only [Forest.nodes, List.mem_singleton] at hd
+  rw [hd]
+  exact Leaf.Within.refl c
 
 /-- A current leaf is an authority-carrying node. -/
 theorem mem_nodes_of_mem_leaves {f : Forest} {c : Leaf} (h : c ∈ f.leaves) :
@@ -417,6 +545,94 @@ theorem suspended_frontier_realizes {kind : RuleKind} {parent leftRule rightRule
       exact Forest.fractional_split_budget (p := parent) (l := leftRule)
         (r := rightRule) (x := x)
         (by rw [hls, hps]) (by rw [hrs, hps]) hlo1 hhi1 hlo2 hhi2 hsum
+
+/-- Forest coherence entails rule validity at every suspension. -/
+theorem coherent_valid {f : Forest} (h : f.Coherent) : f.Valid := by
+  induction f with
+  | leaf c => trivial
+  | split k p lr rr l r ihl ihr =>
+      simp only [Forest.Coherent] at h
+      obtain ⟨hrule, -, -, hCL, hCR⟩ := h
+      exact ⟨hrule, ihl hCL, ihr hCR⟩
+
+/-- The local coherence facts of any suspension of a coherent forest: the rule is
+checked and each current child subtree realizes its rule fragment. -/
+theorem coherent_suspension {f : Forest} (h : f.Coherent) {s : Suspension}
+    (hs : s ∈ f.suspensions) :
+    RuleValid s.kind s.parent s.leftRule s.rightRule ∧
+      s.left.Realizes s.leftRule ∧ s.right.Realizes s.rightRule := by
+  induction f with
+  | leaf c => simp [Forest.suspensions] at hs
+  | split k p lr rr l r ihl ihr =>
+      simp only [Forest.Coherent] at h
+      obtain ⟨hrule, hL, hR, hCL, hCR⟩ := h
+      simp only [Forest.suspensions, List.mem_cons, List.mem_append] at hs
+      rcases hs with rfl | hs | hs
+      · exact ⟨hrule, hL, hR⟩
+      · exact ihl hCL hs
+      · exact ihr hCR hs
+
+/-- The frontier budget of a suspension whose children realize the rule fragments
+is the suspended parent's budget. This is the premise `suspended_frontier_realizes`
+takes, derived from coherence rather than supplied by a caller. -/
+theorem split_budget_realizes {kind : RuleKind} {p lr rr : Leaf} {l r : Forest}
+    (hrule : RuleValid kind p lr rr) (hl : l.Realizes lr) (hr : r.Realizes rr) :
+    ∀ x, l.budget x + r.budget x = (Forest.leaf p).budget x := by
+  intro x
+  obtain ⟨-, -, -, -, -, -, -, hb⟩ := suspended_frontier_realizes hrule hl.1 hr.1
+  simpa [Forest.budget] using hb x
+
+/-- The premises `suspended_frontier_realizes` takes are consequences of
+coherence: for every suspension, its current subtrees realize the recorded rule
+fragments, so the parent's budget is their pointwise sum and both subtrees lie
+inside the parent's resource. -/
+theorem coherent_suspension_realizes {f : Forest} (h : f.Coherent) {s : Suspension}
+    (hs : s ∈ f.suspensions) :
+    (∀ x, s.left.budget x + s.right.budget x = (Forest.leaf s.parent).budget x) ∧
+      s.left.Inside s.parent ∧ s.right.Inside s.parent := by
+  obtain ⟨hrule, hL, hR⟩ := coherent_suspension h hs
+  exact ⟨split_budget_realizes hrule hL hR, hL.2.trans (RuleValid.left_within hrule),
+    hR.2.trans (RuleValid.right_within hrule)⟩
+
+/-- In a coherent forest every authority node's recorded resource is realized by
+everything actually below it. -/
+theorem coherent_nodeRealized {f : Forest} (h : f.Coherent) {c : Leaf}
+    (hc : c ∈ f.nodes) : f.NodeRealized c := by
+  induction f with
+  | leaf c0 =>
+      simp only [Forest.nodes, List.mem_singleton] at hc
+      rcases hc with rfl
+      exact Or.inl (by simp [Forest.leaves])
+  | split k p lr rr l r ihl ihr =>
+      simp only [Forest.Coherent] at h
+      obtain ⟨hrule, hL, hR, hCL, hCR⟩ := h
+      simp only [Forest.nodes, List.mem_cons, List.mem_append] at hc
+      rcases hc with hcp | hc | hc
+      · have hnc : (Forest.split k p lr rr l r).NodeRealized p := by
+          refine Or.inr ⟨l, r, ?_, ?_, ?_, ?_⟩
+          · exact ⟨{ kind := k, parent := p, leftRule := lr, rightRule := rr,
+                     left := l, right := r }, by simp [Forest.suspensions], rfl, rfl, rfl⟩
+          · exact split_budget_realizes hrule hL hR
+          · exact Forest.Inside.trans hL.2 (RuleValid.left_within hrule)
+          · exact Forest.Inside.trans hR.2 (RuleValid.right_within hrule)
+        rw [hcp]
+        exact hnc
+      · rcases ihl hCL hc with hleaf | ⟨l', r', hmem, hbud, hinl, hinr⟩
+        · exact Or.inl (by
+            simp only [Forest.leaves, List.mem_append]
+            exact Or.inl hleaf)
+        · obtain ⟨s, hs, hpar, hl', hr'⟩ := hmem
+          exact Or.inr ⟨l', r', ⟨s, by
+            simp only [Forest.suspensions, List.mem_cons, List.mem_append]
+            exact Or.inr (Or.inl hs), hpar, hl', hr'⟩, hbud, hinl, hinr⟩
+      · rcases ihr hCR hc with hleaf | ⟨l', r', hmem, hbud, hinl, hinr⟩
+        · exact Or.inl (by
+            simp only [Forest.leaves, List.mem_append]
+            exact Or.inr hleaf)
+        · obtain ⟨s, hs, hpar, hl', hr'⟩ := hmem
+          exact Or.inr ⟨l', r', ⟨s, by
+            simp only [Forest.suspensions, List.mem_cons, List.mem_append]
+            exact Or.inr (Or.inr hs), hpar, hl', hr'⟩, hbud, hinl, hinr⟩
 
 /-- Modify the first current leaf with the given name. Returns the updated forest
 and the leaf that was replaced. -/
@@ -857,6 +1073,183 @@ theorem modifyLeafAt_nodes_leaf_mem {f f' : Forest} {id : CapId}
               · exact Or.inr (Or.inr hc')
         · cases h
 
+/-- A leaf replacement that keeps every new node inside the replaced leaf keeps
+the subtree inside any resource the old nodes lay in. -/
+theorem inside_modifyLeafAt {f f' : Forest} {id : CapId}
+    {g : Leaf → Option (Forest × Leaf)} {c d0 : Leaf}
+    (h : f.modifyLeafAt id g = some (f', d0))
+    (hc : f.Inside c)
+    (hg : ∀ (d : Leaf) (x : Forest) (d' : Leaf), g d = some (x, d') → x.Inside d) :
+    f'.Inside c := by
+  induction f generalizing f' d0 with
+  | leaf c0 =>
+      simp only [Forest.modifyLeafAt] at h
+      by_cases hc0 : c0.id = id
+      · rw [if_pos hc0] at h
+        exact Forest.Inside.trans (hg c0 f' d0 h) (hc c0 (by simp [Forest.nodes]))
+      · rw [if_neg hc0] at h
+        cases h
+  | split k p lr rr l r ihl ihr =>
+      simp only [Forest.modifyLeafAt] at h
+      split at h
+      · rename_i l' d' hl
+        simp only [Option.some.injEq, Prod.mk.injEq] at h
+        obtain ⟨rfl, rfl⟩ := h
+        intro e he
+        simp only [Forest.nodes, List.mem_cons, List.mem_append] at he
+        rcases he with he | he | he
+        · exact hc e (by simp only [Forest.nodes, List.mem_cons]; exact Or.inl he)
+        · exact (ihl hl (fun x hx => hc x (by
+            simp only [Forest.nodes, List.mem_cons, List.mem_append]
+            exact Or.inr (Or.inl hx)))) e he
+        · exact hc e (by
+            simp only [Forest.nodes, List.mem_cons, List.mem_append]
+            exact Or.inr (Or.inr he))
+      · rename_i hl
+        split at h
+        · rename_i r' d' hr
+          simp only [Option.some.injEq, Prod.mk.injEq] at h
+          obtain ⟨rfl, rfl⟩ := h
+          intro e he
+          simp only [Forest.nodes, List.mem_cons, List.mem_append] at he
+          rcases he with he | he | he
+          · exact hc e (by simp only [Forest.nodes, List.mem_cons]; exact Or.inl he)
+          · exact hc e (by
+              simp only [Forest.nodes, List.mem_cons, List.mem_append]
+              exact Or.inr (Or.inl he))
+          · exact (ihr hr (fun x hx => hc x (by
+              simp only [Forest.nodes, List.mem_cons, List.mem_append]
+              exact Or.inr (Or.inr hx)))) e he
+        · cases h
+
+/-- A leaf replacement that preserves the budget and the resource scope of the
+replaced leaf preserves subtree realization. -/
+theorem realizes_modifyLeafAt {f f' : Forest} {id : CapId}
+    {g : Leaf → Option (Forest × Leaf)} {c d0 : Leaf}
+    (h : f.modifyLeafAt id g = some (f', d0))
+    (hc : f.Realizes c)
+    (hg : ∀ (d : Leaf) (x : Forest) (d' : Leaf), g d = some (x, d') → x.Realizes d) :
+    f'.Realizes c := by
+  refine ⟨?_, ?_⟩
+  · intro b
+    rw [budget_modifyLeafAt h (fun d x d' hgd b => (hg d x d' hgd).1 b) b]
+    exact hc.1 b
+  · exact inside_modifyLeafAt h hc.2 (fun d x d' hgd => (hg d x d' hgd).2)
+
+/-- A coherent forest stays coherent when one current leaf is replaced by a
+coherent forest that realizes it. -/
+theorem coherent_modifyLeafAt {f f' : Forest} {id : CapId}
+    {g : Leaf → Option (Forest × Leaf)} {d0 : Leaf}
+    (h : f.modifyLeafAt id g = some (f', d0))
+    (hc : f.Coherent)
+    (hgR : ∀ (d : Leaf) (x : Forest) (d' : Leaf), g d = some (x, d') → x.Realizes d)
+    (hgC : ∀ (d : Leaf) (x : Forest) (d' : Leaf), g d = some (x, d') → x.Coherent) :
+    f'.Coherent := by
+  induction f generalizing f' d0 with
+  | leaf c0 =>
+      simp only [Forest.modifyLeafAt] at h
+      by_cases hc0 : c0.id = id
+      · rw [if_pos hc0] at h
+        exact hgC c0 f' d0 h
+      · rw [if_neg hc0] at h
+        cases h
+  | split k p lr rr l r ihl ihr =>
+      simp only [Forest.Coherent] at hc
+      obtain ⟨hrule, hL, hR, hCL, hCR⟩ := hc
+      simp only [Forest.modifyLeafAt] at h
+      split at h
+      · rename_i l' d' hl
+        simp only [Option.some.injEq, Prod.mk.injEq] at h
+        obtain ⟨rfl, rfl⟩ := h
+        exact ⟨hrule, realizes_modifyLeafAt hl hL hgR, hR,
+          ihl hl hCL, hCR⟩
+      · rename_i hl
+        split at h
+        · rename_i r' d' hr
+          simp only [Option.some.injEq, Prod.mk.injEq] at h
+          obtain ⟨rfl, rfl⟩ := h
+          exact ⟨hrule, hL, realizes_modifyLeafAt hr hR hgR,
+            hCL, ihr hr hCR⟩
+        · cases h
+
+
+/-- A leaf replacement that keeps every new node in scope keeps the subtree in
+scope, provided the replaced leaf itself is in scope. -/
+theorem nodes_scope_modifyLeafAt {f f' : Forest} {id : CapId}
+    {g : Leaf → Option (Forest × Leaf)} {d0 : Leaf} {a : AllocId} {len D : Nat}
+    (h : f.modifyLeafAt id g = some (f', d0))
+    (hf : ∀ c ∈ f.nodes, c.InScope a len D)
+    (hg : ∀ (d : Leaf) (x : Forest) (d' : Leaf), g d = some (x, d') →
+        d.InScope a len D → ∀ c ∈ x.nodes, c.InScope a len D) :
+    ∀ c ∈ f'.nodes, c.InScope a len D := by
+  induction f generalizing f' d0 with
+  | leaf c0 =>
+      simp only [Forest.modifyLeafAt] at h
+      by_cases hc0 : c0.id = id
+      · rw [if_pos hc0] at h
+        exact hg c0 f' d0 h (hf c0 (by simp [Forest.nodes]))
+      · rw [if_neg hc0] at h
+        cases h
+  | split k p lr rr l r ihl ihr =>
+      simp only [Forest.modifyLeafAt] at h
+      split at h
+      · rename_i l' d' hl
+        simp only [Option.some.injEq, Prod.mk.injEq] at h
+        obtain ⟨rfl, rfl⟩ := h
+        intro c hc
+        simp only [Forest.nodes, List.mem_cons, List.mem_append] at hc
+        rcases hc with hc | hc | hc
+        · exact hf c (by simp only [Forest.nodes, List.mem_cons]; exact Or.inl hc)
+        · exact ihl hl (fun x hx => hf x (by
+            simp only [Forest.nodes, List.mem_cons, List.mem_append]
+            exact Or.inr (Or.inl hx))) c hc
+        · exact hf c (by
+            simp only [Forest.nodes, List.mem_cons, List.mem_append]
+            exact Or.inr (Or.inr hc))
+      · rename_i hl
+        split at h
+        · rename_i r' d' hr
+          simp only [Option.some.injEq, Prod.mk.injEq] at h
+          obtain ⟨rfl, rfl⟩ := h
+          intro c hc
+          simp only [Forest.nodes, List.mem_cons, List.mem_append] at hc
+          rcases hc with hc | hc | hc
+          · exact hf c (by simp only [Forest.nodes, List.mem_cons]; exact Or.inl hc)
+          · exact hf c (by
+              simp only [Forest.nodes, List.mem_cons, List.mem_append]
+              exact Or.inr (Or.inl hc))
+          · exact ihr hr (fun x hx => hf x (by
+              simp only [Forest.nodes, List.mem_cons, List.mem_append]
+              exact Or.inr (Or.inr hx))) c hc
+        · cases h
+
+/-- Every rule descriptor of a coherent forest that has its authority nodes in
+scope is itself in scope: allocation, extent and share, without a non-emptiness
+requirement (an empty side of a split carries no bytes and no authority). -/
+theorem ruleFragments_scope {f : Forest} {a : AllocId} {len D : Nat}
+    (hcoh : f.Coherent) (hn : ∀ c ∈ f.nodes, c.InScope a len D) :
+    ∀ c ∈ f.ruleFragments, c.alloc = a ∧ c.hi ≤ len ∧ c.q ≤ D := by
+  induction f with
+  | leaf c => intro c' hc'; simp [Forest.ruleFragments] at hc'
+  | split k p lr rr l r ihl ihr =>
+      simp only [Forest.Coherent] at hcoh
+      obtain ⟨hrule, -, -, hCL, hCR⟩ := hcoh
+      intro c' hc'
+      simp only [Forest.ruleFragments, List.mem_cons, List.mem_append] at hc'
+      rcases hc' with rfl | rfl | hc' | hc'
+      · obtain ⟨hla, -, hhi, -, hq⟩ := RuleValid.left_within hrule
+        obtain ⟨hpa, hph, -, hpq⟩ := hn p (by simp [Forest.nodes])
+        exact ⟨hla.trans hpa, Nat.le_trans hhi hph, Nat.le_trans hq hpq⟩
+      · obtain ⟨hra, -, hhi, -, hq⟩ := RuleValid.right_within hrule
+        obtain ⟨hpa, hph, -, hpq⟩ := hn p (by simp [Forest.nodes])
+        exact ⟨hra.trans hpa, Nat.le_trans hhi hph, Nat.le_trans hq hpq⟩
+      · exact ihl hCL (fun c hc => hn c (by
+          simp only [Forest.nodes, List.mem_cons, List.mem_append]
+          exact Or.inr (Or.inl hc))) c' hc'
+      · exact ihr hCR (fun c hc => hn c (by
+          simp only [Forest.nodes, List.mem_cons, List.mem_append]
+          exact Or.inr (Or.inr hc))) c' hc'
+
 /-- The checked leaf-level spatial split: explicit child intervals must exactly
 partition the parent interval, the ceiling and share are inherited, and the
 parent must be an active leaf. -/
@@ -1025,6 +1418,126 @@ theorem spatialLeafSplit_valid {p p' : Leaf} {x : Forest} {c1 c2 : CapId}
     · simp at h
   · simp at h
 
+
+/-- A checked spatial split realizes the leaf it subdivides: the split node's
+frontier is the parent's budget and every authority node it carries lies within
+the parent's resource. -/
+theorem spatialLeafSplit_realizes {p p' : Leaf} {x : Forest} {c1 c2 : CapId}
+    {lo1 hi1 lo2 hi2 : Nat}
+    (h : spatialLeafSplit p c1 c2 lo1 hi1 lo2 hi2 = some (x, p')) :
+    x.Realizes p := by
+  have hbud := spatialLeafSplit_budget h
+  have hvalid := spatialLeafSplit_valid h
+  unfold spatialLeafSplit at h
+  split at h
+  · rename_i _hact
+    split at h
+    · rename_i _hb
+      split at h
+      · rename_i _hpart
+        split at h
+        · rename_i _hid
+          simp only [Option.some.injEq, Prod.mk.injEq] at h
+          obtain ⟨rfl, _hp'⟩ := h
+          refine ⟨hbud, ?_⟩
+          intro e he
+          simp only [Forest.nodes, List.mem_cons, List.mem_append, List.mem_singleton,
+            List.nil_append, List.cons_append, List.mem_nil_iff, or_false] at he
+          rcases he with he | he | he
+          · rw [he]; exact Leaf.Within.refl _
+          · rw [he]; exact RuleValid.left_within hvalid.1
+          · rw [he]; exact RuleValid.right_within hvalid.1
+        · simp at h
+      · simp at h
+    · simp at h
+  · simp at h
+
+/-- A checked spatial split is itself coherent. -/
+theorem spatialLeafSplit_coherent {p p' : Leaf} {x : Forest} {c1 c2 : CapId}
+    {lo1 hi1 lo2 hi2 : Nat}
+    (h : spatialLeafSplit p c1 c2 lo1 hi1 lo2 hi2 = some (x, p')) :
+    x.Coherent := by
+  have hvalid := spatialLeafSplit_valid h
+  unfold spatialLeafSplit at h
+  split at h
+  · rename_i _hact
+    split at h
+    · rename_i _hb
+      split at h
+      · rename_i _hpart
+        split at h
+        · rename_i _hid
+          simp only [Option.some.injEq, Prod.mk.injEq] at h
+          obtain ⟨rfl, _hp'⟩ := h
+          exact ⟨hvalid.1, realizes_leaf _, realizes_leaf _, trivial, trivial⟩
+        · simp at h
+      · simp at h
+    · simp at h
+  · simp at h
+
+
+/-- The exact shape of a checked spatial split: the new leaves are the rule
+fragments, their intervals are the requested ones, and the parent's resource is
+preserved. -/
+theorem spatialLeafSplit_shape {p p' : Leaf} {x : Forest} {c1 c2 : CapId}
+    {lo1 hi1 lo2 hi2 : Nat}
+    (h : spatialLeafSplit p c1 c2 lo1 hi1 lo2 hi2 = some (x, p')) :
+    p' = p ∧
+    ∃ l r : Leaf, x = .split .spatial p l r (.leaf l) (.leaf r) ∧
+      l.lo = lo1 ∧ l.hi = hi1 ∧ r.lo = lo2 ∧ r.hi = hi2 ∧
+      l.q = p.q ∧ r.q = p.q ∧ l.alloc = p.alloc ∧ r.alloc = p.alloc ∧
+      l.ceiling = p.ceiling ∧ r.ceiling = p.ceiling ∧
+      lo1 ≤ hi1 ∧ lo2 ≤ hi2 ∧ lo1 = p.lo ∧ hi1 = lo2 ∧ hi2 = p.hi := by
+  unfold spatialLeafSplit at h
+  split at h
+  · rename_i _hact
+    split at h
+    · rename_i hb
+      split at h
+      · rename_i hpart
+        split at h
+        · rename_i _hid
+          simp only [Option.some.injEq, Prod.mk.injEq] at h
+          obtain ⟨rfl, hp'⟩ := h
+          exact ⟨hp'.symm, _, _, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl,
+            hb.1, hb.2, hpart.1, hpart.2.1, hpart.2.2⟩
+        · simp at h
+      · simp at h
+    · simp at h
+  · simp at h
+
+/-- A checked spatial split keeps every node of the result in the parent's
+component scope: the suspended parent and both new children. The non-emptiness
+guard is what admits the children in a non-empty allocation. -/
+theorem spatialLeafSplit_nodes_scope {p p' : Leaf} {x : Forest} {c1 c2 : CapId}
+    {lo1 hi1 lo2 hi2 : Nat} {a : AllocId} {len D : Nat}
+    (h : spatialLeafSplit p c1 c2 lo1 hi1 lo2 hi2 = some (x, p'))
+    (hp : p.InScope a len D)
+    (hne : len = 0 ∨ (lo1 < hi1 ∧ lo2 < hi2)) :
+    ∀ c ∈ x.nodes, c.InScope a len D := by
+  obtain ⟨-, l, r, rfl, hllo, hlhi, hrlo, hrhi, hlq, hrq, hla, hra, -, -, hb1, hb2,
+    hpart1, hpart2, hpart3⟩ := spatialLeafSplit_shape h
+  obtain ⟨hpa, hph, hpne, hpq⟩ := hp
+  intro c hc
+  simp only [Forest.nodes, List.mem_cons, List.mem_singleton,
+    List.nil_append, List.cons_append, List.mem_nil_iff, or_false] at hc
+  rcases hc with hc | hc | hc
+  · rw [hc]; exact ⟨hpa, hph, hpne, hpq⟩
+  · rw [hc]
+    refine ⟨hla.trans hpa, ?_, ?_, ?_⟩
+    · rw [hlhi, hpart2]; exact Nat.le_trans hb2 (Nat.le_trans (Nat.le_of_eq hpart3) hph)
+    · rcases hne with h0 | ⟨h1, -⟩
+      · exact Or.inr h0
+      · exact Or.inl (by rw [hllo, hlhi]; exact h1)
+    · rw [hlq]; exact hpq
+  · rw [hc]
+    refine ⟨hra.trans hpa, ?_, ?_, ?_⟩
+    · rw [hrhi, hpart3]; exact hph
+    · rcases hne with h0 | ⟨-, h2⟩
+      · exact Or.inr h0
+      · exact Or.inl (by rw [hrlo, hrhi]; exact h2)
+    · rw [hrq]; exact hpq
+
 /-- Checked spatial subdivision of the current leaf `id`. -/
 def splitSpatialAt (id c1 c2 : CapId) (lo1 hi1 lo2 hi2 : Nat) :
     Forest → Option (Forest × Leaf) :=
@@ -1047,6 +1560,40 @@ theorem splitSpatialAt_valid {f f' : Forest} {p : Leaf} {id c1 c2 : CapId}
   apply valid_modifyLeafAt h hv
   intro d x d' hg
   exact spatialLeafSplit_valid hg
+
+
+/-- A checked spatial subdivision preserves realization of any enclosing
+resource. -/
+theorem splitSpatialAt_realizes {f f' : Forest} {p : Leaf} {id c1 c2 : CapId}
+    {lo1 hi1 lo2 hi2 : Nat} {c : Leaf}
+    (h : f.splitSpatialAt id c1 c2 lo1 hi1 lo2 hi2 = some (f', p))
+    (hc : f.Realizes c) : f'.Realizes c := by
+  unfold Forest.splitSpatialAt at h
+  exact realizes_modifyLeafAt h hc
+    (fun d x d' hg => spatialLeafSplit_realizes hg)
+
+/-- A checked spatial subdivision preserves forest coherence. -/
+theorem splitSpatialAt_coherent {f f' : Forest} {p : Leaf} {id c1 c2 : CapId}
+    {lo1 hi1 lo2 hi2 : Nat}
+    (h : f.splitSpatialAt id c1 c2 lo1 hi1 lo2 hi2 = some (f', p))
+    (hc : f.Coherent) : f'.Coherent := by
+  unfold Forest.splitSpatialAt at h
+  exact coherent_modifyLeafAt h hc
+    (fun d x d' hg => spatialLeafSplit_realizes hg)
+    (fun d x d' hg => spatialLeafSplit_coherent hg)
+
+
+/-- A checked spatial subdivision keeps every resulting node in the parent's
+component scope. -/
+theorem splitSpatialAt_nodes_scope {f f' : Forest} {p : Leaf} {id c1 c2 : CapId}
+    {lo1 hi1 lo2 hi2 : Nat} {a : AllocId} {len D : Nat}
+    (h : f.splitSpatialAt id c1 c2 lo1 hi1 lo2 hi2 = some (f', p))
+    (hf : ∀ c ∈ f.nodes, c.InScope a len D)
+    (hne : len = 0 ∨ (lo1 < hi1 ∧ lo2 < hi2)) :
+    ∀ c ∈ f'.nodes, c.InScope a len D := by
+  unfold Forest.splitSpatialAt at h
+  exact nodes_scope_modifyLeafAt h hf
+    (fun d x d' hg hd => spatialLeafSplit_nodes_scope hg hd hne)
 
 /-- A spatial subdivision preserves distinct authority identities when both child
 names are fresh. -/
@@ -1268,6 +1815,122 @@ theorem fractionalLeafSplit_valid {p p' : Leaf} {x : Forest} {c1 c2 : CapId}
     · simp at h
   · simp at h
 
+
+/-- A checked fractional split realizes the leaf it subdivides. -/
+theorem fractionalLeafSplit_realizes {p p' : Leaf} {x : Forest} {c1 c2 : CapId}
+    {q1 q2 : Nat}
+    (h : fractionalLeafSplit p c1 c2 q1 q2 = some (x, p')) :
+    x.Realizes p := by
+  have hbud := fractionalLeafSplit_budget h
+  have hvalid := fractionalLeafSplit_valid h
+  unfold fractionalLeafSplit at h
+  split at h
+  · rename_i _hact
+    split at h
+    · rename_i _hpos
+      split at h
+      · rename_i _hsum
+        split at h
+        · rename_i _hid
+          simp only [Option.some.injEq, Prod.mk.injEq] at h
+          obtain ⟨rfl, _hp'⟩ := h
+          refine ⟨hbud, ?_⟩
+          intro e he
+          simp only [Forest.nodes, List.mem_cons, List.mem_append, List.mem_singleton,
+            List.nil_append, List.cons_append, List.mem_nil_iff, or_false] at he
+          rcases he with he | he | he
+          · rw [he]; exact Leaf.Within.refl _
+          · rw [he]; exact RuleValid.left_within hvalid.1
+          · rw [he]; exact RuleValid.right_within hvalid.1
+        · simp at h
+      · simp at h
+    · simp at h
+  · simp at h
+
+/-- A checked fractional split is itself coherent. -/
+theorem fractionalLeafSplit_coherent {p p' : Leaf} {x : Forest} {c1 c2 : CapId}
+    {q1 q2 : Nat}
+    (h : fractionalLeafSplit p c1 c2 q1 q2 = some (x, p')) :
+    x.Coherent := by
+  have hvalid := fractionalLeafSplit_valid h
+  unfold fractionalLeafSplit at h
+  split at h
+  · rename_i _hact
+    split at h
+    · rename_i _hpos
+      split at h
+      · rename_i _hsum
+        split at h
+        · rename_i _hid
+          simp only [Option.some.injEq, Prod.mk.injEq] at h
+          obtain ⟨rfl, _hp'⟩ := h
+          exact ⟨hvalid.1, realizes_leaf _, realizes_leaf _, trivial, trivial⟩
+        · simp at h
+      · simp at h
+    · simp at h
+  · simp at h
+
+
+/-- The exact shape of a checked fractional split: both children keep the parent
+interval, their shares are the requested ones, and they sum to the parent's. -/
+theorem fractionalLeafSplit_shape {p p' : Leaf} {x : Forest} {c1 c2 : CapId}
+    {q1 q2 : Nat}
+    (h : fractionalLeafSplit p c1 c2 q1 q2 = some (x, p')) :
+    p' = p ∧
+    ∃ l r : Leaf, x = .split .fractional p l r (.leaf l) (.leaf r) ∧
+      l.lo = p.lo ∧ l.hi = p.hi ∧ r.lo = p.lo ∧ r.hi = p.hi ∧
+      l.q = q1 ∧ r.q = q2 ∧ l.alloc = p.alloc ∧ r.alloc = p.alloc ∧
+      l.ceiling = p.ceiling ∧ r.ceiling = p.ceiling ∧
+      0 < q1 ∧ 0 < q2 ∧ q1 + q2 = p.q := by
+  unfold fractionalLeafSplit at h
+  split at h
+  · rename_i _hact
+    split at h
+    · rename_i hpos
+      split at h
+      · rename_i hsum
+        split at h
+        · rename_i _hid
+          simp only [Option.some.injEq, Prod.mk.injEq] at h
+          obtain ⟨rfl, hp'⟩ := h
+          exact ⟨hp'.symm, _, _, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl,
+            hpos.1, hpos.2, hsum⟩
+        · simp at h
+      · simp at h
+    · simp at h
+  · simp at h
+
+/-- A checked fractional split keeps every node of the result in the parent's
+component scope: both children inherit the parent interval, and each share is
+bounded by the parent's. -/
+theorem fractionalLeafSplit_nodes_scope {p p' : Leaf} {x : Forest} {c1 c2 : CapId}
+    {q1 q2 : Nat} {a : AllocId} {len D : Nat}
+    (h : fractionalLeafSplit p c1 c2 q1 q2 = some (x, p'))
+    (hp : p.InScope a len D) :
+    ∀ c ∈ x.nodes, c.InScope a len D := by
+  obtain ⟨-, l, r, rfl, hllo, hlhi, hrlo, hrhi, hlq, hrq, hla, hra, -, -, hq1, hq2,
+    hsum⟩ := fractionalLeafSplit_shape h
+  obtain ⟨hpa, hph, hpne, hpq⟩ := hp
+  intro c hc
+  simp only [Forest.nodes, List.mem_cons, List.mem_singleton,
+    List.nil_append, List.cons_append, List.mem_nil_iff, or_false] at hc
+  rcases hc with hc | hc | hc
+  · rw [hc]; exact ⟨hpa, hph, hpne, hpq⟩
+  · rw [hc]
+    refine ⟨hla.trans hpa, ?_, ?_, ?_⟩
+    · rw [hlhi]; exact hph
+    · rcases hpne with h0 | h1
+      · exact Or.inl (by rw [hllo, hlhi]; exact h0)
+      · exact Or.inr h1
+    · rw [hlq]; omega
+  · rw [hc]
+    refine ⟨hra.trans hpa, ?_, ?_, ?_⟩
+    · rw [hrhi]; exact hph
+    · rcases hpne with h0 | h1
+      · exact Or.inl (by rw [hrlo, hrhi]; exact h0)
+      · exact Or.inr h1
+    · rw [hrq]; omega
+
 /-- Checked fractional subdivision of the current leaf `id`. -/
 def splitFractionAt (id c1 c2 : CapId) (q1 q2 : Nat) :
     Forest → Option (Forest × Leaf) :=
@@ -1290,6 +1953,39 @@ theorem splitFractionAt_valid {f f' : Forest} {p : Leaf} {id c1 c2 : CapId}
   apply valid_modifyLeafAt h hv
   intro d x d' hg
   exact fractionalLeafSplit_valid hg
+
+
+/-- A checked fractional subdivision preserves realization of any enclosing
+resource. -/
+theorem splitFractionAt_realizes {f f' : Forest} {p : Leaf} {id c1 c2 : CapId}
+    {q1 q2 : Nat} {c : Leaf}
+    (h : f.splitFractionAt id c1 c2 q1 q2 = some (f', p))
+    (hc : f.Realizes c) : f'.Realizes c := by
+  unfold Forest.splitFractionAt at h
+  exact realizes_modifyLeafAt h hc
+    (fun d x d' hg => fractionalLeafSplit_realizes hg)
+
+/-- A checked fractional subdivision preserves forest coherence. -/
+theorem splitFractionAt_coherent {f f' : Forest} {p : Leaf} {id c1 c2 : CapId}
+    {q1 q2 : Nat}
+    (h : f.splitFractionAt id c1 c2 q1 q2 = some (f', p))
+    (hc : f.Coherent) : f'.Coherent := by
+  unfold Forest.splitFractionAt at h
+  exact coherent_modifyLeafAt h hc
+    (fun d x d' hg => fractionalLeafSplit_realizes hg)
+    (fun d x d' hg => fractionalLeafSplit_coherent hg)
+
+
+/-- A checked fractional subdivision keeps every resulting node in the parent's
+component scope. -/
+theorem splitFractionAt_nodes_scope {f f' : Forest} {p : Leaf} {id c1 c2 : CapId}
+    {q1 q2 : Nat} {a : AllocId} {len D : Nat}
+    (h : f.splitFractionAt id c1 c2 q1 q2 = some (f', p))
+    (hf : ∀ c ∈ f.nodes, c.InScope a len D) :
+    ∀ c ∈ f'.nodes, c.InScope a len D := by
+  unfold Forest.splitFractionAt at h
+  exact nodes_scope_modifyLeafAt h hf
+    (fun d x d' hg hd => fractionalLeafSplit_nodes_scope hg hd)
 
 /-- A fractional subdivision preserves distinct authority identities when both
 child names are fresh. -/
@@ -1959,6 +2655,56 @@ theorem reconstructAt_ruleIds_mem {f f' : Forest} {id : CapId} {a b : Leaf}
             · exact List.mem_cons_of_mem _ (List.mem_cons_of_mem _
                 (List.mem_append.mpr (Or.inr (ihr hr hy))))
           · simp at h
+
+
+/-- Reconstruction preserves realization of any enclosing resource: it only
+removes authority nodes and the budget is unchanged pointwise. -/
+theorem realizes_reconstructAt {f f' : Forest} {id : CapId} {a b : Leaf} {c : Leaf}
+    (h : f.reconstructAt id = some (f', a, b)) (hc : f.Realizes c) :
+    f'.Realizes c := by
+  refine ⟨?_, ?_⟩
+  · intro x
+    rw [reconstructAt_budget h x]
+    exact hc.1 x
+  · exact fun e he => hc.2 e (reconstructAt_nodes_sub h he)
+
+/-- Reconstruction preserves forest coherence. -/
+theorem coherent_reconstructAt {f f' : Forest} {id : CapId} {a b : Leaf}
+    (h : f.reconstructAt id = some (f', a, b)) (hc : f.Coherent) :
+    f'.Coherent := by
+  induction f generalizing f' a b with
+  | leaf c0 => simp [Forest.reconstructAt] at h
+  | split k p lr rr l r ihl ihr =>
+      simp only [Forest.Coherent] at hc
+      obtain ⟨hrule, hL, hR, hCL, hCR⟩ := hc
+      simp only [Forest.reconstructAt] at h
+      split at h
+      · rename_i _hp
+        have hf' : f' = .leaf p := reconstructHere_nodes h
+        subst hf'
+        trivial
+      · rename_i _hp
+        split at h
+        · rename_i l' a' b' hl
+          simp only [Option.some.injEq, Prod.mk.injEq] at h
+          obtain ⟨rfl, rfl, rfl⟩ := h
+          exact ⟨hrule, realizes_reconstructAt hl hL, hR, ihl hl hCL, hCR⟩
+        · rename_i _hl
+          split at h
+          · rename_i r' a' b' hr
+            simp only [Option.some.injEq, Prod.mk.injEq] at h
+            obtain ⟨rfl, rfl, rfl⟩ := h
+            exact ⟨hrule, hL, realizes_reconstructAt hr hR, hCL, ihr hr hCR⟩
+          · simp at h
+
+/-- Reconstruction only removes authority nodes, so it keeps every surviving
+node in scope. -/
+theorem reconstructAt_nodes_scope {f f' : Forest} {id : CapId} {a b : Leaf}
+    {a' : AllocId} {len D : Nat}
+    (h : f.reconstructAt id = some (f', a, b))
+    (hf : ∀ c ∈ f.nodes, c.InScope a' len D) :
+    ∀ c ∈ f'.nodes, c.InScope a' len D :=
+  fun c hc => hf c (reconstructAt_nodes_sub h hc)
 
 /-- Retag a current active leaf, keeping its resource description. -/
 def retagLeafAt (newId : CapId) (c : Leaf) : Option (Forest × Leaf) :=
@@ -2757,6 +3503,72 @@ theorem retagLeaf_nodes_old_mem {f f' : Forest} {id newId : CapId} {p c : Leaf}
   unfold Forest.retagLeaf at h
   exact retag_modify_nodes_old_mem h hc hid
 
+
+/-- Retagging keeps the leaf's resource, so the result realizes the old leaf. -/
+theorem retagLeafAt_realizes {newId : CapId} {c : Leaf} {f' : Forest} {d : Leaf}
+    (h : retagLeafAt newId c = some (f', d)) : f'.Realizes c := by
+  unfold retagLeafAt at h
+  split at h
+  · simp only [Option.some.injEq, Prod.mk.injEq] at h
+    obtain ⟨rfl, _⟩ := h
+    refine ⟨fun b => ?_, ?_⟩
+    · simp [Forest.budget, Leaf.budget]
+    · intro e he
+      simp only [Forest.nodes, List.mem_singleton] at he
+      rw [he]
+      exact ⟨rfl, Nat.le_refl _, Nat.le_refl _, rfl, Nat.le_refl _⟩
+  · cases h
+
+/-- Retagging a leaf stays coherent. -/
+theorem retagLeafAt_coherent {newId : CapId} {c : Leaf} {f' : Forest} {d : Leaf}
+    (h : retagLeafAt newId c = some (f', d)) : f'.Coherent := by
+  unfold retagLeafAt at h
+  split at h
+  · simp only [Option.some.injEq, Prod.mk.injEq] at h
+    obtain ⟨rfl, _⟩ := h
+    trivial
+  · cases h
+
+/-- Retagging keeps the leaf's allocation, interval and share, hence its scope. -/
+theorem retagLeafAt_nodes_scope {newId : CapId} {c : Leaf} {f' : Forest} {d : Leaf}
+    (h : retagLeafAt newId c = some (f', d)) {a : AllocId} {len D : Nat}
+    (hc : c.InScope a len D) : ∀ e ∈ f'.nodes, e.InScope a len D := by
+  unfold retagLeafAt at h
+  split at h
+  · simp only [Option.some.injEq, Prod.mk.injEq] at h
+    obtain ⟨rfl, _⟩ := h
+    intro e he
+    simp only [Forest.nodes, List.mem_singleton] at he
+    rw [he]
+    exact ⟨hc.1, hc.2.1, hc.2.2.1, hc.2.2.2⟩
+  · cases h
+
+/-- Retagging preserves realization of any enclosing resource. -/
+theorem retagLeaf_realizes {f f' : Forest} {id newId : CapId} {p c : Leaf}
+    (h : f.retagLeaf id newId = some (f', p)) (hc : f.Realizes c) :
+    f'.Realizes c := by
+  unfold Forest.retagLeaf at h
+  exact realizes_modifyLeafAt h hc (fun d x d' hg => retagLeafAt_realizes hg)
+
+/-- Retagging preserves forest coherence. -/
+theorem retagLeaf_coherent {f f' : Forest} {id newId : CapId} {p : Leaf}
+    (h : f.retagLeaf id newId = some (f', p)) (hc : f.Coherent) :
+    f'.Coherent := by
+  unfold Forest.retagLeaf at h
+  exact coherent_modifyLeafAt h hc
+    (fun d x d' hg => retagLeafAt_realizes hg)
+    (fun d x d' hg => retagLeafAt_coherent hg)
+
+/-- Retagging preserves component scope. -/
+theorem retagLeaf_nodes_scope {f f' : Forest} {id newId : CapId} {p : Leaf}
+    {a : AllocId} {len D : Nat}
+    (h : f.retagLeaf id newId = some (f', p))
+    (hf : ∀ c ∈ f.nodes, c.InScope a len D) :
+    ∀ c ∈ f'.nodes, c.InScope a len D := by
+  unfold Forest.retagLeaf at h
+  exact nodes_scope_modifyLeafAt h hf
+    (fun d x d' hg hd => retagLeafAt_nodes_scope hg hd)
+
 end Forest
 
 /-- The reconstruction state of one allocation. The heap is the reference byte
@@ -2885,10 +3697,76 @@ theorem State.Accounts.dormant_not_leaves {s : State} (h : s.Accounts)
   have hnode : c ∈ s.forest.nodes := Forest.mem_nodes_of_mem_leaves hc
   exact h.dormant_absent r hr (heq ▸ List.mem_map.mpr ⟨c, hnode, rfl⟩)
 
+/-- The component scope. Every authority fragment — a current leaf or a suspended
+parent — describes this component's allocation, lies inside its extent, is empty
+only when the whole allocation is empty, and carries at most the denominator's
+share. Every outstanding obligation is described the same way. The denominator is
+positive. Scope for the rule descriptors follows from this and coherence
+(`State.Scope.rule_scope`); their authority is delayed by construction. -/
+structure State.Scope (s : State) : Prop where
+  denom_pos : 0 < s.D
+  node_scope : ∀ c ∈ s.forest.nodes, c.InScope s.alloc s.len s.D
+  restore_scope : ∀ r ∈ s.restores,
+    r.alloc = s.alloc ∧ r.hi ≤ s.len ∧ (r.lo < r.hi ∨ s.len = 0) ∧ r.q ≤ s.D
+
+/-- The state's forest is coherent. -/
+def State.Coherent (s : State) : Prop := s.forest.Coherent
+
 /-- The reconstruction invariant: the frontier is covered, every recorded rule
-is checked, and the ownership accounts are complete. -/
+is checked, the ownership accounts are complete, the forest is coherent — every
+current subtree realizes the rule fragment it was recorded for — and every
+fragment is in the component's allocation scope. -/
 def State.Inv (s : State) : Prop :=
-  s.Covered ∧ s.forest.Valid ∧ s.Accounts
+  s.Covered ∧ s.forest.Valid ∧ s.Accounts ∧ s.Coherent ∧ s.Scope
+
+/-- The covered half of the invariant. -/
+theorem State.Inv.covered {s : State} (h : s.Inv) : s.Covered := h.1
+
+/-- The validity half of the invariant. -/
+theorem State.Inv.valid {s : State} (h : s.Inv) : s.forest.Valid := h.2.1
+
+/-- The ownership accounts. -/
+theorem State.Inv.accounts {s : State} (h : s.Inv) : s.Accounts := h.2.2.1
+
+/-- Forest coherence. -/
+theorem State.Inv.coherent {s : State} (h : s.Inv) : s.forest.Coherent := h.2.2.2.1
+
+/-- Component allocation scope. -/
+theorem State.Inv.scope {s : State} (h : s.Inv) : s.Scope := h.2.2.2.2
+
+/-- Rule descriptors are in scope: their allocation, extent and share are bounded
+by the component's. An empty descriptor is admitted (it carries no bytes and no
+current authority), which is why no non-emptiness is required here. -/
+theorem State.Scope.rule_scope {s : State} (h : s.Scope) (hc : s.forest.Coherent) :
+    ∀ c ∈ s.forest.ruleFragments, c.alloc = s.alloc ∧ c.hi ≤ s.len ∧ c.q ≤ s.D :=
+  Forest.ruleFragments_scope hc h.node_scope
+
+/-- Replacing the heap keeps the component scope: scope mentions only the
+allocation, extent, denominator, forest and obligations. -/
+theorem State.Scope.setHeap {s : State} (h : s.Scope) (h' : Heap) :
+    ({ s with heap := h' } : State).Scope :=
+  { denom_pos := h.denom_pos
+    node_scope := h.node_scope
+    restore_scope := h.restore_scope }
+
+/-- Replacing the heap keeps the ownership accounts: no account field mentions
+the heap. -/
+theorem State.Accounts.setHeap {s : State} (h : s.Accounts) (h' : Heap) :
+    ({ s with heap := h' } : State).Accounts :=
+  { nodeIds_nodup := h.nodeIds_nodup
+    issue_covers := h.issue_covers
+    retired_absent := h.retired_absent
+    restores_issued := h.restores_issued
+    borrowers_nodup := h.borrowers_nodup
+    lenders_nodup := h.lenders_nodup
+    lender_ne_borrower := h.lender_ne_borrower
+    dormant_absent := h.dormant_absent
+    borrower_not_rule := h.borrower_not_rule
+    restore_realized := h.restore_realized
+    node_agrees := h.node_agrees
+    nested_agrees := h.nested_agrees
+    restore_order := h.restore_order
+    rule_fragments_issued := h.rule_fragments_issued }
 
 /-- The component's represented storage: its heap holds the allocation with
 exactly `len` bytes. This is the storage half of the integrated invariant; the
@@ -2907,7 +3785,7 @@ theorem State.Storage.of_heap {s s' : State} (hheap : s'.heap = s.heap)
 /-- A whole live allocation satisfies the reconstruction invariant. -/
 theorem State.initial_inv (a : AllocId) (n D : Nat) (pos : 0 < D)
     (rootId disposalId : CapId) : (State.initial a n D pos rootId disposalId).Inv := by
-  refine ⟨?_, ?_, ?_⟩
+  refine ⟨?_, ?_, ?_, ?_, ?_⟩
   · intro x hx
     change (Forest.leaf
       { id := rootId, alloc := a, lo := 0, hi := n, ordered := Nat.zero_le n,
@@ -2956,6 +3834,17 @@ theorem State.initial_inv (a : AllocId) (n D : Nat) (pos : 0 < D)
       simp [State.initial] at hr
     · intro id hid
       simp [State.initial, Forest.ruleIds] at hid
+  · show (State.initial a n D pos rootId disposalId).forest.Coherent
+    trivial
+  · refine ⟨pos, ?_, ?_⟩
+    · intro c hc
+      simp only [State.initial, Forest.nodes, List.mem_singleton] at hc
+      rcases hc with rfl
+      refine ⟨rfl, Nat.le_refl _, ?_, Nat.le_refl _⟩
+      show 0 < n ∨ n = 0
+      omega
+    · intro r hr
+      simp [State.initial] at hr
 
 /-- Delegation paths compose. -/
 theorem State.RestoreReaches.trans {s : State} {a b c : Restore}
@@ -3044,6 +3933,28 @@ theorem State.Accounts.restore_terminal_agrees {s : State} (h : s.Accounts)
     · exact ⟨rfl, rfl, rfl, rfl, rfl⟩
     · exact h.restoreReaches_sameResource hp
   exact Restore.Agrees.of_sameResource hs.symm ht.2.2.2.2
+
+/-- The invariant derives terminal resource realization without any caller-
+supplied subtree budget: every outstanding obligation reaches a terminal node
+whose recorded resource agrees with the obligation, and that node's recorded
+resource is realized by everything actually below it. -/
+theorem State.Inv.restore_terminal_frontier {s : State} (h : s.Inv) {r : Restore}
+    (hr : r ∈ s.restores) :
+    ∃ r' c, State.RestoreTerminal s r' c ∧
+      (r' = r ∨ State.RestoreReaches s r r') ∧ r.Agrees c ∧
+      s.forest.NodeRealized c := by
+  obtain ⟨-, -, hacct, hcoh, -⟩ := h
+  obtain ⟨r', c, hterm, hpath, hag⟩ := hacct.restore_reaches_terminal hr
+  exact ⟨r', c, hterm, hpath, hag, Forest.coherent_nodeRealized hcoh hterm.2.2.1⟩
+
+/-- A terminal suspended parent is realized by the two current subtrees its
+suspension records: their frontier budget is the parent's and they lie inside the
+parent's resource. No extra hypothesis is supplied. -/
+theorem State.Inv.terminal_suspended_realizes {s : State} (h : s.Inv)
+    (susp : Forest.Suspension) (hs : susp ∈ s.forest.suspensions) :
+    (∀ x, susp.left.budget x + susp.right.budget x = (Forest.leaf susp.parent).budget x) ∧
+      susp.left.Inside susp.parent ∧ susp.right.Inside susp.parent :=
+  Forest.coherent_suspension_realizes h.coherent hs
 
 /-- The index of an element distinct from a prepended head shifts by one. -/
 private theorem idxOf_cons_ne_restore {l : List Restore} {a b : Restore} (h : a ≠ b) :
@@ -3138,14 +4049,25 @@ def secondSnapshot : List UInt8 :=
    0, 13, 0, 0, 0, 0, 0, 0, 9, 0, 0, 0, 0, 0, 0, 0,
    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
 
+/-- The write guard. A write is authorised by a current active fragment of *this*
+component's allocation, holding the whole share at a read--write ceiling and
+covering the offset. The allocation conjunct binds the authority to the bytes the
+write actually updates. -/
+def State.WriteGuard (s : State) (c : Leaf) (i : Nat) : Prop :=
+  c.state = .active ∧ c.q = s.D ∧ c.ceiling = .readWrite ∧ c.alloc = s.alloc ∧
+  c.lo ≤ i ∧ i < c.hi
+
+instance (s : State) (c : Leaf) (i : Nat) : Decidable (s.WriteGuard c i) := by
+  unfold State.WriteGuard
+  infer_instance
+
 /-- Write a byte through an active whole-share fragment of a read--write
-ceiling. The access name must be a current leaf. -/
+ceiling. The access name must be a current leaf of this component. -/
 def State.write (s : State) (id : CapId) (i : Nat) (v : UInt8) : Option State :=
   match s.forest.findLeaf? id with
   | none => none
   | some c =>
-      if h : c.state = .active ∧ c.q = s.D ∧ c.ceiling = .readWrite ∧
-              c.lo ≤ i ∧ i < c.hi then
+      if h : s.WriteGuard c i then
         match s.heap.write? s.alloc i v with
         | some h' => some { s with heap := h' }
         | none => none
@@ -3158,28 +4080,69 @@ theorem State.write_inv {s s' : State} {id : CapId} {i : Nat} {v : UInt8}
   unfold State.write at h
   split at h
   · simp at h
-  · split at h
-    · split at h
-      · rename_i hw
-        simp only [Option.some.injEq] at h
-        subst s'
-        refine ⟨hinv.1, hinv.2.1, ?_⟩
-        exact
-          { nodeIds_nodup := hinv.2.2.nodeIds_nodup
-            issue_covers := hinv.2.2.issue_covers
-            retired_absent := hinv.2.2.retired_absent
-            restores_issued := hinv.2.2.restores_issued
-            borrowers_nodup := hinv.2.2.borrowers_nodup
-            lenders_nodup := hinv.2.2.lenders_nodup
-            lender_ne_borrower := hinv.2.2.lender_ne_borrower
-            dormant_absent := hinv.2.2.dormant_absent
-            borrower_not_rule := hinv.2.2.borrower_not_rule
-            restore_realized := hinv.2.2.restore_realized
-            node_agrees := hinv.2.2.node_agrees
-            nested_agrees := hinv.2.2.nested_agrees
-            restore_order := hinv.2.2.restore_order
-            rule_fragments_issued := hinv.2.2.rule_fragments_issued }
-      · simp at h
+  · rename_i c _hfind
+    split at h
+    · rename_i _hg
+      cases hw : s.heap.write? s.alloc i v with
+      | none => simp [hw] at h
+      | some h' =>
+          simp only [hw, Option.some.injEq] at h
+          subst h
+          exact ⟨hinv.1, hinv.2.1, State.Accounts.setHeap hinv.2.2.1 h',
+            hinv.2.2.2.1, State.Scope.setHeap hinv.2.2.2.2 h'⟩
+    · simp at h
+
+/-- An accepted write is authorised by a current leaf of this component's
+allocation, and updates that allocation. This is the guard theorem for the
+allocation binding added to `State.WriteGuard`. -/
+theorem State.write_guard {s s' : State} {id : CapId} {i : Nat} {v : UInt8}
+    (h : s.write id i v = some s') :
+    ∃ c : Leaf, s.forest.findLeaf? id = some c ∧ s.WriteGuard c i ∧
+      c.alloc = s.alloc ∧ s'.alloc = s.alloc ∧ s'.len = s.len := by
+  unfold State.write at h
+  split at h
+  · simp at h
+  · rename_i c hfind
+    split at h
+    · rename_i hg
+      cases hw : s.heap.write? s.alloc i v with
+      | none => simp [hw] at h
+      | some h' =>
+          simp only [hw, Option.some.injEq] at h
+          subst h
+          exact ⟨c, hfind, hg, hg.2.2.2.1, rfl, rfl⟩
+    · simp at h
+
+/-- An accepted write's authorising fragment is in the component's allocation
+scope, so the allocation its guard names is the one the write updates. This reads
+the guard together with the invariant rather than the guard alone. -/
+theorem State.Inv.write_scope {s s' : State} {id : CapId} {i : Nat} {v : UInt8}
+    (h : s.write id i v = some s') (hinv : s.Inv) :
+    ∃ c : Leaf, s.forest.findLeaf? id = some c ∧ c.alloc = s.alloc ∧
+      c.hi ≤ s.len ∧ c.q = s.D ∧ c.lo ≤ i ∧ i < c.hi := by
+  obtain ⟨c, hfind, hguard, halloc, -, -⟩ := State.write_guard h
+  obtain ⟨hcleaf, -⟩ := Forest.findLeaf?_mem_leaves hfind
+  have hsc := hinv.scope.node_scope c (Forest.mem_nodes_of_mem_leaves hcleaf)
+  exact ⟨c, hfind, halloc, hsc.2.1, hguard.2.1, hguard.2.2.2.2.1, hguard.2.2.2.2.2⟩
+
+/-- An accepted write updates the allocation its authorising fragment names, so
+the authority and the bytes written agree. -/
+theorem State.write_alloc {s s' : State} {id : CapId} {i : Nat} {v : UInt8}
+    (h : s.write id i v = some s') :
+    ∃ c : Leaf, ∃ h' : Heap, s.forest.findLeaf? id = some c ∧
+      c.alloc = s.alloc ∧ s.heap.write? s.alloc i v = some h' ∧ s'.heap = h' := by
+  unfold State.write at h
+  split at h
+  · simp at h
+  · rename_i c hfind
+    split at h
+    · rename_i hg
+      cases hw : s.heap.write? s.alloc i v with
+      | none => simp [hw] at h
+      | some h' =>
+          simp only [hw, Option.some.injEq] at h
+          subst h
+          exact ⟨c, h', hfind, hg.2.2.2.1, rfl, rfl⟩
     · simp at h
 
 /-- A write changes only the bytes, not the represented allocation or its
@@ -3231,7 +4194,8 @@ def State.splitSpatial (s : State) (parentId c1 c2 : CapId)
   match s.forest.splitSpatialAt parentId c1 c2 lo1 hi1 lo2 hi2 with
   | none => none
   | some (f', _p) =>
-      if h : c1 ∉ s.issued ∧ c2 ∉ s.issued ∧ c1 ∉ s.retired ∧ c2 ∉ s.retired then
+      if h : (c1 ∉ s.issued ∧ c2 ∉ s.issued ∧ c1 ∉ s.retired ∧ c2 ∉ s.retired) ∧
+              (s.len = 0 ∨ (lo1 < hi1 ∧ lo2 < hi2)) then
         some { s with forest := f', issued := c1 :: c2 :: s.issued }
       else none
 
@@ -3281,13 +4245,14 @@ theorem State.splitSpatial_inv {s s' : State} {parentId c1 c2 : CapId}
     {lo1 hi1 lo2 hi2 : Nat}
     (h : s.splitSpatial parentId c1 c2 lo1 hi1 lo2 hi2 = some s')
     (hinv : s.Inv) : s'.Inv := by
-  obtain ⟨hcov, hval, hacct⟩ := hinv
+  obtain ⟨hcov, hval, hacct, hcoh, hscope⟩ := hinv
   unfold State.splitSpatial at h
   split at h
   · simp at h
   · rename_i f' p hsplit
     split at h
-    · rename_i hfresh
+    · rename_i hok
+      obtain ⟨hfresh, hne⟩ := hok
       simp only [Option.some.injEq] at h
       subst h
       have hchildren := Forest.splitSpatialAt_children_ne hsplit
@@ -3299,7 +4264,7 @@ theorem State.splitSpatial_inv {s s' : State} {parentId c1 c2 : CapId}
         intro hm
         obtain ⟨c', hc', hid⟩ := List.mem_map.mp hm
         exact hfresh.2.1 (hid ▸ hacct.issue_covers c'.id (Forest.node_id_mem_ids hc'))
-      refine ⟨?_, ?_, ?_⟩
+      refine ⟨?_, ?_, ?_, ?_, ?_⟩
       · intro x hx
         change f'.budget x = s.D
         rw [Forest.splitSpatialAt_budget hsplit x]
@@ -3386,6 +4351,10 @@ theorem State.splitSpatial_inv {s s' : State} {parentId c1 c2 : CapId}
               (hacct.rule_fragments_issued id ho))
           · exact ho ▸ List.mem_cons_self
           · exact ho ▸ List.mem_cons_of_mem _ List.mem_cons_self
+      · exact Forest.splitSpatialAt_coherent hsplit hcoh
+      · exact ⟨hscope.denom_pos,
+          Forest.splitSpatialAt_nodes_scope hsplit hscope.node_scope hne,
+          fun r hr => hscope.restore_scope r hr⟩
     · simp at h
 
 /-- A checked fractional subdivision preserves the reconstruction invariant. -/
@@ -3393,7 +4362,7 @@ theorem State.splitFraction_inv {s s' : State} {parentId c1 c2 : CapId}
     {q1 q2 : Nat}
     (h : s.splitFraction parentId c1 c2 q1 q2 = some s')
     (hinv : s.Inv) : s'.Inv := by
-  obtain ⟨hcov, hval, hacct⟩ := hinv
+  obtain ⟨hcov, hval, hacct, hcoh, hscope⟩ := hinv
   unfold State.splitFraction at h
   split at h
   · simp at h
@@ -3411,7 +4380,7 @@ theorem State.splitFraction_inv {s s' : State} {parentId c1 c2 : CapId}
         intro hm
         obtain ⟨c', hc', hid⟩ := List.mem_map.mp hm
         exact hfresh.2.1 (hid ▸ hacct.issue_covers c'.id (Forest.node_id_mem_ids hc'))
-      refine ⟨?_, ?_, ?_⟩
+      refine ⟨?_, ?_, ?_, ?_, ?_⟩
       · intro x hx
         change f'.budget x = s.D
         rw [Forest.splitFractionAt_budget hsplit x]
@@ -3498,6 +4467,10 @@ theorem State.splitFraction_inv {s s' : State} {parentId c1 c2 : CapId}
               (hacct.rule_fragments_issued id ho))
           · exact ho ▸ List.mem_cons_self
           · exact ho ▸ List.mem_cons_of_mem _ List.mem_cons_self
+      · exact Forest.splitFractionAt_coherent hsplit hcoh
+      · exact ⟨hscope.denom_pos,
+          Forest.splitFractionAt_nodes_scope hsplit hscope.node_scope,
+          fun r hr => hscope.restore_scope r hr⟩
     · simp at h
 
 /-- A spatial subdivision frames every outstanding return obligation. -/
@@ -3535,7 +4508,7 @@ theorem State.splitFraction_frames_restores {s s' : State} {parentId c1 c2 : Cap
 /-- Reconstruction preserves the reconstruction invariant. -/
 theorem State.reconstruct_inv {s s' : State} {parentId : CapId}
     (h : s.reconstruct parentId = some s') (hinv : s.Inv) : s'.Inv := by
-  obtain ⟨hcov, hval, hacct⟩ := hinv
+  obtain ⟨hcov, hval, hacct, hcoh, hscope⟩ := hinv
   unfold State.reconstruct at h
   split at h
   · simp at h
@@ -3544,7 +4517,7 @@ theorem State.reconstruct_inv {s s' : State} {parentId : CapId}
     subst h
     have hsub : ∀ {c : Leaf}, c ∈ f'.nodes → c ∈ s.forest.nodes :=
       fun hc => Forest.reconstructAt_nodes_sub hrec hc
-    refine ⟨?_, ?_, ?_⟩
+    refine ⟨?_, ?_, ?_, ?_, ?_⟩
     · intro x hx
       change f'.budget x = s.D
       rw [Forest.reconstructAt_budget hrec x]
@@ -3617,11 +4590,15 @@ theorem State.reconstruct_inv {s s' : State} {parentId : CapId}
       · intro id hid
         exact hacct.rule_fragments_issued id
           (Forest.reconstructAt_ruleIds_mem hrec hid)
+    · exact Forest.coherent_reconstructAt hrec hcoh
+    · exact ⟨hscope.denom_pos,
+        Forest.reconstructAt_nodes_scope hrec hscope.node_scope,
+        fun r hr => hscope.restore_scope r hr⟩
 
 /-- Beginning a borrow preserves the reconstruction invariant. -/
 theorem State.borrow_inv {s s' : State} {lender borrower : CapId}
     (h : s.borrow lender borrower = some s') (hinv : s.Inv) : s'.Inv := by
-  obtain ⟨hcov, hval, hacct⟩ := hinv
+  obtain ⟨hcov, hval, hacct, hcoh, hscope⟩ := hinv
   unfold State.borrow at h
   split at h
   · simp at h
@@ -3650,7 +4627,7 @@ theorem State.borrow_inv {s s' : State} {lender borrower : CapId}
           have hb : r.borrower = borrower :=
             (congrArg Restore.borrower heq).symm
           exact hok.2.1 (by rw [← hb]; exact (hacct.restores_issued r hr).2)
-        refine ⟨?_, ?_, ?_⟩
+        refine ⟨?_, ?_, ?_, ?_, ?_⟩
         · intro x hx
           change f'.budget x = s.D
           rw [Forest.retagLeaf_budget hretag x]
@@ -3776,12 +4753,19 @@ theorem State.borrow_inv {s s' : State} {lender borrower : CapId}
           · intro id hid
             exact List.mem_cons_of_mem _
               (hacct.rule_fragments_issued id (Forest.retagLeaf_ruleIds_mem hretag hid))
+        · exact Forest.retagLeaf_coherent hretag hcoh
+        · refine ⟨hscope.denom_pos,
+            Forest.retagLeaf_nodes_scope hretag hscope.node_scope, ?_⟩
+          intro r hr
+          rcases List.mem_cons.mp hr with rfl | hr
+          · exact hscope.node_scope p (Forest.retagLeaf_found hretag).2
+          · exact hscope.restore_scope r hr
     · simp at h
 
 /-- Returning a borrow preserves the reconstruction invariant. -/
 theorem State.return_inv {s s' : State} {borrower : CapId}
     (h : s.return borrower = some s') (hinv : s.Inv) : s'.Inv := by
-  obtain ⟨hcov, hval, hacct⟩ := hinv
+  obtain ⟨hcov, hval, hacct, hcoh, hscope⟩ := hinv
   unfold State.return at h
   split at h
   · simp at h
@@ -3808,7 +4792,7 @@ theorem State.return_inv {s s' : State} {borrower : CapId}
           have hrc : r.Agrees c :=
             ⟨hok.2.1.symm, hok.2.2.1.symm, hok.2.2.2.1.symm,
              hok.2.2.2.2.1.symm, hok.2.2.2.2.2.1.symm⟩
-          refine ⟨?_, ?_, ?_⟩
+          refine ⟨?_, ?_, ?_, ?_, ?_⟩
           · intro x hx
             change f'.budget x = s.D
             rw [Forest.retagLeaf_budget hretag x]
@@ -3933,6 +4917,11 @@ theorem State.return_inv {s s' : State} {borrower : CapId}
             · intro id hid
               exact hacct.rule_fragments_issued id
                 (Forest.retagLeaf_ruleIds_mem hretag hid)
+          · exact Forest.retagLeaf_coherent hretag hcoh
+          · refine ⟨hscope.denom_pos,
+              Forest.retagLeaf_nodes_scope hretag hscope.node_scope, ?_⟩
+            intro r' hr'
+            exact hscope.restore_scope r' (List.mem_filter.mp hr').1
       · simp at h
 
 /-- Beginning a borrow leaves the represented heap, allocation and length
@@ -4044,8 +5033,8 @@ theorem State.splitSpatial_none_of_issued {s : State} {parentId c1 c2 : CapId}
   · rfl
   · rename_i f' p hsplit
     split
-    · rename_i hfresh
-      exact (hfresh.1 h).elim
+    · rename_i hok
+      exact (hok.1.1 h).elim
     · rfl
 
 /-- A fractional split is refused if the child name has been retired. -/

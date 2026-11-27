@@ -121,8 +121,9 @@ and an old capability cannot authorize a replacement. A general full-path
 union-find theorem runs through that sealed boundary for any represented ranked
 forest with whole-fragment write authority, with the two-find example derived
 from it, and one clang-emitted byte-store kernel is proved and composed with an
-authorized integrated write at one caller-supplied address window, under stated
-assumptions about the window, the IR projection, the ABI and installation. The sealed boundary executes
+authorized integrated write through a finite multi-allocation memory relation,
+under stated assumptions about the supplied address map, the IR projection, the
+ABI and installation. The sealed boundary executes
 the reconstruction language, while integration into the world command guard
 remains open. The development identifies the logical
 obligations for a sealed low-level implementation interface, including resource
@@ -178,7 +179,8 @@ The development provides four groups of results.
 \item A ledger whose per-byte budget treats fractional and spatial decomposition
 uniformly, with mechanised preservation and uniqueness of writable authority, and
 a reconstruction account whose well-founded restoration dependencies make every
-obligation terminate at a represented resource
+obligation terminate at a represented resource, with recursive coherence and
+allocation scope excluding malformed suspended or mislabelled authority
 (Sections~\ref{sec:ledger} and~\ref{sec:delegation}). Distinct-borrower
 delegation is the retag mechanism the combined invariant carries.
 \item An executable authority machine and indexed program interfaces, proving
@@ -198,7 +200,8 @@ other allocations, and supplies its own successor state
 marshalling gives the exact write-trace counterpart.
 \item One authorized low-level kernel: a clang-emitted store body proved to have
 the reference store's bounded outcome, composed with an authorized integrated
-write at one caller-supplied address window, with its remaining premises stated
+write through a finite multi-allocation memory relation, with its remaining
+loader, projection and ABI premises stated
 (Section~\ref{sec:boundary}). These expose the additional obligations for
 implementing the sealed boundary in C.
 \end{enumerate}
@@ -568,21 +571,35 @@ its descendant access authority; recovering one historical identifier is not
 enough. The artifact now proves this lifecycle in a reconstruction model lifted
 to a multi-allocation state. A forest records the checked spatial or fractional
 rule at every interior node, its budget is the frontier sum, and validity
-requires every recorded rule to be checked. The state pairs the forest with the
-issued and retired names and the outstanding restoration obligations; its
-invariant is frontier coverage, rule validity and an ownership account that
-relates the forest to those histories, constrains current and suspended
-identities, excludes retired and dormant names from current authority, requires
-each outstanding obligation to be realized by the recorded resource, and makes
-nested obligations agree on it. An obligation depends on another when the second
+requires every recorded rule to be checked. A recursive coherence predicate
+connects each actual child subtree to its recorded rule resource by pointwise
+budget, allocation, interval and ceiling; it is stated by resource rather than by
+access name, so retagging survives. A scope predicate binds every current leaf,
+suspended parent and obligation to the component's allocation and extent, with a
+positive denominator and an explicit empty-range policy. The state pairs the
+forest with the issued and retired names and the outstanding restoration
+obligations; its invariant is coverage, validity, coherence, scope and an
+ownership account that relates the forest to those histories, constrains current
+and suspended identities, excludes retired and dormant names from current
+authority, requires each outstanding obligation to be realized by the recorded
+resource, and makes nested obligations agree on it. An obligation depends on another when the second
 record's lender is the first's borrower; borrowing prepends a record, and
 \lean{State.RestoreOrder} requires every such dependency to decrease the
 \lean{restores} index strictly, so \lean{dependency\_wellFounded} excludes cyclic
 justifications. Every outstanding obligation therefore reaches a terminal forest
 node through a finite dependency chain: \lean{restore\_reaches\_terminal} produces
 the node, \lean{restore\_terminal\_agrees} transports the recorded resource
-agreement along the path, and \lean{suspended\_frontier\_realizes} connects a
-suspended terminal parent to its rule descendants and frontier budget. Writes,
+agreement along the path. \lean{State.Inv.restore\_terminal\_frontier} removes
+the remaining caller assumption: the terminal suspended parent's recorded
+resource agrees with its actual descendant frontier, with the two budget
+equations derived from \lean{Forest.Coherent} through
+\lean{Forest.coherent\_suspension\_realizes}. The audit's malformed witnesses are
+kernel-checked: the overstated suspended parent and the wrong-allocation leaf
+satisfy the earlier predicate and are excluded by coherence and scope
+(\lean{witnessA\_not\_inv}, \lean{witnessB\_not\_inv}). The write guard includes
+the leaf allocation binding, so an accepted write uses authority for the
+allocation it updates (\lean{State.write\_guard}, \lean{State.write\_alloc}).
+Writes,
 borrows, both subdivisions, reconstruction and return each preserve the
 reconstruction invariant and the component storage agreement, and a return before
 reconstruction is refused. The integrated state's private-constructor boundary
@@ -701,8 +718,9 @@ frames the other allocations, and carries the integrated invariant.
 two finds compose without reconstructing premises; the two-find fixture above is
 an instance of this theorem. \lean{Cap/UFForest.lean} supplies the ranked
 construction witness for built forests. What remains is the world-based sealed
-runner, a compiled demonstration, and a frame law over arbitrary sealed command
-lists.
+runner and an optimized native ownership backend; the command-list frame is
+proved at the integrated and sealed boundaries, and the compiled \lean{capuf}
+driver executes the model's successive finds and an unrelated allocation.
 
 \subsection{Marshalling values with an explicit footprint}
 
@@ -759,12 +777,12 @@ delegation chain, the reconstruction model and its integrated sealed execution,
 well-founded restoration dependencies with finite terminal realization, and the
 general sealed union-find theorem with its two-find instance and functional
 successor runner. The repository contains Lean declarations and proof bodies
-for the listed results, together with executable controls. A fresh Lean build and
-timing record for this editorial revision are not supplied; the
-\lean{llvm-bridge/} package is built on a worker against a sibling
-\lean{lean-llvm} checkout and its builds are recorded in
-\lean{llvm-bridge/EVIDENCE.md}. The LaTeX outputs are rebuilt from these sources
-at this revision. No performance
+for the listed results, together with executable controls. The exact ownership
+and bridge revisions, separate toolchain pins, build commands, compiled driver
+output and axiom footprints are recorded in
+\lean{docs/notes/cap-artifact-pins.md}; the bridge's from-source build and IR
+provenance are in \lean{llvm-bridge/EVIDENCE.md}. The LaTeX outputs are rebuilt
+from these sources at this revision. No performance
 result is inferred from proof checking or from the existence of a computable
 definition.
 
@@ -780,9 +798,9 @@ Ledger & Budget preservation and writable-authority uniqueness & World guard int
 Checked language & Whole-run \lean{FullInv} preservation; per-write authority; borrow and return commands & A single invariant combining world execution and the reconstruction forest \\
 Indexed programs & Post-context and no-refusal theorems & Representation-sensitive operational client type \\
 Delegation & Retag budget lemma; rooted chain with derived holder and checked begin/end; world/chain correspondence; combined-invariant preservation & A single sealed world path carrying the reconstruction invariant \\
-Reconstruction & Checked spatial and fractional rules; reconstruction and restoration invariant with an ownership account over issued, retired and outstanding names; well-founded restoration dependency order with finite terminal realization; integrated sealed 64-byte lifecycle with a second cycle; persistent allocation and capability histories with reuse refusal & Consultation by the world split/join guard; concrete implementation \\
-Union-find & General sealed theorem (\lean{sealedFind\_spec}, \lean{findRanked\_twice}) over represented ranked forests, its two-find instance through the integrated sealed boundary, functional successor runner (\lean{PathRunner}), constructible forests (\lean{UFForest}), computable full-path certificates, exact write traces & World-based sealed runner; compiled demonstration \\
-Compiled kernel & clang-emitted \lean{store8} body with a bounded exact behaviour theorem; composed theorem for one authorized integrated write at one caller-supplied address window, with frame and post-state representation & Kernel-level address assignment across multiple allocations (\lean{Cap/AddressMap.lean} is a separate state-level model not connected to the bridge), semantic justification of the IR projection, ABI and installation of the verified body \\
+Reconstruction & Checked spatial and fractional rules; recursive resource coherence and allocation scope; reconstruction and restoration invariant with an ownership account over issued, retired and outstanding names; well-founded dependency order; unconditional terminal frontier realization; kernel-checked malformed-state witnesses; integrated sealed 64-byte lifecycle with a second cycle; persistent allocation and capability histories with reuse refusal & Consultation by the world split/join guard; concrete implementation \\
+Union-find & General sealed theorem (\lean{sealedFind\_spec}, \lean{findRanked\_twice}) over represented ranked forests, its two-find instance through the integrated sealed boundary, functional successor runner (\lean{PathRunner}), constructible forests (\lean{UFForest}), computable full-path certificates, exact write traces; compiled \lean{capuf} model driver & World-based sealed runner; optimized native ownership backend \\
+Compiled kernel & clang-emitted \lean{store8} body with a bounded exact behaviour theorem; \lean{MemRepMap} finite multi-allocation relation and \lean{sealed\_store8\_write\_comp\_map}, with frame and post-state representation & Loader's physical address assignment; semantic justification of the IR projection; ABI, native installation and copied-handle replay \\
 Marshalling & Round trips, range guards, representation and exact write trace & Concrete layout and ABI relation \\
 \bottomrule
 \end{tabular}
@@ -846,12 +864,13 @@ survives. The authority for the write is \emph{derived} from the command's guard
 (a current, active, whole-share, read--write fragment covering the offset),
 rather than assumed.
 
-The instance does not establish the general schema. Its remaining premises are
-stated, not discharged: the representation \lean{MemRep m buf base} and the
-base address are supplied by the caller; the offset map $\mathit{off}\mapsto
-\mathit{base}+\mathit{off}$ is injective within the one window, while two
-allocations' disjointness is a hypothesis of
-\lean{MemRep.frame\_write}, not a loader theorem; the emitted IR is projected
+The finite-map theorem \lean{sealed\_store8\_write\_comp\_map} extends this
+to every window of a supplied well-formed address map: \lean{MemRepMap}
+relates the flat memory to all live allocations, an accepted write updates the
+target window and frames every other allocation, and window disjointness is
+derived from the map rather than assumed per write. Its remaining premises are
+stated, not discharged: the map, its well-formedness and the base placement are
+supplied rather than proved by a loader; the emitted IR is projected
 onto the parser's surface, and parser/AST agreement is a textual guard rather
 than a semantic justification of that projection; the capability route is the
 integrated reconstruction guard, not the \lean{Cap.World}
@@ -994,8 +1013,9 @@ functional successor runner and \lean{Cap/UFForest.lean} the ranked construction
 witness for built forests. The command-list frame is proved at the integrated
 boundary as well (\lean{Sealed.run\_frames\_other}, \lean{State.run\_frames\_other}):
 any allocation no command of the list targets keeps its component, bytes and
-\texttt{Storage} certificate. What remains is the world-based sealed runner and a
-compiled demonstration.
+\texttt{Storage} certificate. What remains is the world-based sealed runner and
+an optimized native ownership backend; the compiled \lean{capuf} driver is a
+correctness demonstration of the model, not a performance result.
 
 \emph{World-guard integration (open).} The checked world's split, fractional
 split and join still test the allocation-wide loan exclusion. They therefore
@@ -1024,14 +1044,15 @@ returns no such successor, and the compiled example must run the same definition
 Fuelled evaluation and rank-based completion should remain distinct from
 amortized complexity or performance claims.
 
-\emph{Compiled kernel (one instance).} One clang-emitted byte-store body is proved
-to have exactly the reference store's bounded outcome, and one authorized
-integrated write is composed with it at one caller-supplied address window. This is not
-the general simulation schema: the representation and base address are supplied,
-multi-allocation address assignment and window disjointness are not proved, the
-IR projection is assumed, the world capability route is not related to the
-integrated guard, and the ABI, installation, physical storage and replay of a
-copied live handle remain trust or proof obligations. The bridge's memory has no
+\emph{Compiled kernel (multi-allocation relation).} One clang-emitted byte-store
+body is proved to have exactly the reference store's bounded outcome, and an
+authorized integrated write is composed with it through \lean{MemRepMap}, a
+finite relation over all live mapped windows; unrelated allocations are framed
+and disjointness follows from the supplied map. This is not a loader theorem:
+the map and physical placement are supplied, the IR projection is assumed, the
+world capability route is not related to the integrated guard, and the ABI,
+installation, physical storage and replay of a copied live handle remain trust
+or proof obligations. The bridge's memory has no
 allocation bounds, so the in-bounds fact comes from the ownership guard.
 
 \emph{Concrete implementation.} The C interface needs layout, allocation,
@@ -1059,9 +1080,9 @@ subdivision and restoration are proved in the reconstruction model and executed
 through the integrated sealed state. Integrating that forest into the world
 command guard, so that one sealed execution path carries world delegation and
 reconstruction together, is the remaining mathematical requirement. The general
-sealed find already supplies the operational algorithm interface, with the
-world-based runner and the compiled demonstration outstanding; combined with a
-concrete implementation simulation of the sealed boundary, these would
+sealed find already supplies the operational algorithm interface; the
+world-based runner and an optimized native backend remain outstanding. Combined
+with a concrete implementation simulation of the sealed boundary, these would
 provide the ownership boundary needed to connect high-level Lean specifications
 to specialised low-level code without adding linear typing rules to Lean.
 

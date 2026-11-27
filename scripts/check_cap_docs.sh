@@ -278,6 +278,21 @@ add|AGENTS.md|Rel.run_other
 add|docs/notes/cap-tutorial.md|State.run_frames_other
 add|docs/notes/cap-tutorial.md|Sealed.run_frames_other
 add|docs/notes/cap-tutorial.md|Rel.run_other
+# The strengthened reconstruction invariant: recursive resource coherence,
+# allocation scope, the write guard's allocation binding, derived terminal
+# realization, and the adversarial regression witnesses.
+add|AGENTS.md|recursive resource coherence `Forest.Coherent`
+add|AGENTS.md|State.Scope.rule_scope
+add|AGENTS.md|State.Inv.restore_terminal_frontier
+add|AGENTS.md|Forest.coherent_suspension_realizes
+add|AGENTS.md|State.WriteGuard`
+add|AGENTS.md|State.write_guard
+add|AGENTS.md|bench/CapInvariantWitness.lean
+add|AGENTS.md|witnessA_frontier_overstated
+add|AGENTS.md|witnessB_not_inv
+add|AGENTS.md|State.Inv.write_scope
+add|docs/notes/cap-tutorial.md|component allocation scope `State.Scope`
+add|AGENTS.md|`Forest.Coherent` and `State.Scope`
 ROWS
 
 if [ "$fail" -ne 0 ]; then

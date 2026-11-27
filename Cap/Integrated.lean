@@ -48,7 +48,10 @@ What `State.Inv` is: distinct live allocations; a persistent allocation history
 `free`; a persistent capability history `issued` that contains every name any
 component has issued; each component's `Reconstruction.State.Inv`, whose
 accounting component constrains current authority, issuance, retirement, dormant
-lenders and outstanding restoration obligations; and each component's
+lenders and outstanding restoration obligations, and whose coherence and scope
+components connect every actual child subtree to its recorded rule resource and
+bind every fragment to the component's allocation and extent; and each
+component's
 `Reconstruction.State.Storage` — the component heap holds that allocation with
 exactly `len` bytes. `State.alloc` refuses an allocation identifier that is in
 `allocsIssued` and either initial capability name that is in `issued`, so a
@@ -261,6 +264,16 @@ theorem State.find?_inv {s : State} (hinv : s.Inv) {a : AllocId}
 theorem State.find?_alloc {s : State} {a : AllocId}
     {st : Reconstruction.State} (h : s.find? a = some st) : st.alloc = a := by
   exact (findState?_eq_some_mem h).2
+
+/-- A component of an invariant integrated state is coherent. -/
+theorem State.find?_coherent {s : State} (hinv : s.Inv) {a : AllocId}
+    {st : Reconstruction.State} (h : s.find? a = some st) : st.forest.Coherent :=
+  (State.find?_inv hinv h).1.coherent
+
+/-- A component of an invariant integrated state is in allocation scope. -/
+theorem State.find?_scope {s : State} (hinv : s.Inv) {a : AllocId}
+    {st : Reconstruction.State} (h : s.find? a = some st) : st.Scope :=
+  (State.find?_inv hinv h).1.scope
 
 /-! ### List facts for the update and free operations -/
 
@@ -1013,6 +1026,17 @@ def Sealed.state (s : Sealed) : State := s.s
 
 /-- The state a sealed value carries satisfies the integrated invariant. -/
 theorem Sealed.state_inv (s : Sealed) : s.state.Inv := s.inv
+
+/-- Every live component of a sealed state is coherent. -/
+theorem Sealed.component_coherent (s : Sealed) {a : AllocId}
+    {st : Reconstruction.State} (h : s.state.find? a = some st) :
+    st.forest.Coherent :=
+  State.find?_coherent s.state_inv h
+
+/-- Every live component of a sealed state is in allocation scope. -/
+theorem Sealed.component_scope (s : Sealed) {a : AllocId}
+    {st : Reconstruction.State} (h : s.state.find? a = some st) : st.Scope :=
+  State.find?_scope s.state_inv h
 
 /-- Two sealed values whose states agree are equal; the invariant field is a
 proof and so carries no information. -/

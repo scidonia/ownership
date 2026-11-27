@@ -172,19 +172,18 @@ theorem Reconstruction.State.write_component {st st' : Reconstruction.State}
     ∃ (c : Leaf) (h' : Heap), st.forest.findLeaf? id = some c ∧
       c.state = CapState.active ∧ c.q = st.D ∧ c.ceiling = Ceiling.readWrite ∧
       c.lo ≤ i ∧ i < c.hi ∧ st.heap.write? st.alloc i v = some h' ∧
-      st' = { st with heap := h' } := by
+      st' = { st with heap := h' } ∧ c.alloc = st.alloc := by
   unfold Reconstruction.State.write at h
   split at h
   · simp at h
   · rename_i c hfind
-    by_cases hguard : c.state = CapState.active ∧ c.q = st.D ∧
-        c.ceiling = Ceiling.readWrite ∧ c.lo ≤ i ∧ i < c.hi
+    by_cases hguard : st.WriteGuard c i
     · rw [dif_pos hguard] at h
       split at h
       · rename_i h' hw
         simp only [Option.some.injEq] at h
         exact ⟨c, h', hfind, hguard.1, hguard.2.1, hguard.2.2.1,
-          hguard.2.2.2.1, hguard.2.2.2.2, hw, h.symm⟩
+          hguard.2.2.2.2.1, hguard.2.2.2.2.2, hw, h.symm, hguard.2.2.2.1⟩
       · simp at h
     · rw [dif_neg hguard] at h
       simp at h
@@ -376,7 +375,7 @@ theorem sealed_write_snapshot_self {s s' : Sealed} {a : AllocId} {id : CapId}
     {i : Nat} {v : UInt8} (h : Sealed.write s a id i v = .ok s') :
     s'.snapshot a = (s.snapshot a).map (fun xs => xs.set i v) := by
   obtain ⟨st, st', hfa, hw, hfind'⟩ := sealed_write_component h
-  obtain ⟨c, h', -, -, -, -, -, -, hheapw, hst'⟩ :=
+  obtain ⟨c, h', -, -, -, -, -, -, hheapw, hst', -⟩ :=
     Reconstruction.State.write_component hw
   subst hst'
   have hstate : s'.state.snapshot a =
@@ -445,7 +444,7 @@ theorem sealed_write_frames {s s' : Sealed} {a : AllocId} {id : CapId}
     {i : Nat} {v : UInt8} (h : Sealed.write s a id i v = .ok s') :
     WriteFrame s s' a := by
   obtain ⟨st, st', hfa, hw, hfind'⟩ := sealed_write_component h
-  obtain ⟨_, _, _, _, _, _, _, _, _, hst'⟩ :=
+  obtain ⟨_, _, _, _, _, _, _, _, _, hst', _⟩ :=
     Reconstruction.State.write_component hw
   subst hst'
   have hexec : s.state.exec (.write a id i v) = some s'.state :=
@@ -767,15 +766,19 @@ theorem Writable.write_exists {s : Sealed} {a : AllocId} {id : CapId} {n : Nat}
     rw [hlook]
     dsimp only
     rw [if_pos hxs]
+  have halloc : c.alloc = st.alloc := by
+    have hinv : st.Inv := (Integrated.State.find?_inv s.state_inv hfind).1
+    have hc : c ∈ st.forest.nodes := by rw [hforest]; simp [Reconstruction.Forest.nodes]
+    exact (hinv.scope.node_scope c hc).1
   have hstwrite : st.write id i v =
       some { st with heap := ⟨Heap.updateList st.heap.bufs st.alloc (xs.set i v)⟩ } := by
     unfold Reconstruction.State.write
     rw [hforest]
     rw [Reconstruction.Forest.findLeaf?_leaf hid]
     dsimp only
-    have hguard : c.state = CapState.active ∧ c.q = st.D ∧
-        c.ceiling = Ceiling.readWrite ∧ c.lo ≤ i ∧ i < c.hi :=
-      ⟨hstate, hq, hceil, by rw [hlo]; exact Nat.zero_le i, by rw [hhi]; exact hi⟩
+    have hguard : st.WriteGuard c i :=
+      ⟨hstate, hq, hceil, halloc, by rw [hlo]; exact Nat.zero_le i,
+        by rw [hhi]; exact hi⟩
     rw [dif_pos hguard]
     simp only [hheapwrite]
   have halt : ({ st with
@@ -802,7 +805,7 @@ theorem Writable.write_preserved {s s' : Sealed} {a : AllocId} {id : CapId}
   obtain ⟨st0, st', hfa, hwrite, hfind'⟩ := sealed_write_component hw
   have hst0 : st0 = st := Option.some.inj (hfa.symm.trans hfind)
   obtain rfl : st0 = st := hst0
-  obtain ⟨c', h', hleaf, -, -, -, -, -, -, hst'⟩ :=
+  obtain ⟨c', h', hleaf, -, -, -, -, -, -, hst', -⟩ :=
     Reconstruction.State.write_component hwrite
   subst hst'
   have hcc : c' = c := by

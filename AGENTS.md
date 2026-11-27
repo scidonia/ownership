@@ -800,8 +800,9 @@ shows the certificate it would have to emit, not proof-producing elaboration.
   and `reconstructAt` restores a suspended parent from two children matched to
   its recorded rule. `State` pairs the forest with the reference heap, the
   issued and retired names and the outstanding `Restore` obligations; `State.Inv`
-  is frontier coverage, forest validity and the ownership accounting predicate
-  `State.Accounts`, and `State.Storage` separately says the heap holds that
+  is frontier coverage, forest validity, the ownership accounting predicate
+  `State.Accounts`, recursive resource coherence `Forest.Coherent` and component
+  allocation scope `State.Scope`, and `State.Storage` separately says the heap holds that
   `State.Accounts` constrains current
   authority-node identities, issuance coverage, retirement, dormant lenders,
   restoration realization, resource agreement and restoration order, so a
@@ -840,13 +841,38 @@ shows the certificate it would have to emit, not proof-producing elaboration.
   does not consult this forest.
   `bench/CapReconstruction.lean` drives the 64-byte borrow/split/write/
   reconstruct/return lifecycle with each refusal paired to its affirmative case.
+  `Forest.Coherent` connects each actual child subtree to the recorded rule
+  resource through `Forest.Realizes`: pointwise budget correspondence, allocation
+  identity, and interval and ceiling containment, with no requirement that the
+  child's access name equal the historical rule name, so retagging and borrowing
+  survive. `State.Scope` carries the positive denominator, the allocation,
+  extent and empty-range policy for current leaves and suspended parents, and
+  the obligation scope; `State.Scope.rule_scope` derives the rule descriptors'
+  scope from it and coherence, and `Forest.ruleFragments_scope` is that
+  derivation. `State.Inv.restore_terminal_frontier` derives terminal resource
+  realization — `Forest.coherent_nodeRealized` at the reached node — with no
+  caller-supplied subtree budgets, and `Forest.coherent_suspension_realizes`
+  supplies exactly the premises `Forest.suspended_frontier_realizes` takes. The
+  write guard is `State.WriteGuard`, whose allocation conjunct is exposed by
+  `State.write_guard`; `State.write_alloc` shows the accepted write updates the
+  allocation its authorising fragment names, and `State.Inv.write_scope` derives
+  that fragment's allocation, extent and share from the invariant.
+  `bench/CapInvariantWitness.lean` is the adversarial regression: the overstated
+  suspended parent (`witnessA`) and the mislabelled-allocation write
+  (`witnessB`) satisfy the previous `Covered ∧ Valid ∧ Accounts` predicate,
+  their intended properties fail (`witnessA_frontier_overstated`,
+  `witnessB_old_write_accepts`) and the strengthened invariant excludes them
+  (`witnessA_not_inv`, `witnessB_not_inv`). The further negative controls cover
+  a mismatched ceiling, an out-of-scope interval, a zero-length fragment inside
+  a non-empty allocation and a split that would create an empty side.
 - `Cap/Integrated.lean` is the one integrated sealed semantics: `State` is a
   list of `Reconstruction.State` keyed by `AllocId` together with the persistent
   allocation history `allocsIssued` and capability history `issued`, and
   `State.Inv` requires distinct allocation identifiers, a duplicate-free
   persistent allocation history containing every live identifier, every
-  component's `State.Inv` (including `State.Accounts`) and `State.Storage`, and
-  the capability history covering every component-issued name. `Cmd` is the
+  component's `State.Inv` (including `State.Accounts`, `Forest.Coherent` and
+  `State.Scope`) and `State.Storage`, and the capability history covering every
+  component-issued name. `Cmd` is the
   checked command language (`alloc`,
   `write`, `borrow`, `splitSpatial`, `splitFraction`, `reconstruct`, `ret`,
   `free`); every command names its allocation, and `State.exec` refuses an
