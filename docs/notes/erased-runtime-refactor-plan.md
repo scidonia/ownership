@@ -1,6 +1,11 @@
 # Erased-runtime refactor plan
 
-Status: plan only. The current `Cap.Sealed`/`UFGeneric` interpreter is a
+Status: Phase 1 and Phase 2 started and green; Phase 3 (certificate/erasure) is next.
+
+- `CapRuntime` exists as a separate library with no ghost imports.
+- Raw `ByteArray` union-find and the runtime control compile and run.
+- On a 256-node chain the raw runtime is ~1,700 ns versus ~3,750 ns for native Lean `Array Nat`; the ghost interpreter was ~752,000 ns.
+- Runtime performance is not yet certified performance; the refinement relation and erased certificate are pending. The current `Cap.Sealed`/`UFGeneric` interpreter is a
 proof-facing model. It is not the runtime.
 
 ## 1. Contract

@@ -33,3 +33,13 @@ root = "bench.CapUFDriver"
 [[lean_exe]]
 name = "capufbench"
 root = "bench.CapUFPerformance"
+
+[[lean_lib]]
+name = "CapRuntime"
+
+[[lean_lib]]
+name = "CapRuntimeTest"
+
+[[lean_exe]]
+name = "capruntimeuf"
+root = "bench.CapRuntimeUF"

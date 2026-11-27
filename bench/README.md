@@ -149,3 +149,26 @@ orders of magnitude slower than native Lean `Array` at the 256-node limit, and
 the pure functional list model accounts for most of that gap; the sealed checks
 add roughly 20% at 256. This is a model-vs-native comparison on one machine, not
 a claim about a specialized mutable implementation or asymptotic complexity.
+
+## Erased runtime union-find (Phase 1/2)
+
+`CapRuntime` is a separate library with no ghost imports. `bench/CapRuntimeUF.lean`
+(`lake exe capruntimeuf`) measures a raw `ByteArray` parent array with full-path
+compression against native Lean `Array Nat`, on the same chain and with
+construction outside the timed region. Runtime correctness control:
+`CapRuntimeTest.lean`; boundary check: `scripts/check_runtime_imports.sh`.
+
+Observed on two runs, compiled rc3 executable, 200 repetitions, best ns/mean ns:
+
+| n | native `Array Nat` | runtime `ByteArray` |
+| ---: | ---: | ---: |
+| 32 | 337–347 / 360–371 | 221–224 / 236–237 |
+| 128 | 1,827–1,828 / 1,862–1,871 | 846–875 / 935–964 |
+| 256 | 3,727–3,773 / 3,824–3,916 | 1,638–1,715 / 1,835–1,863 |
+
+The runtime is ~1.5× faster at 32 and ~2.2× faster at 256 than the native
+`Array Nat` path in this microbenchmark. Both are Lean-managed values; this is not
+a C/FFI comparison. The important result is the separation: the ghost interpreter
+at 256 was ~752,000 ns, while the erased raw runtime is ~1,700 ns. `CapRuntime`
+is not yet connected to a certificate/refinement theorem, so this is runtime
+performance, not certified-runtime performance.
