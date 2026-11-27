@@ -79,7 +79,105 @@ def runCase (name : String) (n reps : Nat) (trial : Nat → IO Nat) : IO Unit :=
   let total := times.foldl (· + ·) 0
   IO.println s!"{name},{n},{reps},{best},{total / reps}"
 
+
+/-- The compression path for the chain: n-1, n-2, ..., 1. -/
+def chainPath (n : Nat) : List Nat := (List.range (n - 1)).map (· + 1) |>.reverse
+
+def compressArrUnique (p : Array Nat) (path : List Nat) : Array Nat :=
+  path.foldl (fun p x => p.set! x 0) p
+
+def compressArrVersioned (p : Array Nat) (path : List Nat) : Array Nat × Nat :=
+  path.foldl (fun (p, acc) x =>
+    let snap := p
+    let p' := p.set! x 0
+    (p', acc + snap.getD x 0)) (p, 0)
+
+def compressBytesUnique (p : ByteArray) (path : List Nat) : ByteArray :=
+  path.foldl (fun p x => p.set! x 0) p
+
+def compressBytesVersioned (p : ByteArray) (path : List Nat) : ByteArray × Nat :=
+  path.foldl (fun (p, acc) x =>
+    let snap := p
+    let p' := p.set! x 0
+    (p', acc + (snap.get! x).toNat)) (p, 0)
+
+def compressRuntimeUnique (p : UF.ParentArray) (path : List Nat) : UF.ParentArray :=
+  path.foldl (fun p x => { bytes := p.bytes.set! x 0 }) p
+
+def compressRuntimeVersioned (p : UF.ParentArray) (path : List Nat) :
+    UF.ParentArray × Nat :=
+  path.foldl (fun (p, acc) x =>
+    let snap := p
+    let p' : UF.ParentArray := { bytes := p.bytes.set! x 0 }
+    (p', acc + snap.parent x)) (p, 0)
+
+def timeCompression (name : String) (n : Nat)
+    (trial : Nat → IO Nat) : IO Unit := do
+  for _ in [0:5] do
+    let _ ← trial n
+  let mut times := []
+  for _ in [0:200] do
+    times := (← trial n) :: times
+  let best := minimum times
+  let total := times.foldl (· + ·) 0
+  IO.println s!"{name},{n},200,{best},{total / 200}"
+
+def mainCompression : IO Unit := do
+  IO.println "compression,n,reps,best_ns,mean_ns"
+  for n in [32, 128, 256] do
+    let _ ← timeCompression "array-unique" n (fun n => do
+      let p := (Array.range n).map parent
+      let path := chainPath n
+      let t0 ← IO.monoNanosNow
+      let p' := compressArrUnique p path
+      let t1 ← IO.monoNanosNow
+      unless p'.getD (n - 1) 0 = 0 do throw (IO.userError "array-unique")
+      pure (t1 - t0))
+    let _ ← timeCompression "array-versioned" n (fun n => do
+      let p := (Array.range n).map parent
+      let path := chainPath n
+      let t0 ← IO.monoNanosNow
+      let (p', acc) := compressArrVersioned p path
+      let t1 ← IO.monoNanosNow
+      unless p'.getD (n - 1) 0 = 0 && acc >= 0 do throw (IO.userError "array-versioned")
+      pure (t1 - t0))
+    let _ ← timeCompression "bytearray-unique" n (fun n => do
+      let p := (chainBytes n).bytes
+      let path := chainPath n
+      let t0 ← IO.monoNanosNow
+      let p' := compressBytesUnique p path
+      let t1 ← IO.monoNanosNow
+      unless p'.get! (n - 1) = 0 do throw (IO.userError "bytearray-unique")
+      pure (t1 - t0))
+    let _ ← timeCompression "bytearray-versioned" n (fun n => do
+      let p := (chainBytes n).bytes
+      let path := chainPath n
+      let t0 ← IO.monoNanosNow
+      let (p', acc) := compressBytesVersioned p path
+      let t1 ← IO.monoNanosNow
+      unless p'.get! (n - 1) = 0 && acc >= 0 do throw (IO.userError "bytearray-versioned")
+      pure (t1 - t0))
+    let _ ← timeCompression "runtime-unique" n (fun n => do
+      let p := chainBytes n
+      let path := chainPath n
+      let t0 ← IO.monoNanosNow
+      let p' := compressRuntimeUnique p path
+      let t1 ← IO.monoNanosNow
+      unless p'.parent (n - 1) = 0 do throw (IO.userError "runtime-unique")
+      pure (t1 - t0))
+    let _ ← timeCompression "runtime-versioned" n (fun n => do
+      let p := chainBytes n
+      let path := chainPath n
+      let t0 ← IO.monoNanosNow
+      let (p', acc) := compressRuntimeVersioned p path
+      let t1 ← IO.monoNanosNow
+      unless p'.parent (n - 1) = 0 && acc >= 0 do throw (IO.userError "runtime-versioned")
+      pure (t1 - t0))
+
 def main : IO Unit := do
+  mainCompression
+  IO.println ""
+
   IO.println "implementation,n,reps,best_ns,mean_ns"
   for n in [32, 128, 256] do
     runCase "lean-array-nat" n 200 timeNative

@@ -174,3 +174,26 @@ about 2.2× faster than native `Array Nat` at 256, and the ghost interpreter was
 ~752,000 ns. Both Lean paths are managed values; this is not a C/FFI result.
 `CapRuntime` is not yet connected to a certificate/refinement theorem, so this is
 runtime performance, not certified-runtime performance.
+
+### When the Lean variant copies: versioned compression
+
+`capruntimeuf` also compares compression with no retained version against
+compression where a pre-write snapshot is read after each write (the
+`versioned` variants). That snapshot is a live reference across `set!`, so Lean
+copy-on-write copies the array; the unique variants update in place.
+
+Best ns / mean ns for the compression-only phase, same chain and path:
+
+| n | Array Nat unique | Array Nat versioned | ByteArray unique | ByteArray versioned | runtime unique | runtime versioned |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 32 | 194 / 211 | 1,513 / 1,584 | 211 / 227 | 643 / 1,240 | 216 / 226 | 611 / 689 |
+| 128 | 818 / 937 | 16,823 / 21,928 | 767 / 845 | 2,697 / 3,139 | 690 / 798 | 2,608 / 2,821 |
+| 256 | 1,337 / 1,769 | 51,166 / 65,100 | 1,321 / 1,607 | 5,596 / 6,261 | 1,322 / 1,556 | 5,725 / 6,219 |
+
+At 256 the versioned/unique ratio is ~38× for `Array Nat`, ~4.2× for direct
+`ByteArray`, and ~4.3× for `CapRuntime`. Both ByteArray variants copy the compact
+byte buffer; the array copies boxed `Nat` storage, so it is far more expensive.
+This demonstrates the actual trigger: a live pre-write version, not the presence
+of Lean or of an ownership wrapper. A destructive C backend avoids the copy only
+if the algorithm does not need the old bytes; if it needs an undo/version log,
+it must copy or log them too.
