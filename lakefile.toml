@@ -57,3 +57,9 @@ root = "bench.CapRuntimeTransform"
 
 [[lean_lib]]
 name = "CapRuntimeSealedTest"
+
+[[lean_lib]]
+name = "CapCore"
+
+[[lean_lib]]
+name = "CapCoreTest"
