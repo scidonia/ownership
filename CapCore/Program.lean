@@ -8,6 +8,7 @@ inductive Cmd where
   | write (id off : Nat)
   | splitSpatial (id c1 c2 mid : Nat)
   | splitFraction (id c1 c2 q1 q2 : Nat) (h1 : 0 < q1) (h2 : 0 < q2)
+  | reconstruct (id1 id2 newId : Nat)
   | borrow (lender borrower : Nat)
   | restore (borrower lender : Nat)
   | free (id : Nat)
@@ -22,6 +23,8 @@ def step (c : Ctx) : Cmd → Option Ctx
       c.splitSpatial? id c1 c2 mid
   | .splitFraction id c1 c2 q1 q2 h1 h2 =>
       c.splitFraction? id c1 c2 q1 q2 h1 h2
+  | .reconstruct id1 id2 newId =>
+      c.reconstruct? id1 id2 newId
   | .borrow lender borrower =>
       c.borrow? lender borrower
   | .restore borrower lender =>

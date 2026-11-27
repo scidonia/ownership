@@ -102,3 +102,28 @@ def goodProg : Prog where
 -- Checker acceptance yields the semantic access evidence.
 example : CanRead c0 0 := canRead_of_readAllowed (by decide)
 example : CanWrite c0 0 1 := canWrite_of_writeAllowed (by decide)
+
+
+-- Fractional reconstruction restores whole-share write authority.
+def splitForJoin : List Cmd :=
+  [.splitFraction 0 1 2 1 1 (by decide) (by decide)]
+
+def joined : Ctx :=
+  match run c0 splitForJoin with
+  | some c =>
+      match c.reconstruct? 1 2 5 with
+      | some c' => c'
+      | none => c
+  | none => c0
+
+#guard joined.writeAllowed 5 1
+#guard !joined.readAllowed 1 && !joined.readAllowed 2
+
+-- A removed id becomes available for the joined whole capability.
+#guard (match cf.reconstruct? 1 2 0 with
+  | some c => c.writeAllowed 0 1
+  | none => false)
+
+-- Reused live ids and a non-whole share sum are refused.
+#guard (Ctx.reconstruct? cf 1 2 1).isNone
+#guard (Ctx.reconstruct? cs 3 4 5).isNone

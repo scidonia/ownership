@@ -15,7 +15,7 @@ def CanWrite (c : Ctx) (id off : Nat) : Prop :=
 theorem readAllowed_iff {c : Ctx} {id : Nat} :
     c.readAllowed id = true ↔ CanRead c id := by
   unfold Ctx.readAllowed CanRead
-  cases h : c.find? id <;> simp [h]
+  cases h : c.find? id <;> simp_all
 
 theorem canWrite_of_writeAllowed {c : Ctx} {id off : Nat}
     (h : c.writeAllowed id off = true) : CanWrite c id off := by

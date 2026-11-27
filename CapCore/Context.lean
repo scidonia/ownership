@@ -20,6 +20,7 @@ structure Cap where
 /-- A sequential context for one allocation. `D` is the whole share. -/
 structure Ctx where
   D : Nat
+  Dpos : 0 < D
   len : Nat
   caps : List Cap
   deriving Repr
@@ -40,7 +41,7 @@ def has (c : Ctx) (id : Nat) : Bool :=
 
 /-- Fresh allocation with one whole-share capability over `[0,len)`. -/
 def new (D len root : Nat) (hD : 0 < D) : Ctx :=
-  { D, len, caps := [{ id := root, region := ⟨0, 0, len⟩, q := D, pos := hD }] }
+  { D, Dpos := hD, len, caps := [{ id := root, region := ⟨0, 0, len⟩, q := D, pos := hD }] }
 
 /-- A read is allowed only from a capability present in the current context. -/
 def readAllowed (c : Ctx) (id : Nat) : Bool :=
@@ -80,6 +81,19 @@ def splitFraction? (c : Ctx) (id c1 c2 q1 q2 : Nat)
           some ((c.remove id).add left |>.add right)
         else none
       else none
+
+
+/-- Join two fractional children of one region back into a whole-share
+capability under a fresh id. -/
+def reconstruct? (c : Ctx) (id1 id2 newId : Nat) : Option Ctx :=
+  match c.find? id1, c.find? id2 with
+  | some a, some b =>
+      if a.region = b.region ∧ id1 ≠ id2 ∧ a.q + b.q = c.D ∧
+          c.has newId = false then
+        let whole : Cap := { id := newId, region := a.region, q := c.D, pos := c.Dpos }
+        some ((c.remove id1).remove id2 |>.add whole)
+      else none
+  | _, _ => none
 
 /-- Borrow is a rename of the current holder; the lender name is no longer a
 current capability. -/
