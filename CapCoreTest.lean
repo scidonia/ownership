@@ -140,3 +140,11 @@ theorem writeOnce : Program c0 [.write 0 1] c0 :=
   .cons (.write (by decide)) (.nil c0)
 
 example : run c0 [.write 0 1] = some c0 := Program.run_some writeOnce
+
+-- The initial reconstruction state matches the abstract allocation context.
+example : Matches (Ctx.new 2 4 0 (by decide))
+    (Cap.Reconstruction.State.initial ⟨0⟩ 4 2 (by decide) ⟨0⟩ ⟨1⟩) := by
+  simpa using new_matches_initial (⟨0⟩ : Cap.AllocId) 4 2 0 (by decide) ⟨0⟩ ⟨1⟩ rfl
+
+example : (Cap.Reconstruction.State.initial (⟨0⟩ : Cap.AllocId) 4 2 (by decide) ⟨0⟩ ⟨1⟩).Inv :=
+  (new_matches_initial_inv (⟨0⟩ : Cap.AllocId) 4 2 0 (by decide) ⟨0⟩ ⟨1⟩ rfl).2
